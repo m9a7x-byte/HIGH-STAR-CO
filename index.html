@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VOGA</title>
+
+  <!-- PWA Meta Tags -->
+  <meta name="application-name" content="VOGA" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="VOGA" />
+  <meta name="theme-color" content="#e65100" />
+  <meta name="msapplication-TileColor" content="#151c2c" />
+  <meta name="msapplication-TileImage" content="/src/assets/logo/icons/icon-144x144.png" />
+
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="/manifest.json" />
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" sizes="32x32" href="/src/assets/logo/icons/icon-96x96.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/src/assets/logo/icons/icon-48x48.png" />
+
+  <!-- Apple Touch Icons -->
+  <link rel="apple-touch-icon" href="/src/assets/logo/icons/icon-192x192.png" />
+  <link rel="apple-touch-icon" sizes="152x152" href="/src/assets/logo/icons/icon-152x152.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/src/assets/logo/icons/icon-192x192.png" />
+  <link rel="apple-touch-icon" sizes="167x167" href="/src/assets/logo/icons/icon-192x192.png" />
+  <style>
+    /* Force Cairo Font Globally */
+    body,
+    button,
+    input,
+    select,
+    textarea,
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6,
+    p,
+    span,
+    div {
+      font-family: 'Cairo', sans-serif !important;
+    }
+
+    body {
+      background-color: #f3f4f6;
+      /* Gray-100 */
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #f1f1f1;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+
+    /* Wavy Underline Animation */
+    .wavy-hover {
+      position: relative;
+      text-decoration: none;
+      transition: color 0.3s ease;
+    }
+
+    .wavy-hover:hover {
+      color: #0e3c63;
+      text-decoration: underline;
+      text-decoration-style: wavy;
+      text-decoration-color: #0e3c63;
+      text-underline-offset: 4px;
+      text-decoration-thickness: 1.5px;
+    }
+
+    /* Print Specific Styles */
+    @media print {
+      @page {
+        size: A4;
+        margin: 0;
+      }
+
+      body * {
+        visibility: hidden;
+      }
+
+      #invoice-modal,
+      #invoice-modal * {
+        visibility: visible;
+      }
+
+      #invoice-modal {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        min-height: 100%;
+        background: white;
+        padding: 20px;
+        margin: 0;
+        z-index: 9999;
+        overflow: visible !important;
+        display: block !important;
+      }
+
+      /* Reset modal specific styling for print */
+      #invoice-modal>div {
+        box-shadow: none !important;
+        max-width: 100% !important;
+        max-height: none !important;
+        border-radius: 0 !important;
+        width: 100% !important;
+      }
+
+      .no-print,
+      button,
+      .print\:hidden {
+        display: none !important;
+      }
+
+      * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+    }
+  </style>
+  <link rel="stylesheet" href="/index.css">
+</head>
+
+<body class="bg-gray-100 text-gray-900 print:bg-white">
+  <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+
+</html>

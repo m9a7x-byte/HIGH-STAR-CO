@@ -1,0 +1,33 @@
+{
+    "appId": "com.highstar.voga.agent",
+    "productName": "Voga Agent",
+    "copyright": "Copyright © 2026 HIGH STAR CO.",
+    "directories": {
+        "output": "release/agent"
+    },
+    "files": [
+        "dist/**/*",
+        "dist-electron/**/*"
+    ],
+    "win": {
+        "target": "nsis",
+        "icon": "electron/icon.ico",
+        "publish": [
+            {
+                "provider": "github",
+                "channel": "agent"
+            }
+        ]
+    },
+    "extraMetadata": {
+        "description": "HIGH STAR CO. - VOGA AGENT",
+        "author": "HIGH STAR CO."
+    },
+    "nsis": {
+        "oneClick": false,
+        "allowToChangeInstallationDirectory": true,
+        "installerIcon": "electron/icon.ico",
+        "uninstallerIcon": "electron/icon.ico",
+        "shortcutName": "Voga Agent"
+    }
+}

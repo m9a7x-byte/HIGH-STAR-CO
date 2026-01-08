@@ -1,0 +1,141 @@
+<!--
+  VOGA System - Reauthentication Email Template
+  Copy this HTML content to Supabase: Authentication > Email Templates > Reauthentication
+  
+  Available variables:
+  {{ .ConfirmationURL }} - The reauthentication link
+  {{ .Email }} - User's email
+  {{ .SiteURL }} - Your site URL
+-->
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تأكيد الهوية - VOGA</title>
+</head>
+
+<body
+    style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%); min-height: 100vh;">
+
+    <!-- Container -->
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="min-height: 100vh;">
+        <tr>
+            <td align="center" style="padding: 40px 20px;">
+
+                <!-- Card -->
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
+                    style="max-width: 480px; background: #ffffff; border-radius: 32px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
+
+                    <!-- Header -->
+                    <tr>
+                        <td
+                            style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); padding: 40px 30px; text-align: center;">
+                            <!-- Icon -->
+                            <div
+                                style="width: 80px; height: 80px; background: rgba(255,255,255,0.15); border-radius: 24px; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center;">
+                                <img src="https://img.icons8.com/fluency/96/fingerprint.png" alt="Security" width="48"
+                                    height="48" style="display: block;">
+                            </div>
+                            <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 800;">تأكيد الهوية مطلوب
+                            </h1>
+                            <p
+                                style="margin: 10px 0 0; color: rgba(255,255,255,0.9); font-size: 14px; font-weight: 600;">
+                                🛡️ إجراء أمني إضافي</p>
+                        </td>
+                    </tr>
+
+                    <!-- Body -->
+                    <tr>
+                        <td style="padding: 40px 30px;">
+
+                            <!-- Alert Box -->
+                            <div
+                                style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border: 2px solid #f59e0b; border-radius: 16px; padding: 20px; margin: 0 0 24px; text-align: center;">
+                                <p style="margin: 0; color: #92400e; font-size: 14px; font-weight: 700;">
+                                    ⚠️ تم طلب تأكيد هويتك لإتمام عملية حساسة
+                                </p>
+                            </div>
+
+                            <p
+                                style="margin: 0 0 20px; color: #374151; font-size: 16px; line-height: 1.8; text-align: center;">
+                                للمتابعة، يرجى تأكيد هويتك بالضغط على الزر أدناه.
+                                <br>
+                                هذا الإجراء يحمي حسابك من الوصول غير المصرح به.
+                            </p>
+
+                            <!-- Security Shield -->
+                            <div style="text-align: center; margin: 24px 0;">
+                                <span style="font-size: 56px;">🔐</span>
+                            </div>
+
+                            <!-- Account Info -->
+                            <div
+                                style="background: #f3f4f6; border-radius: 12px; padding: 16px; margin: 24px 0; text-align: center;">
+                                <p
+                                    style="margin: 0; color: #6b7280; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;">
+                                    الحساب المطلوب تأكيده</p>
+                                <p style="margin: 8px 0 0; color: #1f2937; font-size: 16px; font-weight: 800;">{{ .Email
+                                    }}</p>
+                            </div>
+
+                            <!-- CTA Button -->
+                            <div style="text-align: center; margin: 32px 0;">
+                                <a href="{{ .ConfirmationURL }}"
+                                    style="display: inline-block; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: #ffffff; text-decoration: none; font-size: 18px; font-weight: 800; padding: 18px 48px; border-radius: 16px; box-shadow: 0 10px 25px -5px rgba(245, 158, 11, 0.4);">
+                                    ✓ تأكيد هويتي
+                                </a>
+                            </div>
+
+                            <!-- Expiry Warning -->
+                            <div
+                                style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 12px; padding: 16px; margin: 24px 0;">
+                                <p style="margin: 0; color: #991b1b; font-size: 13px; text-align: center;">
+                                    ⏱️ هذا الرابط صالح لمدة <strong>10 دقائق</strong> فقط
+                                </p>
+                            </div>
+
+                            <!-- Alternative Link -->
+                            <p
+                                style="margin: 24px 0 0; color: #9ca3af; font-size: 12px; text-align: center; line-height: 1.6;">
+                                إذا لم يعمل الزر:
+                                <br>
+                                <a href="{{ .ConfirmationURL }}" style="color: #d97706; word-break: break-all;">{{
+                                    .ConfirmationURL }}</a>
+                            </p>
+
+                            <!-- Didn't Request -->
+                            <div style="margin-top: 32px; padding-top: 24px; border-top: 2px dashed #fde68a;">
+                                <p
+                                    style="margin: 0; color: #6b7280; font-size: 13px; text-align: center; line-height: 1.8;">
+                                    <strong style="color: #dc2626;">🚨 لم تطلب هذا؟</strong>
+                                    <br>
+                                    إذا لم تكن أنت من طلب هذا التأكيد، قد يكون شخص ما يحاول الوصول لحسابك.
+                                    <br>
+                                    <strong>يرجى تغيير كلمة المرور فوراً.</strong>
+                                </p>
+                            </div>
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background: #1f2937; padding: 24px 30px; text-align: center;">
+                            <p style="margin: 0; color: #9ca3af; font-size: 12px; font-weight: 600;">
+                                🔒 VOGA System © 2026
+                                <br>
+                                <span style="color: #6b7280;">Secure Reauthentication</span>
+                            </p>
+                        </td>
+                    </tr>
+
+                </table>
+
+            </td>
+        </tr>
+    </table>
+
+</body>
+
+</html>

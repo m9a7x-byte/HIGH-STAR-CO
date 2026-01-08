@@ -1,0 +1,5 @@
+{
+  "name": "Agent Order System",
+  "description": "A full-stack NestJS and Next.js application for managing factory agents, orders, and tiered pricing.",
+  "requestFramePermissions": []
+}

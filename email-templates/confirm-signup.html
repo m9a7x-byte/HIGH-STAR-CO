@@ -1,0 +1,88 @@
+<!--
+  VOGA System - Confirm Sign Up Email Template
+  Copy this HTML content to Supabase: Authentication > Email Templates > Confirm signup
+  
+  Available variables:
+  {{ .ConfirmationURL }} - The confirmation link
+  {{ .Email }} - User's email
+  {{ .SiteURL }} - Your site URL
+-->
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>تأكيد البريد الإلكتروني - VOGA</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: linear-gradient(135deg, #0f172a 0%, #0e3c63 50%, #0f172a 100%); min-height: 100vh;">
+  
+  <!-- Container -->
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="min-height: 100vh;">
+    <tr>
+      <td align="center" style="padding: 40px 20px;">
+        
+        <!-- Card -->
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 480px; background: #ffffff; border-radius: 32px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
+          
+          <!-- Header -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 40px 30px; text-align: center;">
+              <!-- Icon -->
+              <div style="width: 80px; height: 80px; background: rgba(255,255,255,0.15); border-radius: 24px; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center;">
+                <img src="https://img.icons8.com/fluency/96/mail.png" alt="Email" width="48" height="48" style="display: block;">
+              </div>
+              <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 800;">مرحباً بك في VOGA!</h1>
+              <p style="margin: 10px 0 0; color: rgba(255,255,255,0.8); font-size: 14px; font-weight: 600;">يرجى تأكيد بريدك الإلكتروني</p>
+            </td>
+          </tr>
+          
+          <!-- Body -->
+          <tr>
+            <td style="padding: 40px 30px;">
+              <p style="margin: 0 0 20px; color: #374151; font-size: 16px; line-height: 1.8; text-align: center;">
+                شكراً لتسجيلك في نظام VOGA! 
+                <br>
+                لإكمال التسجيل، يرجى الضغط على الزر أدناه لتأكيد بريدك الإلكتروني.
+              </p>
+              
+              <!-- Email Badge -->
+              <div style="background: #f3f4f6; border-radius: 16px; padding: 16px; margin: 24px 0; text-align: center;">
+                <p style="margin: 0; color: #6b7280; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;">البريد الإلكتروني</p>
+                <p style="margin: 8px 0 0; color: #1f2937; font-size: 16px; font-weight: 800;">{{ .Email }}</p>
+              </div>
+              
+              <!-- CTA Button -->
+              <div style="text-align: center; margin: 32px 0;">
+                <a href="{{ .ConfirmationURL }}" style="display: inline-block; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: #ffffff; text-decoration: none; font-size: 18px; font-weight: 800; padding: 18px 48px; border-radius: 16px; box-shadow: 0 10px 25px -5px rgba(16, 185, 129, 0.4);">
+                  ✓ تأكيد البريد الإلكتروني
+                </a>
+              </div>
+              
+              <!-- Alternative Link -->
+              <p style="margin: 24px 0 0; color: #9ca3af; font-size: 12px; text-align: center; line-height: 1.6;">
+                إذا لم يعمل الزر، انسخ الرابط التالي والصقه في المتصفح:
+                <br>
+                <a href="{{ .ConfirmationURL }}" style="color: #0e3c63; word-break: break-all;">{{ .ConfirmationURL }}</a>
+              </p>
+            </td>
+          </tr>
+          
+          <!-- Footer -->
+          <tr>
+            <td style="background: #f9fafb; padding: 24px 30px; text-align: center; border-top: 1px solid #e5e7eb;">
+              <p style="margin: 0; color: #9ca3af; font-size: 12px; font-weight: 600;">
+                VOGA System © 2026
+                <br>
+                <span style="color: #d1d5db;">Secure Email Verification</span>
+              </p>
+            </td>
+          </tr>
+          
+        </table>
+        
+      </td>
+    </tr>
+  </table>
+  
+</body>
+</html>

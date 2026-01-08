@@ -1,0 +1,84 @@
+{
+  "name": "voga-system",
+  "private": true,
+  "version": "1.0.7",
+  "description": "HIGH STAR CO. - VOGA",
+  "author": "HIGH STAR CO.",
+  "type": "module",
+  "main": "dist-electron/main.cjs",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/m9a7x-byte/HIGH-STAR-CO"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:admin": "cross-env VITE_APP_MODE=admin vite build",
+    "build:agent": "cross-env VITE_APP_MODE=agent vite build",
+    "preview": "vite preview",
+    "compile:electron": "tsc -p tsconfig.electron.json && del /q dist-electron\\*.cjs 2>nul & ren dist-electron\\main.js main.cjs && ren dist-electron\\preload.js preload.cjs && copy electron\\icon.ico dist-electron\\icon.ico >nul && copy electron\\splash.html dist-electron\\splash.html >nul",
+    "electron": "wait-on tcp:3000 && electron .",
+    "electron:dev": "npm run compile:electron && concurrently -k \"cross-env BROWSER=none npm run dev\" \"cross-env NODE_ENV=development npm run electron\"",
+    "electron:build": "npm run build && npm run compile:electron && electron-builder",
+    "build:electron:admin": "npm run build:admin && npm run compile:electron && electron-builder --config electron-admin.json",
+    "build:electron:agent": "npm run build:agent && npm run compile:electron && electron-builder --config electron-agent.json"
+  },
+  "dependencies": {
+    "@google/genai": "^1.34.0",
+    "@supabase/supabase-js": "^2.89.0",
+    "@types/ua-parser-js": "^0.7.39",
+    "electron-updater": "^6.7.3",
+    "flag-icons": "^7.5.0",
+    "lucide-react": "^0.555.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-easy-crop": "^5.5.6",
+    "ua-parser-js": "^2.0.7"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.18",
+    "@types/node": "^22.14.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "autoprefixer": "^10.4.23",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "electron": "^39.2.7",
+    "electron-builder": "^26.0.12",
+    "postcss": "^8.5.6",
+    "rcedit": "^5.0.2",
+    "tailwindcss": "^4.1.18",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0",
+    "wait-on": "^9.0.3"
+  },
+  "build": {
+    "appId": "com.highstar.voga",
+    "productName": "Voga System",
+    "copyright": "Copyright © 2026 HIGH STAR CO.",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "electron/icon.ico",
+      "publish": [
+        "github"
+      ]
+    },
+    "extraMetadata": {
+      "description": "HIGH STAR CO. - VOGA",
+      "author": "HIGH STAR CO."
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "electron/icon.ico",
+      "uninstallerIcon": "electron/icon.ico",
+      "shortcutName": "Voga System"
+    }
+  }
+}

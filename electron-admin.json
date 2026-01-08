@@ -1,0 +1,33 @@
+{
+    "appId": "com.highstar.voga.admin",
+    "productName": "Voga Admin",
+    "copyright": "Copyright © 2026 HIGH STAR CO.",
+    "directories": {
+        "output": "release/admin"
+    },
+    "files": [
+        "dist/**/*",
+        "dist-electron/**/*"
+    ],
+    "win": {
+        "target": "nsis",
+        "icon": "electron/icon.ico",
+        "publish": [
+            {
+                "provider": "github",
+                "channel": "admin"
+            }
+        ]
+    },
+    "extraMetadata": {
+        "description": "HIGH STAR CO. - VOGA ADMIN",
+        "author": "HIGH STAR CO."
+    },
+    "nsis": {
+        "oneClick": false,
+        "allowToChangeInstallationDirectory": true,
+        "installerIcon": "electron/icon.ico",
+        "uninstallerIcon": "electron/icon.ico",
+        "shortcutName": "Voga Admin"
+    }
+}

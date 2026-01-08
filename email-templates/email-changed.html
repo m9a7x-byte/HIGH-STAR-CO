@@ -1,0 +1,100 @@
+<!--
+  VOGA System - Email Changed Notification
+  Copy this HTML content to Supabase: Authentication > Email Templates > Email address changed
+  
+  Available variables:
+  {{ .Email }} - User's NEW email
+  {{ .SiteURL }} - Your site URL
+-->
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تم تغيير البريد الإلكتروني - VOGA</title>
+</head>
+
+<body
+    style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: linear-gradient(135deg, #0f172a 0%, #0e3c63 50%, #0f172a 100%); min-height: 100vh;">
+
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="min-height: 100vh;">
+        <tr>
+            <td align="center" style="padding: 40px 20px;">
+
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
+                    style="max-width: 480px; background: #ffffff; border-radius: 32px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
+
+                    <!-- Header -->
+                    <tr>
+                        <td
+                            style="background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%); padding: 40px 30px; text-align: center;">
+                            <div
+                                style="width: 80px; height: 80px; background: rgba(255,255,255,0.15); border-radius: 24px; margin: 0 auto 20px;">
+                                <img src="https://img.icons8.com/fluency/96/mail.png" alt="Email" width="48" height="48"
+                                    style="display: block; margin: 16px auto;">
+                            </div>
+                            <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 800;">تم تغيير البريد
+                                الإلكتروني 📧</h1>
+                            <p
+                                style="margin: 10px 0 0; color: rgba(255,255,255,0.8); font-size: 14px; font-weight: 600;">
+                                إشعار أمني</p>
+                        </td>
+                    </tr>
+
+                    <!-- Body -->
+                    <tr>
+                        <td style="padding: 40px 30px;">
+                            <div
+                                style="background: #ecfeff; border: 1px solid #a5f3fc; border-radius: 16px; padding: 20px; margin: 0 0 24px; text-align: center;">
+                                <p style="margin: 0; color: #0e7490; font-size: 14px; font-weight: 700;">
+                                    ✅ تم تحديث البريد الإلكتروني لحسابك بنجاح
+                                </p>
+                            </div>
+
+                            <p
+                                style="margin: 0 0 20px; color: #374151; font-size: 16px; line-height: 1.8; text-align: center;">
+                                البريد الإلكتروني الجديد المرتبط بحسابك هو:
+                            </p>
+
+                            <div
+                                style="background: linear-gradient(135deg, #ecfeff 0%, #cffafe 100%); border: 2px solid #22d3ee; border-radius: 16px; padding: 20px; margin: 24px 0; text-align: center;">
+                                <p
+                                    style="margin: 0; color: #0e7490; font-size: 12px; font-weight: 700; text-transform: uppercase;">
+                                    البريد الجديد</p>
+                                <p style="margin: 8px 0 0; color: #0c4a6e; font-size: 18px; font-weight: 800;">{{ .Email
+                                    }}</p>
+                            </div>
+
+                            <!-- Warning -->
+                            <div
+                                style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 12px; padding: 16px; margin: 24px 0;">
+                                <p
+                                    style="margin: 0; color: #991b1b; font-size: 13px; text-align: center; line-height: 1.6;">
+                                    🚨 <strong>لم تقم بهذا التغيير؟</strong>
+                                    <br>
+                                    اتصل بالدعم فوراً لاستعادة بريدك القديم وتأمين حسابك.
+                                </p>
+                            </div>
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td
+                            style="background: #f9fafb; padding: 24px 30px; text-align: center; border-top: 1px solid #e5e7eb;">
+                            <p style="margin: 0; color: #9ca3af; font-size: 12px; font-weight: 600;">
+                                VOGA System © 2026 • Security Notification
+                            </p>
+                        </td>
+                    </tr>
+
+                </table>
+
+            </td>
+        </tr>
+    </table>
+
+</body>
+
+</html>
