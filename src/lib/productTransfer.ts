@@ -1,4 +1,5 @@
 import type { Category, Product } from '../types';
+import { isPieceProduct } from './productFamilies.ts';
 
 import type { ProductFamily } from './productFamilies';
 export type { ProductFamily } from './productFamilies';
@@ -7,6 +8,7 @@ export type ProductRow = {
     code: string;
     name: string;
     paintType: string;
+    saleMode: string;
     category: string;
     dimensions: string;
     packageUnits: number;
@@ -19,7 +21,7 @@ export type ProductRow = {
 export type ImportedProductRow = Partial<Record<keyof ProductRow, string | number>>;
 
 const commonLabels: Record<keyof ProductRow, string> = {
-    id: 'ID', code: 'كود المنتج', name: 'اسم المادة', paintType: 'نوع الصبغ', category: 'التصنيف', dimensions: 'الابعاد / الوزن',
+    id: 'ID', code: 'كود المنتج', name: 'اسم المادة', paintType: 'نوع الصبغ', saleMode: 'طريقة البيع', category: 'التصنيف', dimensions: 'الابعاد / الوزن',
     packageUnits: 'عدد الأمتار في الكارتون', normalMeter: 'عادي - سعر المتر', vipMeter: 'VIP - سعر المتر',
     normalUnit: 'عادي - سعر الكيس', vipUnit: 'VIP - سعر الكيس', isActive: 'الحالة'
 };
@@ -27,15 +29,17 @@ const commonLabels: Record<keyof ProductRow, string> = {
 export const transferLabels = (family: ProductFamily) => ({
     ...commonLabels,
     packageUnits: family === 'ADHESIVE' ? 'عدد الأكياس في الباليت' : commonLabels.packageUnits,
-    normalUnit: family === 'PAINT' ? 'عادي - سعر السطلة' : commonLabels.normalUnit,
-    vipUnit: family === 'PAINT' ? 'VIP - سعر السطلة' : commonLabels.vipUnit,
+    normalUnit: family === 'PAINT' ? 'عادي - سعر السطلة' : family === 'STYROFOAM' ? 'عادي - سعر القطعة' : commonLabels.normalUnit,
+    vipUnit: family === 'PAINT' ? 'VIP - سعر السطلة' : family === 'STYROFOAM' ? 'VIP - سعر القطعة' : commonLabels.vipUnit,
     dimensions: family === 'PAINT' ? 'الوزن / الحجم' : commonLabels.dimensions
 });
 
 export const transferFields = (family: ProductFamily): (keyof ProductRow)[] => [
     'id', 'code', ...(family === 'PAINT' ? ['name', 'paintType'] as const : []), 'category', 'dimensions',
+    ...(family === 'STYROFOAM' ? ['saleMode'] as const : []),
     ...(family === 'PAINT' ? [] : ['packageUnits'] as const),
-    ...(family !== 'STYROFOAM' ? ['normalUnit', 'vipUnit'] as const : ['normalMeter', 'vipMeter'] as const),
+    ...(family === 'STYROFOAM' ? ['normalMeter', 'vipMeter'] as const : []),
+    'normalUnit', 'vipUnit',
     'isActive'
 ];
 
@@ -59,11 +63,12 @@ const numberValue = (value: unknown, fallback: number, label: string, positive =
 
 export const buildProductRow = (product: Product, categories: Category[]): ProductRow => ({
     id: String(product.id), code: product.code, name: product.name || '', paintType: product.paintType || '', category: product.category, dimensions: product.dimensions,
-    packageUnits: Number(product.metersPerCarton ?? (getCategoryType(categories, product.category) === 'ADHESIVE' ? 80 : 1)),
+    saleMode: isPieceProduct(product) ? 'قطعة' : 'كارتون',
+    packageUnits: isPieceProduct(product) ? 0 : Number(product.metersPerCarton ?? (getCategoryType(categories, product.category) === 'ADHESIVE' ? 80 : 1)),
     normalMeter: Number(product.prices['عادي']?.pricePerMeter || 0),
     vipMeter: Number(product.prices.VIP?.pricePerMeter || 0),
-    normalUnit: Number(product.prices['عادي']?.pricePerCarton || 0),
-    vipUnit: Number(product.prices.VIP?.pricePerCarton || 0),
+    normalUnit: getCategoryType(categories, product.category) === 'STYROFOAM' && !isPieceProduct(product) ? 0 : Number(product.prices['عادي']?.pricePerCarton || 0),
+    vipUnit: getCategoryType(categories, product.category) === 'STYROFOAM' && !isPieceProduct(product) ? 0 : Number(product.prices.VIP?.pricePerCarton || 0),
     isActive: product.isActive === false ? 'متوقف' : 'فعال'
 });
 
@@ -73,8 +78,18 @@ export const buildImportPayload = (row: ImportedProductRow, target: Product, cat
     if (getCategoryType(categories, target.category) !== family || getCategoryType(categories, category) !== family) {
         throw new Error('نوع المنتج لا يطابق القسم المختار؛ استورد ملف الفلين واللاصقة كل واحد بقسمه');
     }
-    const adhesive = family !== 'STYROFOAM';
-    const quantity = family === 'PAINT' ? 1 : numberValue(row.packageUnits, Number(target.metersPerCarton ?? (adhesive ? 80 : 1)), 'عدد وحدات العبوة');
+    const modes = { CARTON: 'CARTON', PIECE: 'PIECE', 'كارتون': 'CARTON', 'قطعة': 'PIECE' } as const;
+    const requestedMode = nonBlank(row.saleMode) ? modes[String(row.saleMode).trim() as keyof typeof modes] : target.saleMode ?? 'CARTON';
+    if (!requestedMode) throw new Error('طريقة البيع يجب أن تكون قطعة أو كارتون');
+    if (family !== 'STYROFOAM' && requestedMode === 'PIECE') throw new Error('طريقة البيع بالقطعة خاصة بمنتجات الفلين');
+    const piece = family === 'STYROFOAM' && requestedMode === 'PIECE';
+    const adhesive = family !== 'STYROFOAM' || piece;
+    if (piece && nonBlank(row.packageUnits) && numberValue(row.packageUnits, 0, 'عدد وحدات العبوة') !== 0) throw new Error('القطعة لا تحتوي أمتار كارتون؛ اترك الكمية صفر');
+    if (family === 'STYROFOAM' && requestedMode !== (target.saleMode ?? 'CARTON')) {
+        const fields = piece ? ['normalUnit', 'vipUnit'] as const : ['normalMeter', 'vipMeter'] as const;
+        if (fields.some(field => !nonBlank(row[field]))) throw new Error('عند تغيير طريقة البيع يجب إدخال سعر العادي وVIP للوحدة الجديدة');
+    }
+    const quantity = piece ? 0 : family === 'PAINT' ? 1 : numberValue(row.packageUnits, Number(target.metersPerCarton ?? (adhesive ? 80 : 1)), 'عدد وحدات العبوة');
     if (family === 'ADHESIVE' && !Number.isInteger(quantity)) throw new Error('عدد الأكياس في الباليت يجب أن يكون عدداً صحيحاً');
     const normal = numberValue(adhesive ? row.normalUnit : row.normalMeter,
         adhesive ? target.prices['عادي'].pricePerCarton : target.prices['عادي'].pricePerMeter, 'سعر العادي');
@@ -88,6 +103,7 @@ export const buildImportPayload = (row: ImportedProductRow, target: Product, cat
         name: nonBlank(row.name) ? String(row.name).trim() : target.name || null,
         paint_type: nonBlank(row.paintType) ? String(row.paintType).trim() : target.paintType || null,
         category,
+        sale_mode: family === 'STYROFOAM' ? requestedMode : 'CARTON',
         dimensions: nonBlank(row.dimensions) ? String(row.dimensions).trim() : target.dimensions,
         meters_per_carton: quantity,
         is_active: status ? status === 'فعال' : target.isActive !== false,

@@ -20,7 +20,7 @@ test('paint quantities use buckets and cannot be counted as foam cartons or adhe
   assert.equal(getProductName(product), 'ستار برايمر');
   assert.equal(getProductUnit(product, categories), 'سطلة');
   assert.equal(isUnitPricedProduct(product, categories), true);
-  assert.deepEqual(getCatalogCartCounts({ 10: { c: 3, m: 0 } }, [product], categories), { totalCartons: 0, totalBags: 0, totalBuckets: 3 });
+  assert.deepEqual(getCatalogCartCounts({ 10: { c: 3, m: 0 } }, [product], categories), { totalCartons: 0, totalBags: 0, totalBuckets: 3, totalPieces: 0 });
 });
 test('paint imports preserve names and weights and store bucket prices directly', () => {
   const row = buildProductRow(product, categories);

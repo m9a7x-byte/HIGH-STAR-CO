@@ -1,4 +1,4 @@
-import { getProductFamily, getProductUnit, isUnitPricedProduct } from '../../../lib/productFamilies';
+import { getProductFamily, getProductUnit, isUnitPricedProduct, snapshotProductUnits } from '../../../lib/productFamilies';
 
 import React, { useState, useEffect, useMemo } from 'react';
 import {
@@ -227,6 +227,9 @@ export const OrdersTab = ({ orders, onViewOrder, onDeleteOrder, isDateInRange, o
 
                 const updatedItemsSimple = editingOrderItems.map(i => ({
                     productId: i.productId,
+                    paintColor: i.paintColor,
+                    productSaleMode: i.productSaleMode,
+                    productMetersPerCarton: i.productMetersPerCarton,
                     qMeters: i.quantityMeters,
                     qCartons: i.quantityCartons,
                     isSpecialRequest: i.isSpecialRequest,
@@ -276,6 +279,9 @@ export const OrdersTab = ({ orders, onViewOrder, onDeleteOrder, isDateInRange, o
         try {
             const unchangedItems = order.items.map(i => ({
                 productId: i.productId,
+                paintColor: i.paintColor,
+                    productSaleMode: i.productSaleMode,
+                productMetersPerCarton: i.productMetersPerCarton,
                 qMeters: i.quantityMeters,
                 qCartons: i.quantityCartons,
                 isSpecialRequest: i.isSpecialRequest,
@@ -351,7 +357,7 @@ export const OrdersTab = ({ orders, onViewOrder, onDeleteOrder, isDateInRange, o
             if (exists) { toast.info('المنتج موجود بالفعل'); return; }
             const prices = getAdjustedProductPrices(prodDetails, agent.agentDetails);
             const newItem: OrderItem = {
-                id: Date.now(), productId: p.id, productCode: p.code, productName: p.name, productPaintType: p.paintType, productDimensions: p.dimensions,
+                id: Date.now(), productId: p.id, productCode: p.code, productName: p.name, productPaintType: p.paintType, ...snapshotProductUnits(p), productDimensions: p.dimensions,
                 quantityCartons: 1, quantityMeters: 0, unitPriceCarton: prices.pricePerCarton,
                 unitPriceMeter: prices.pricePerMeter, totalPrice: prices.pricePerCarton,
                 priceAdjustmentNote: prices.increasePercent > 0 ? `زيادة ${prices.increasePercent}%` : undefined
@@ -602,7 +608,7 @@ export const OrdersTab = ({ orders, onViewOrder, onDeleteOrder, isDateInRange, o
         const newItem = {
             id: Date.now(),
             productId: p.id,
-            productCode: p.code, productName: p.name, productPaintType: p.paintType,
+            productCode: p.code, productName: p.name, productPaintType: p.paintType, ...snapshotProductUnits(p),
             productDimensions: p.dimensions,
             quantityCartons: 1,
             quantityMeters: 0,
@@ -627,6 +633,9 @@ export const OrdersTab = ({ orders, onViewOrder, onDeleteOrder, isDateInRange, o
             // 1. Create Base Order
             const itemsPayload = manualOrderItems.map(i => ({
                 productId: i.productId,
+                paintColor: i.paintColor,
+                    productSaleMode: i.productSaleMode,
+                productMetersPerCarton: i.productMetersPerCarton,
                 qMeters: i.quantityMeters,
                 qCartons: i.quantityCartons,
                 isSpecial: i.isSpecialRequest,
@@ -638,6 +647,9 @@ export const OrdersTab = ({ orders, onViewOrder, onDeleteOrder, isDateInRange, o
             const updatePayload = manualOrderItems.map(i => ({
                 ...i,
                 qCartons: i.quantityCartons,
+                paintColor: i.paintColor,
+                    productSaleMode: i.productSaleMode,
+                productMetersPerCarton: i.productMetersPerCarton,
                 qMeters: i.quantityMeters,
             }));
             db.updateOrder(currentUser!.id, newOrder.id, updatePayload, 0, manualDiscount, manualDiscountType);
@@ -947,9 +959,9 @@ export const OrdersTab = ({ orders, onViewOrder, onDeleteOrder, isDateInRange, o
                                             const isCartonPriceEditing = priceEditTarget?.scope === 'edit' && priceEditTarget.index === idx && priceEditTarget.field === 'unitPriceCarton';
                                             const isMeterPriceEditing = priceEditTarget?.scope === 'edit' && priceEditTarget.index === idx && priceEditTarget.field === 'unitPriceMeter';
                                             const itemProduct = products.find((p: any) => String(p.id) === String(item.productId));
-                                            const isAdhesiveItem = isUnitPricedProduct(itemProduct, db.categories);
+                                            const isAdhesiveItem = isUnitPricedProduct(itemProduct, db.categories, item.productSaleMode);
                                             const itemFamily = getProductFamily(itemProduct, db.categories);
-                                            const itemUnit = getProductUnit(itemProduct, db.categories);
+                                            const itemUnit = getProductUnit(itemProduct, db.categories, item.productSaleMode);
                                             return (
                                                 <div key={idx} className={`bg-white p-4 rounded-[1.5rem] border flex flex-col items-stretch shadow-sm gap-3 group transition-all ${isDataLocked ? 'border-gray-100 bg-gray-50/40 grayscale' : 'border-gray-200 hover:border-[#0e3c63]/30 hover:shadow-md'} ${item.isSpecialRequest ? 'bg-amber-50/70 border-amber-200' : ''}`}>
                                                     <div className="w-full text-right flex flex-wrap items-start justify-between gap-3 min-w-0">
@@ -970,10 +982,10 @@ export const OrdersTab = ({ orders, onViewOrder, onDeleteOrder, isDateInRange, o
                                                         </div>
                                                         <div className="shrink-0 flex flex-wrap items-center justify-end gap-2 max-w-full">
                                                             <span className={`px-3 py-1.5 rounded-xl border text-[10px] font-black leading-5 whitespace-nowrap ${item.isSpecialRequest ? 'bg-amber-100 text-amber-700 border-amber-200' : (isAdhesiveItem ? 'bg-purple-50 text-purple-700 border-purple-100' : 'bg-blue-50 text-[#0e3c63] border-blue-100')}`}>
-                                                                {item.isSpecialRequest ? 'طلب خاص' : (itemFamily === 'PAINT' ? 'أصباغ' : isAdhesiveItem ? 'مادة لاصقة' : 'فلين')}
+                                                                {item.isSpecialRequest ? 'طلب خاص' : (itemFamily === 'PAINT' ? 'أصباغ' : itemFamily === 'ADHESIVE' ? 'مادة لاصقة' : 'فلين')}
                                                             </span>
                                                             <span className={`max-w-full px-3 py-1.5 rounded-xl border text-[10px] font-black leading-5 whitespace-normal break-words ${item.isSpecialRequest ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
-                                                                {item.isSpecialRequest ? 'وحدة إنتاج خاصة' : item.productDimensions}
+                                                                {item.isSpecialRequest ? 'وحدة إنتاج خاصة' : item.productDimensions}{item.paintColor && <span className="block text-[#0e3c63] whitespace-pre-line">الألوان: {item.paintColor}</span>}
                                                             </span>
                                                         </div>
                                                         {item.isSpecialRequest && <p className="basis-full text-[10px] text-amber-700 font-bold mt-1 bg-white/50 px-2 py-1 rounded w-fit max-w-full break-words whitespace-normal line-clamp-2">"{item.specialRequestNote}"</p>}
@@ -1348,9 +1360,9 @@ export const OrdersTab = ({ orders, onViewOrder, onDeleteOrder, isDateInRange, o
                                         ) : (
                                             manualOrderItems.map((item, idx) => {
                                                 const product = products.find((p: any) => p.id === item.productId);
-                                                const isAdhesive = isUnitPricedProduct(product, db.categories);
+                                                const isAdhesive = isUnitPricedProduct(product, db.categories, item.productSaleMode);
                                                 const itemFamily = getProductFamily(product, db.categories);
-                                                const itemUnit = getProductUnit(product, db.categories);
+                                                const itemUnit = getProductUnit(product, db.categories, item.productSaleMode);
                                                 const isCartonPriceEditing = priceEditTarget?.scope === 'manual' && priceEditTarget.index === idx && priceEditTarget.field === 'unitPriceCarton';
                                                 const isMeterPriceEditing = priceEditTarget?.scope === 'manual' && priceEditTarget.index === idx && priceEditTarget.field === 'unitPriceMeter';
                                                 return (
@@ -1373,10 +1385,10 @@ export const OrdersTab = ({ orders, onViewOrder, onDeleteOrder, isDateInRange, o
                                                             </div>
                                                             <div className="shrink-0 flex flex-wrap items-center justify-end gap-2 max-w-full">
                                                                 <span className={`px-3 py-1.5 rounded-xl border text-[10px] font-black leading-5 whitespace-nowrap ${item.isSpecialRequest ? 'bg-amber-100 text-amber-700 border-amber-200' : (isAdhesive ? 'bg-purple-50 text-purple-700 border-purple-100' : 'bg-blue-50 text-[#0e3c63] border-blue-100')}`}>
-                                                                    {item.isSpecialRequest ? 'طلب خاص' : (itemFamily === 'PAINT' ? 'أصباغ' : isAdhesive ? 'مادة لاصقة' : 'فلين')}
+                                                                    {item.isSpecialRequest ? 'طلب خاص' : (itemFamily === 'PAINT' ? 'أصباغ' : itemFamily === 'ADHESIVE' ? 'مادة لاصقة' : 'فلين')}
                                                                 </span>
                                                                 <span className={`max-w-full px-3 py-1.5 rounded-xl border text-[10px] font-black leading-5 whitespace-normal break-words ${item.isSpecialRequest ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
-                                                                    {item.isSpecialRequest ? 'وحدة إنتاج خاصة' : item.productDimensions}
+                                                                    {item.isSpecialRequest ? 'وحدة إنتاج خاصة' : item.productDimensions}{item.paintColor && <span className="block text-[#0e3c63] whitespace-pre-line">الألوان: {item.paintColor}</span>}
                                                                 </span>
                                                             </div>
                                                             {item.isSpecialRequest && <p className="basis-full text-[10px] text-amber-700 font-bold mt-1 bg-white/50 px-2 py-0.5 rounded w-fit max-w-full break-words whitespace-normal line-clamp-2">"{item.specialRequestNote}"</p>}
@@ -1385,7 +1397,7 @@ export const OrdersTab = ({ orders, onViewOrder, onDeleteOrder, isDateInRange, o
                                                         <div className={`w-full overflow-x-auto custom-scrollbar p-2 rounded-2xl border ${item.isSpecialRequest ? 'bg-white border-amber-100 shadow-sm' : 'bg-slate-50 border-slate-200'}`}>
                                                             <div className="flex min-w-max justify-center gap-2 items-end">
                                                             <div className="text-center px-2 py-1 rounded-xl bg-white border border-gray-100 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-                                                                <label className="text-[9px] font-black text-gray-400 block mb-1 uppercase">{isAdhesive ? 'أكياس' : 'كارتون'}</label>
+                                                                <label className="text-[9px] font-black text-gray-400 block mb-1 uppercase">{item.isSpecialRequest ? 'العدد' : itemUnit}</label>
                                                                 <input
                                                                     type="number"
                                                                     min="1"

@@ -1,6 +1,8 @@
+import { snapshotProductUnits } from '../../lib/productFamilies';
 import { getCatalogCartCounts } from '../../lib/productFamilies';
 
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { MobileBottomNavigation, AgentNavItem } from './components/MobileBottomNavigation';
 import { useTranslation } from 'react-i18next';
 import { ShoppingCart, ListOrdered, FileText, Wallet, Lock, Snowflake, AlertCircle, Box, Layers, Sparkles, Info, Truck, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -30,6 +32,9 @@ type AgentCartEntry = {
     unitPriceCarton?: number;
     unitPriceMeter?: number;
     priceAdjustmentNote?: string;
+    paintColor?: string;
+    productSaleMode?: 'CARTON' | 'PIECE';
+    productMetersPerCarton?: number;
 };
 
 export const AgentDashboard = () => {
@@ -37,6 +42,8 @@ export const AgentDashboard = () => {
     const toast = useToast();
     const { t } = useTranslation();
     const [activeTab, setActiveTab] = useState('catalog');
+    const [mobileCartActive, setMobileCartActive] = useState(false);
+    const cartPanelRef = useRef<HTMLDivElement>(null);
 
     // Internal Presence Tracking for Agent Tabs
     usePresence(activeTab);
@@ -171,6 +178,7 @@ export const AgentDashboard = () => {
     const cartStats = useMemo(() => {
         return getCatalogCartCounts(cart, products, db.categories);
     }, [cart, products]);
+    const cartItemCount = (Object.values(cart) as AgentCartEntry[]).filter(item => item.c > 0 || item.m > 0).length;
 
     const cartTotal = useMemo(() => {
         return Object.entries(cart).reduce((sum, [pid, qty]) => {
@@ -184,7 +192,8 @@ export const AgentDashboard = () => {
             if (!p) return sum;
             const prices = getAdjustedProductPrices(p, effectiveUser?.agentDetails);
             const q = qty as { m: number, c: number };
-            return sum + ((q.c || 0) * prices.pricePerCarton) + ((q.m || 0) * prices.pricePerMeter);
+            const previousUnits = qData.productSaleMode && qData.productSaleMode !== (p.saleMode ?? 'CARTON');
+            return sum + ((q.c || 0) * (previousUnits ? qData.unitPriceCarton ?? 0 : prices.pricePerCarton)) + ((q.m || 0) * (previousUnits ? qData.unitPriceMeter ?? 0 : prices.pricePerMeter));
         }, 0);
     }, [cart, products, agentPriceIncreasePercent, effectiveUser?.agentDetails?.type]);
 
@@ -236,11 +245,15 @@ export const AgentDashboard = () => {
                 productId: id,
                 qMeters: q.m || 0,
                 qCartons: q.c || 0,
+                paintColor: qData.paintColor,
                 ...(includePricing ? {
                     productCode: product?.code,
+                    ...snapshotProductUnits(product),
+                    productSaleMode: qData.productSaleMode ?? product?.saleMode ?? 'CARTON',
+                    productMetersPerCarton: qData.productMetersPerCarton ?? snapshotProductUnits(product).productMetersPerCarton,
                     productDimensions: product?.dimensions,
-                    unitPriceCarton: prices?.pricePerCarton || 0,
-                    unitPriceMeter: prices?.pricePerMeter || 0,
+                    unitPriceCarton: qData.productSaleMode && qData.productSaleMode !== (product?.saleMode ?? 'CARTON') ? qData.unitPriceCarton ?? 0 : prices?.pricePerCarton || 0,
+                    unitPriceMeter: qData.productSaleMode && qData.productSaleMode !== (product?.saleMode ?? 'CARTON') ? qData.unitPriceMeter ?? 0 : prices?.pricePerMeter || 0,
                     priceAdjustmentNote: prices.increasePercent > 0 ? `زيادة ${prices.increasePercent}%` : undefined
                 } : {})
             };
@@ -259,6 +272,9 @@ export const AgentDashboard = () => {
             nextCart[key] = {
                 m: item.quantityMeters || 0,
                 c: item.quantityCartons || 0,
+                paintColor: item.paintColor,
+                productSaleMode: item.productSaleMode,
+                productMetersPerCarton: item.productMetersPerCarton,
                 isSpecial: item.isSpecialRequest,
                 specialNote: item.specialRequestNote,
                 productCode: item.productCode,
@@ -336,11 +352,17 @@ export const AgentDashboard = () => {
         if (activeTab === 'history' && !canShowHistory) setActiveTab('catalog');
     }, [activeTab, canShowQueue, canShowHistory, canShowFinance]);
 
+    const navigateMobile = (item: AgentNavItem) => {
+        setMobileCartActive(item === 'cart');
+        setActiveTab(item === 'cart' ? 'catalog' : item);
+        requestAnimationFrame(() => item === 'cart' ? cartPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }) : window.scrollTo({ top: 0, behavior: 'smooth' }));
+    };
+
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 pb-[calc(6rem+env(safe-area-inset-bottom))] lg:pb-0">
             {viewingOrder && <InvoiceModal order={viewingOrder} onClose={() => setViewingOrder(null)} allowPrint={true} />}
 
-            <div className="lg:col-span-1 space-y-6">
+            <div className="lg:col-span-1 space-y-6 order-2 lg:order-1">
                 <div className="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden">
                     <div className="p-8 bg-[#0e3c63] text-white text-center">
                         <UserAvatar name={effectiveUser?.fullName || 'User'} avatarPath={effectiveUser?.avatar_path} avatarUrl={effectiveUser?.avatar_url} size="xl" className="mx-auto mb-4 border-4 border-white/30 shadow-lg" />
@@ -355,7 +377,7 @@ export const AgentDashboard = () => {
                         </div>
                     )}
 
-                    <nav className="p-4 space-y-2">
+                    <nav className="hidden lg:block p-4 space-y-2">
 
                         {[
                             { id: 'catalog', label: t('agent_dashboard.catalog_order'), icon: ShoppingCart },
@@ -369,7 +391,7 @@ export const AgentDashboard = () => {
                 </div>
 
                 {activeTab === 'catalog' && (
-                    <div className="bg-white p-6 rounded-3xl shadow-xl border border-gray-100 sticky top-24">
+                    <div ref={cartPanelRef} className="bg-white p-6 rounded-3xl shadow-xl border border-gray-100 lg:sticky lg:top-24 scroll-mt-24">
                         {editingAgentOrder && (
                             <div className="mb-5 p-4 rounded-2xl bg-amber-50 border border-amber-100 text-amber-800 flex flex-col gap-3">
                                 <div>
@@ -384,7 +406,7 @@ export const AgentDashboard = () => {
                         )}
                         <div className="flex justify-between items-center mb-6">
                             <h3 className="font-bold text-gray-800 flex items-center gap-2 text-lg"><ShoppingCart size={20} /> {t('agent_dashboard.cart')}</h3>
-                            {maintenanceMode ? <Badge color="red">{t('common.stopped')}</Badge> : <span className="bg-red-500 text-white text-sm font-bold rounded-full w-8 h-8 flex items-center justify-center">{Object.keys(cart).length}</span>}
+                            {maintenanceMode ? <Badge color="red">{t('common.stopped')}</Badge> : <span className="bg-red-500 text-white text-sm font-bold rounded-full w-8 h-8 flex items-center justify-center">{cartItemCount}</span>}
                         </div>
 
                         <div className="space-y-2 mb-6">
@@ -397,6 +419,7 @@ export const AgentDashboard = () => {
                                 <span className="font-mono font-black text-lg">{cartStats.totalBags}</span>
                             </div>
                             {cartStats.totalBuckets > 0 && <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-bold text-gray-600">أصباغ — سطلات</span><span className="font-mono font-black text-lg">{cartStats.totalBuckets}</span></div>}
+                            {cartStats.totalPieces > 0 && <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl border border-gray-100"><span className="text-sm font-bold text-gray-600">فلين — قطع</span><span className="font-mono font-black text-lg">{cartStats.totalPieces}</span></div>}
                             {hasSpecialInCart && (
                                 <div className="p-3 bg-indigo-50 rounded-xl border border-indigo-100 flex items-center gap-2 text-indigo-700 animate-pulse">
                                     <Sparkles size={14} className="shrink-0" />
@@ -421,7 +444,8 @@ export const AgentDashboard = () => {
                                     <ShippingCalculator 
                                         cartonCount={cartStats.totalCartons} 
                                         bagCount={cartStats.totalBags}
-                                        bucketCount={cartStats.totalBuckets} 
+                                        bucketCount={cartStats.totalBuckets}
+                                        pieceCount={cartStats.totalPieces}
                                         targetVehicle={targetVehicle}
                                         onTargetVehicleChange={(v) => {
                                             setTargetVehicle(v as any);
@@ -437,7 +461,7 @@ export const AgentDashboard = () => {
 
                                     <Button 
                                         onClick={handleOrderSubmit} 
-                                        disabled={Object.keys(cart).length === 0 || maintenanceMode || isOverLimit} 
+                                        disabled={cartItemCount === 0 || maintenanceMode || isOverLimit}
                                         variant={maintenanceMode ? "secondary" : "primary"} 
                                         className="w-full mt-6 text-lg py-4 shadow-xl"
                                     >
@@ -450,7 +474,7 @@ export const AgentDashboard = () => {
                 )}
             </div>
 
-            <div className="lg:col-span-3">
+            <div className="lg:col-span-3 order-1 lg:order-2">
                 {activeTab === 'catalog' && (
                     <CatalogTab
                         products={products} cart={cart} setCart={setCart} activeCat={activeCat} setActiveCat={setActiveCat} searchTerm={searchTerm} setSearchTerm={setSearchTerm} user={effectiveUser} maintenanceMode={maintenanceMode} maintenanceMessage={maintenanceMessage} editingOrderId={editingAgentOrder?.id ?? null} onCancelEdit={cancelAgentOrderEdit}
@@ -460,6 +484,7 @@ export const AgentDashboard = () => {
                 {activeTab === 'queue' && canShowQueue && <QueueTab productionQueue={productionQueue} user={effectiveUser} />}
                 {activeTab === 'finance' && canShowFinance && <FinanceTab myTransactions={myTransactions} currentBalance={userBalance} isDebt={isDebt} onViewOrder={setViewingOrder} />}
             </div>
+            <MobileBottomNavigation activeItem={mobileCartActive && activeTab === 'catalog' ? 'cart' : activeTab} cartCount={cartItemCount} canShowHistory={canShowHistory} canShowQueue={canShowQueue} canShowFinance={canShowFinance} onNavigate={navigateMobile} />
         </div>
     );
 };

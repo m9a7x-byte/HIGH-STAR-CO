@@ -332,7 +332,7 @@ export const ProductImportExportSubTab: React.FC<ProductImportExportSubTabProps>
                 <AlertTriangle size={20} className="shrink-0 mt-1" />
                 {typeFilter === 'PAINT' ? 'أدخل اسم المادة ونوع الصبغ والوزن وسعر السطلة للعادي وVIP. الأصباغ تباع بالسطلة مباشرة.' : typeFilter === 'ADHESIVE'
                     ? 'أدخل عدد الأكياس في الباليت وسعر الكيس للعادي وVIP فقط. سعر الباليت ينحسب تلقائياً من سعر الكيس × العدد.'
-                    : 'أدخل عدد الأمتار في الكارتون وسعر المتر للعادي وVIP فقط. سعر الكارتون ينحسب تلقائياً من سعر المتر × العدد.'}
+                    : 'اختَر طريقة البيع: كارتون أو قطعة. للكارتون أدخل مجموع الأمتار وسعر المتر؛ سعر الكارتون يحسب تلقائياً. للقطعة أدخل سعر القطعة واترك أمتار الكارتون صفر.'}
             </div>
 
             <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">

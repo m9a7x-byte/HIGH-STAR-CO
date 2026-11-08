@@ -5,6 +5,7 @@ import { STYROFOAM_CATEGORIES, ADHESIVE_CATEGORY } from './constants';
 import { supabase } from './supabase';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { getAdjustedProductPrices } from './pricing';
+import { snapshotProductUnits, validateProductQuantities, isPieceProduct, getProductFamily, normalizePaintColor } from './productFamilies';
 
 type Listener = () => void;
 
@@ -439,6 +440,7 @@ class SupabaseService {
         technicalSheetUrl: p.technical_sheet_url,
         isActive: p.is_active,
         metersPerCarton: p.meters_per_carton,
+        saleMode: p.sale_mode ?? 'CARTON',
         volumePerCarton: p.volume_per_carton
       }));
       this.notify();
@@ -711,7 +713,7 @@ class SupabaseService {
     });
   }
 
-  async createOrder(userId: string | number, items: { productId: string | number, qMeters: number, qCartons: number, isSpecial?: boolean, specialNote?: string }[], paidAmount: number, isManual: boolean = false, manualBy?: string, operatorId?: string | number) {
+  async createOrder(userId: string | number, items: { productId: string | number, qMeters: number, qCartons: number, paintColor?: string, isSpecial?: boolean, specialNote?: string }[], paidAmount: number, isManual: boolean = false, manualBy?: string, operatorId?: string | number) {
     let user = this.users.find(u => u.id == userId);
     if (!user) throw new Error('الوكيل غير موجود');
 
@@ -747,6 +749,7 @@ class SupabaseService {
       if (!p) throw new Error(`المنتج غير موجود (ID: ${item.productId})`);
 
       const prices = getAdjustedProductPrices(p, user.agentDetails);
+      validateProductQuantities(p, this.categories, Number(item.qCartons), Number(item.qMeters));
       const totalPrice = (item.qCartons * prices.pricePerCarton) + (item.qMeters * prices.pricePerMeter);
       return {
         id: Math.random(),
@@ -754,6 +757,8 @@ class SupabaseService {
         productCode: p.code,
         productName: p.name,
         productPaintType: p.paintType,
+        ...snapshotProductUnits(p),
+        paintColor: getProductFamily(p, this.categories) === 'PAINT' ? normalizePaintColor(item.paintColor) : undefined,
         productDimensions: p.dimensions,
         quantityCartons: item.qCartons,
         quantityMeters: item.qMeters,
@@ -767,7 +772,7 @@ class SupabaseService {
     const subTotal = orderItems.reduce((acc, curr) => acc + curr.totalPrice, 0);
     const totalVolume = orderItems.reduce((acc, curr) => {
       const p = this.products.find(x => x.id == curr.productId);
-      return acc + (curr.quantityCartons * (p?.volumePerCarton || 0));
+      return acc + (isPieceProduct(p) ? 0 : curr.quantityCartons * (p?.volumePerCarton || 0));
     }, 0);
 
     // Current Date
@@ -894,11 +899,12 @@ class SupabaseService {
     const newItems: OrderItem[] = items.map((item, idx) => {
       // Find product for volume info (even if active/inactive, we need volume)
       const product = this.products.find(p => p.id == item.productId);
+      if (!item.isSpecialRequest && product) validateProductQuantities(product, this.categories, Number(item.qCartons), Number(item.qMeters), item.productSaleMode);
 
       const totalPrice = (Number(item.qCartons) * Number(item.unitPriceCarton)) + (Number(item.qMeters) * Number(item.unitPriceMeter));
 
       if (!item.isSpecialRequest && product) {
-        newVolume += (Number(item.qCartons) * (product.volumePerCarton || 0));
+        newVolume += isPieceProduct(product, item.productSaleMode) ? 0 : (Number(item.qCartons) * (product.volumePerCarton || 0));
       }
 
       return {
@@ -907,6 +913,9 @@ class SupabaseService {
         productCode: item.productCode || (item.isSpecialRequest ? 'طلب خاص' : product?.code || '?'),
         productName: item.productName || product?.name,
         productPaintType: item.productPaintType || product?.paintType,
+        productSaleMode: item.productSaleMode ?? product?.saleMode ?? 'CARTON',
+        productMetersPerCarton: item.productMetersPerCarton ?? snapshotProductUnits(product).productMetersPerCarton,
+        paintColor: normalizePaintColor(item.paintColor),
         productDimensions: item.productDimensions || (item.isSpecialRequest ? 'أبعاد مخصصة' : product?.dimensions || '-'),
         quantityCartons: Number(item.qCartons),
         quantityMeters: Number(item.qMeters),
@@ -1508,7 +1517,7 @@ class SupabaseService {
   }
 
   async createProduct(userId: any, productData: any) {
-    const { id, imageUrl, isActive, metersPerCarton, volumePerCarton, paintType, paint_type, imageNote, image_note, technicalSheetUrl, technical_sheet_url, ...rest } = productData;
+    const { id, imageUrl, isActive, metersPerCarton, volumePerCarton, saleMode, sale_mode, paintType, paint_type, imageNote, image_note, technicalSheetUrl, technical_sheet_url, ...rest } = productData;
     // Map frontend camelCase to DB snake_case
     const dbPayload = {
       ...rest,
@@ -1518,6 +1527,7 @@ class SupabaseService {
       technical_sheet_url: technicalSheetUrl ?? technical_sheet_url ?? null,
       is_active: isActive,
       meters_per_carton: metersPerCarton,
+      sale_mode: saleMode ?? sale_mode ?? 'CARTON',
       volume_per_carton: volumePerCarton
     };
 
@@ -1527,7 +1537,7 @@ class SupabaseService {
     this.notify();
   }
   async updateProduct(userId: any, productData: any) {
-    const { id, imageUrl, isActive, metersPerCarton, volumePerCarton, paintType, paint_type, imageNote, image_note, technicalSheetUrl, technical_sheet_url, ...rest } = productData;
+    const { id, imageUrl, isActive, metersPerCarton, volumePerCarton, saleMode, sale_mode, paintType, paint_type, imageNote, image_note, technicalSheetUrl, technical_sheet_url, ...rest } = productData;
     const dbPayload = {
       ...rest,
       image_url: imageUrl,
@@ -1536,6 +1546,7 @@ class SupabaseService {
       technical_sheet_url: technicalSheetUrl ?? technical_sheet_url ?? null,
       is_active: isActive,
       meters_per_carton: metersPerCarton,
+      ...(saleMode !== undefined || sale_mode !== undefined ? { sale_mode: saleMode ?? sale_mode } : {}),
       volume_per_carton: volumePerCarton
     };
 

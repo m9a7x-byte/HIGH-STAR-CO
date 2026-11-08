@@ -1,3 +1,4 @@
+import { getProductUnit } from '../../lib/productFamilies';
 import { useTranslation } from 'react-i18next';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
@@ -331,7 +332,7 @@ export const AdminDashboard = ({ activeTab, setActiveTab }: AdminDashboardProps)
                                                                     </div>
                                                                     <div className="text-left bg-blue-50 px-3 py-1 rounded-lg border border-blue-100">
                                                                         <span className="font-black text-[#0e3c63] font-mono">{(item.quantityCartons || 0)}</span>
-                                                                        <span className="text-[9px] font-bold text-[#0e3c63]/60 mr-1">{t('batch4.k166')}</span>
+                                                                        <span className="text-[9px] font-bold text-[#0e3c63]/60 mr-1">{item.productPaintType ? 'سطلة' : getProductUnit(db.products.find(p => p.id == item.productId), db.categories, item.productSaleMode)}</span>
                                                                     </div>
                                                                 </div>
                                                             ))}

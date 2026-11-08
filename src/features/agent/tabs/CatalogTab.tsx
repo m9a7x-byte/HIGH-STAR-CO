@@ -12,11 +12,19 @@ import { db } from '../../../lib/db';
 import { useToast } from '../../../context/ToastContext';
 import { ProductSortMode, sortProductsForCatalog } from '../../../lib/productSort';
 import { getAdjustedProductPrices } from '../../../lib/pricing';
+import { isPieceProduct } from '../../../lib/productFamilies';
+
+type CatalogCartEntry = {
+    m: number; c: number; isSpecial?: boolean; specialNote?: string;
+    productCode?: string; productDimensions?: string; unitPriceCarton?: number;
+    unitPriceMeter?: number; priceAdjustmentNote?: string; paintColor?: string;
+    productSaleMode?: 'CARTON' | 'PIECE'; productMetersPerCarton?: number;
+};
 
 interface CatalogTabProps {
     products: Product[];
-    cart: Record<number, { m: number, c: number, isSpecial?: boolean, specialNote?: string, productCode?: string, productDimensions?: string, unitPriceCarton?: number, unitPriceMeter?: number, priceAdjustmentNote?: string }>;
-    setCart: React.Dispatch<React.SetStateAction<Record<number, { m: number, c: number, isSpecial?: boolean, specialNote?: string, productCode?: string, productDimensions?: string, unitPriceCarton?: number, unitPriceMeter?: number, priceAdjustmentNote?: string }>>>;
+    cart: Record<number, CatalogCartEntry>;
+    setCart: React.Dispatch<React.SetStateAction<Record<number, CatalogCartEntry>>>;
     activeCat: string;
     setActiveCat: (cat: string) => void;
     searchTerm: string;
@@ -308,12 +316,15 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
                                 </div>
                             ))
                         ) : filteredProducts.map(p => {
-                            const price = getAdjustedProductPrices(p, user!.agentDetails);
                             const inCart = cart[p.id];
+                            const price = inCart?.productSaleMode && inCart.productSaleMode !== (p.saleMode ?? 'CARTON')
+                                ? { pricePerCarton: inCart.unitPriceCarton ?? 0, pricePerMeter: inCart.unitPriceMeter ?? 0, increasePercent: 0 }
+                                : getAdjustedProductPrices(p, user!.agentDetails);
                             const family = db.categories.find((c: any) => c.name === p.category)?.type;
                             const isAdhesive = family === 'ADHESIVE';
                             const isPaint = family === 'PAINT';
-                            const isUnitProduct = isAdhesive || isPaint;
+                            const isPiece = family === 'STYROFOAM' && isPieceProduct(p, inCart?.productSaleMode);
+                            const isUnitProduct = isAdhesive || isPaint || isPiece;
                             const bagsPerPallet = Math.max(0, Number(p.metersPerCarton ?? 80));
                             const palletPrice = Math.round((Number(price.pricePerCarton || 0) * bagsPerPallet) * 100) / 100;
                             return (
@@ -326,6 +337,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
                                         <div className="min-w-0 flex-1 pt-1">
                                             <h4 className={`text-gray-800 mb-1 group-hover:text-[#0e3c63] transition-colors ${isPaint ? 'text-base sm:text-lg font-bold leading-relaxed break-words' : 'text-3xl font-black font-mono tracking-tighter'}`}>{p.name || p.code}</h4>
                                             <p className="text-sm font-bold text-gray-400 leading-tight">{p.paintType ? `${p.paintType} — ${p.dimensions}` : p.dimensions}</p>
+                                            {isPiece && <p className="text-xs font-bold text-[#0e3c63] mt-2">يباع بالقطعة</p>}
                                             {p.imageNote && <p className="text-[10px] text-gray-500 mt-2">{p.imageNote}</p>}
                                             {isAdhesive && (
                                                 <div className="mt-2 w-fit px-2.5 py-1 rounded-lg bg-purple-50 text-purple-700 border border-purple-100 text-[10px] font-black">
@@ -335,9 +347,10 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
                                         </div>
                                     </div>
                                     <ProductTechnicalDetails product={p} compact />
+                                    {isPaint && <div className="mb-4 space-y-2"><label htmlFor={`paint-colors-${p.id}`} className="block text-xs font-bold text-[#0e3c63]">اللون / الألوان المطلوبة</label><textarea id={`paint-colors-${p.id}`} rows={2} maxLength={500} placeholder="اكتب لوناً أو أكثر، وافصل بينها بفاصلة" value={inCart?.paintColor || ''} onChange={e => setCart(prev => ({ ...prev, [p.id]: { ...prev[p.id], m: 0, c: prev[p.id]?.c || 0, paintColor: e.target.value } }))} className="w-full rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-800 outline-none focus:border-[#0e3c63] focus:bg-white resize-y" /><p className="text-[10px] text-gray-500">اختياري. يمكن كتابة أكثر من لون للمنتج نفسه.</p></div>}
                                     <div className={`flex-1 rounded-3xl p-1.5 mb-5 transition-colors ${inCart ? 'bg-blue-50/50 ring-1 ring-blue-100' : 'bg-gray-50'}`}>
                                         {isUnitProduct ? (
-                                            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-2 flex items-center h-16 transition-all"><span className="text-gray-400 font-bold text-xs px-3">{isPaint ? 'سطلة' : t('batch3.txt_hoh391_5353')}</span><div className="w-px h-6 bg-gray-200"></div><input type="number" min="0" placeholder="0" className="w-full h-full text-center text-2xl font-black text-gray-800 bg-transparent outline-none placeholder:text-gray-200" value={inCart?.c || ''} onChange={(e) => setCart(prev => ({ ...prev, [p.id]: { m: 0, c: Number(e.target.value) } }))} /></div>
+                                            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-2 flex items-center h-16 transition-all"><span className="text-gray-400 font-bold text-xs px-3">{isPiece ? 'عدد القطع' : isPaint ? 'سطلة' : t('batch3.txt_hoh391_5353')}</span><div className="w-px h-6 bg-gray-200"></div><input aria-label={isPiece ? `عدد قطع ${p.code}` : undefined} type="number" min="0" step={isPiece ? "1" : undefined} placeholder="0" className="w-full h-full text-center text-2xl font-black text-gray-800 bg-transparent outline-none placeholder:text-gray-200" value={inCart?.c || ''} onChange={(e) => { const count = Number(e.target.value); if (isPiece && !Number.isInteger(count)) return; setCart(prev => ({ ...prev, [p.id]: { ...prev[p.id], m: 0, c: Math.max(0, count) } })); }} /></div>
                                         ) : (
                                             <div className="grid grid-cols-2 gap-1.5 h-full"><div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-2 flex flex-col justify-center items-center h-20 relative overflow-hidden"><input type="number" min="0" placeholder="0" className="w-full text-center text-xl font-black text-gray-800 bg-transparent outline-none placeholder:text-gray-200 relative z-10" value={inCart?.c || ''} onChange={(e) => setCart(prev => ({ ...prev, [p.id]: { ...prev[p.id], c: Number(e.target.value) } }))} /><span className="text-[10px] font-bold text-gray-400 mt-1 uppercase tracking-wide">{t('batch3.txt_zrhwww_5353')}</span><div className="absolute top-0 right-0 w-8 h-8 bg-blue-50 rounded-bl-full -mr-4 -mt-4 opacity-50"></div></div><div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-2 flex flex-col justify-center items-center h-20 transition-all"><input type="number" min="0" placeholder="0" className="w-full text-center text-xl font-black text-gray-800 bg-transparent outline-none placeholder:text-gray-200" value={inCart?.m || ''} onChange={(e) => setCart(prev => ({ ...prev, [p.id]: { ...prev[p.id], m: Number(e.target.value) } }))} /><span className="text-[10px] font-bold text-gray-400 mt-1 uppercase tracking-wide">{t('batch3.txt_pxkoh8_5353')}</span></div></div>
                                         )}
@@ -345,7 +358,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
                                     <div className="flex justify-between items-end border-t border-dashed border-gray-200 pt-4">
                                         <div className="flex items-center gap-4">
                                             <div className="flex flex-col">
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">{isPaint ? 'سعر السطلة' : isAdhesive ? t('products_tab.price_bag_label') : t('products_tab.price_carton_label')}</span>
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">{isPiece ? 'سعر القطعة' : isPaint ? 'سعر السطلة' : isAdhesive ? t('products_tab.price_bag_label') : t('products_tab.price_carton_label')}</span>
                                                 <span className="text-xl font-black font-mono text-gray-800 group-hover:text-[#0e3c63] transition-colors">${price.pricePerCarton}</span>
                                                 {isAdhesive && <span className="text-[10px] font-black text-purple-600 mt-1">باليت ${palletPrice}</span>}
                                             </div>

@@ -211,6 +211,8 @@ export interface User {
   deleted_at?: string | null;
 }
 
+export type ProductSaleMode = 'CARTON' | 'PIECE';
+
 export interface Product {
   id: number | string;
   code: string;
@@ -220,6 +222,7 @@ export interface Product {
   imageNote?: string;
   technicalSheetUrl?: string;
   category: string;
+  saleMode?: ProductSaleMode;
   dimensions: string;
   imageUrl: string;
   metersPerCarton: number;
@@ -237,6 +240,9 @@ export interface OrderItem {
   productCode: string;
   productName?: string;
   productPaintType?: string;
+  productSaleMode?: ProductSaleMode;
+  productMetersPerCarton?: number;
+  paintColor?: string;
   productDimensions: string;
   quantityMeters: number;
   quantityCartons: number;

@@ -1,3 +1,4 @@
+import { getProductFamily, isPieceProduct } from '../../../lib/productFamilies';
 import i18n from 'i18next';
 const t = i18n.t.bind(i18n);
 
@@ -44,13 +45,14 @@ export const ReportsTab = ({ orders, products, agents, isDateInRange, onNavigate
 
         // 2. تحليل عميق للمواد
         let foamCartons = 0;
+        let foamPieces = 0;
         let foamMeters = 0;
         let adhesiveBags = 0;
         let foamRevenue = 0;
         let adhesiveRevenue = 0;
         let specialRequestsCount = 0;
 
-        const foamSales: Record<number, { code: string, cartons: number, meters: number, revenue: number, dims: string }> = {};
+        const foamSales: Record<string, { code: string, cartons: number, meters: number, revenue: number, dims: string, unit: string }> = {};
         const adhesiveSales: Record<number, { code: string, bags: number, revenue: number, dims: string }> = {};
 
         filtered.forEach((order: Order) => {
@@ -71,17 +73,20 @@ export const ReportsTab = ({ orders, products, agents, isDateInRange, onNavigate
                     adhesiveSales[item.productId].revenue += item.totalPrice;
                     adhesiveBags += item.quantityCartons;
                     adhesiveRevenue += item.totalPrice;
-                } else if (!item.isSpecialRequest) { // Only count standard foam items here
-                    if (!foamSales[item.productId]) {
-                        foamSales[item.productId] = { code: item.productCode, cartons: 0, meters: 0, revenue: 0, dims: item.productDimensions };
+                } else if (!item.isSpecialRequest && getProductFamily(p, db.categories) === 'STYROFOAM') {
+                    const piece = isPieceProduct(p, item.productSaleMode);
+                    const key = `${item.productId}|${piece ? 'PIECE' : 'CARTON'}`;
+                    if (!foamSales[key]) {
+                        foamSales[key] = { code: item.productCode, cartons: 0, meters: 0, revenue: 0, dims: item.productDimensions, unit: piece ? 'قطعة' : 'كارتون' };
                     }
                     // احتساب الأمتار المضافة يدوياً فقط لعرضها كبادج
-                    foamSales[item.productId].cartons += item.quantityCartons;
-                    foamSales[item.productId].meters += (item.quantityMeters || 0);
-                    foamSales[item.productId].revenue += item.totalPrice;
+                    foamSales[key].cartons += item.quantityCartons;
+                    foamSales[key].meters += (item.quantityMeters || 0);
+                    foamSales[key].revenue += item.totalPrice;
 
-                    const itemMetersTotal = (item.quantityCartons * (p?.metersPerCarton || 0)) + (item.quantityMeters || 0);
-                    foamCartons += item.quantityCartons;
+                    const itemMetersTotal = piece ? 0 : (item.quantityCartons * (item.productMetersPerCarton ?? p?.metersPerCarton ?? 0)) + (item.quantityMeters || 0);
+                    foamCartons += piece ? 0 : item.quantityCartons;
+                    foamPieces += piece ? item.quantityCartons : 0;
                     foamMeters += itemMetersTotal;
                     foamRevenue += item.totalPrice;
                 }
@@ -119,7 +124,7 @@ export const ReportsTab = ({ orders, products, agents, isDateInRange, onNavigate
 
         return {
             totalRevenue, totalPaid, totalDebt, avgOrderValue,
-            foamCartons, foamMeters, foamRevenue,
+            foamCartons, foamPieces, foamMeters, foamRevenue,
             adhesiveBags, adhesiveRevenue,
             specialRequestsCount,
             recentOrders, topAgents, topProvinces,
@@ -212,6 +217,7 @@ export const ReportsTab = ({ orders, products, agents, isDateInRange, onNavigate
                     <div className="absolute top-0 right-0 w-24 h-24 bg-blue-50 rounded-bl-full -mr-12 -mt-12 transition-transform group-hover:scale-110 opacity-70"></div>
                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 relative z-10">{t('batch4.k433')}</p>
                     <h4 className="text-xl font-black text-gray-800 font-mono relative z-10">{reportData.foamCartons.toLocaleString()} {t('batch4.k449')}</h4>
+                    {reportData.foamPieces > 0 && <p className="text-xs font-bold text-[#0e3c63] mt-1">{reportData.foamPieces.toLocaleString()} قطعة</p>}
                     <p className="text-[10px] font-bold text-blue-500 mt-1 relative z-10">{Math.round(reportData.foamMeters).toLocaleString()} {t('batch4.txt_total_meters')}</p>
                     <div className="mt-4 p-2 bg-blue-50 text-[#0e3c63] rounded-xl w-fit"><Box size={18} /></div>
                 </Card>
@@ -259,6 +265,7 @@ export const ReportsTab = ({ orders, products, agents, isDateInRange, onNavigate
                             </div>
                             <div className="space-y-1">
                                 <p className="text-[10px] font-bold text-gray-500 flex justify-between"><span>{t('batch4.k437')}</span> <span>{reportData.foamCartons.toLocaleString()}</span></p>
+                                {reportData.foamPieces > 0 && <p className="text-[10px] font-bold text-gray-500 flex justify-between"><span>قطع الفلين</span><span>{reportData.foamPieces.toLocaleString()}</span></p>}
                                 <p className="text-[10px] font-bold text-gray-500 flex justify-between"><span>{t('batch4.k438')}</span> <span>{Math.round(reportData.foamMeters).toLocaleString()} {t('batch4.txt_sqm')}</span></p>
                                 <p className="text-lg font-black text-[#0e3c63] font-mono mt-3">${reportData.foamRevenue.toLocaleString()}</p>
                             </div>
@@ -373,7 +380,7 @@ export const ReportsTab = ({ orders, products, agents, isDateInRange, onNavigate
                                     .filter((i: any) => {
                                         const p = products.find((pr: any) => pr.id === i.productId);
                                         const isAdh = p ? db.categories.find((c: any) => c.name === p.category)?.type === 'ADHESIVE' : false;
-                                        return !isAdh;
+                                        return !isAdh && getProductFamily(p, db.categories) === 'STYROFOAM' && !isPieceProduct(p, i.productSaleMode);
                                     })
                                     .reduce((acc: number, i: any) => acc + i.quantityCartons, 0);
 
@@ -381,10 +388,11 @@ export const ReportsTab = ({ orders, products, agents, isDateInRange, onNavigate
                                     .filter((i: any) => {
                                         const p = products.find((pr: any) => pr.id === i.productId);
                                         const isAdh = p ? db.categories.find((c: any) => c.name === p.category)?.type === 'ADHESIVE' : false;
-                                        return !isAdh;
+                                        return !isAdh && getProductFamily(p, db.categories) === 'STYROFOAM' && !isPieceProduct(p, i.productSaleMode);
                                     })
                                     .reduce((acc: number, i: any) => acc + i.quantityMeters, 0);
 
+                                const foamPieces = order.items.filter((i: OrderItem) => isPieceProduct(products.find((p: Product) => p.id === i.productId), i.productSaleMode)).reduce((sum: number, i: OrderItem) => sum + i.quantityCartons, 0);
                                 const adhBags = order.items
                                     .filter((i: any) => {
                                         const p = products.find((pr: any) => pr.id === i.productId);
@@ -420,6 +428,7 @@ export const ReportsTab = ({ orders, products, agents, isDateInRange, onNavigate
 
                                         <div className="flex flex-wrap gap-2 pt-2 border-t border-dashed border-gray-200">
                                             {foamCartons > 0 && <span className="bg-blue-100/50 text-[#0e3c63] px-2 py-1 rounded-lg text-[9px] font-black border border-blue-100 flex items-center gap-1"><Box size={10} /> {foamCartons} {t('batch4.k449')}</span>}
+                                            {foamPieces > 0 && <span className="bg-blue-50 text-[#0e3c63] px-2 py-1 rounded-lg text-[9px] font-black">{foamPieces} قطعة</span>}
                                             {foamMeters > 0 && <span className="bg-sky-50 text-sky-700 px-2 py-1 rounded-lg text-[9px] font-black border border-sky-100 flex items-center gap-1"><Ruler size={10} /> {foamMeters} {t('batch4.txt_sqm')}</span>}
                                             {adhBags > 0 && <span className="bg-purple-50 text-purple-700 px-2 py-1 rounded-lg text-[9px] font-black border border-purple-100 flex items-center gap-1"><Layers size={10} /> {adhBags} {t('batch4.k125')}</span>}
                                         </div>
@@ -461,7 +470,7 @@ export const ReportsTab = ({ orders, products, agents, isDateInRange, onNavigate
                                             <div className="text-left font-mono flex items-center gap-2">
                                                 <div className="flex flex-col items-end">
                                                     <span className="text-xl font-black text-gray-800">{p.cartons.toLocaleString()}</span>
-                                                    <span className="text-[9px] font-bold text-gray-400 uppercase">{t('batch4.k449')}</span>
+                                                    <span className="text-[9px] font-bold text-gray-400 uppercase">{p.unit}</span>
                                                 </div>
                                                 {p.meters > 0 && (
                                                     <div className="bg-blue-100 text-blue-700 px-2 py-1 rounded-lg border border-blue-200 flex flex-col items-center min-w-[50px]">

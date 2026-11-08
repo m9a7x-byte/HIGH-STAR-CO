@@ -177,20 +177,20 @@ export const InvoiceModal = ({ order, onClose, allowPrint = true, respectPrintSe
                                         <th className="p-3 print:p-1.5 w-10 text-center">{t('invoice.th_seq')}</th>
                                         <th className="p-3 print:p-1.5">{t('invoice.th_code')}</th>
                                         <th className="p-3 print:p-1.5">{t('invoice.th_dimensions')}</th>
-                                        <th className="p-3 print:p-1.5 text-center">{t('invoice.th_cartons')}</th>
+                                        <th className="p-3 print:p-1.5 text-center">العدد / الوحدة</th>
                                         <th className="p-3 print:p-1.5 text-center">{t('invoice.th_individual_meters')}</th>
                                         <th className="p-3 print:p-1.5 text-center">{t('invoice.th_meters_per_carton')}</th>
                                         <th className="p-3 print:p-1.5 text-center">{t('invoice.th_total_meters')}</th>
-                                        <th className="p-3 print:p-1.5 text-center price-col">{t('invoice.th_unit_price_meter')}</th>
+                                        <th className="p-3 print:p-1.5 text-center price-col">سعر المتر / الوحدة</th>
                                         <th className="p-3 print:p-1.5 text-left price-col">{t('invoice.th_total_price')}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100 print:divide-gray-400">
                                     {sortOrderItemsByProductCode(order.items).map((item, index) => {
                                         const product = db.products.find((p: any) => p.id === item.productId || String(p.id) === String(item.productId));
-                                        const isAdhesive = isUnitPricedProduct(product, db.categories) || !!item.productPaintType;
-                                        const itemUnit = item.productPaintType ? 'سطلة' : getProductUnit(product, db.categories);
-                                        const metersPerCarton = product?.metersPerCarton || 0;
+                                        const isAdhesive = isUnitPricedProduct(product, db.categories, item.productSaleMode) || !!item.productPaintType;
+                                        const itemUnit = item.productPaintType ? 'سطلة' : getProductUnit(product, db.categories, item.productSaleMode);
+                                        const metersPerCarton = item.productMetersPerCarton ?? product?.metersPerCarton ?? 0;
                                         const totalMeters = isAdhesive ? 0 : (item.quantityCartons * metersPerCarton) + (item.quantityMeters || 0);
                                         const unitPriceMeter = isAdhesive ? 0 : (metersPerCarton > 0 ? (item.unitPriceCarton / metersPerCarton) : (item.unitPriceMeter || 0));
                                         const computedTotalPrice = isAdhesive ? (item.totalPrice || 0) : (totalMeters * unitPriceMeter);
@@ -207,7 +207,7 @@ export const InvoiceModal = ({ order, onClose, allowPrint = true, respectPrintSe
                                                         {item.productName || product?.name || item.productCode}
                                                     </div>
                                                 </td>
-                                                <td className="p-3 print:p-1.5 text-gray-500 print:text-black">{item.productPaintType || product?.paintType ? `${item.productPaintType || product?.paintType} — ${item.productDimensions}` : item.productDimensions}</td>
+                                                <td className="p-3 print:p-1.5 text-gray-500 print:text-black">{item.productPaintType || product?.paintType ? `${item.productPaintType || product?.paintType} — ${item.productDimensions}` : item.productDimensions}{item.paintColor && <p className="mt-1 text-xs font-bold text-[#0e3c63] whitespace-pre-line">الألوان: {item.paintColor}</p>}</td>
                                                 <td className="p-3 print:p-1.5 text-center font-bold">
                                                     {isAdhesive ? (
                                                         <span>{item.quantityCartons} <span className="text-[10px] opacity-50">{itemUnit}</span></span>

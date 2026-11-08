@@ -42,10 +42,10 @@ export const ProductionConfirmationModal: React.FC<ProductionConfirmationModalPr
 
         // Find product to determine type
         const product = db.products.find(p => p.id === item.productId);
-        const isAdhesive = isUnitPricedProduct(product, db.categories) || !!item.productPaintType;
+        const isAdhesive = isUnitPricedProduct(product, db.categories, item.productSaleMode) || !!item.productPaintType;
 
         if (isAdhesive) {
-            return `${item.quantityCartons} ${item.productPaintType ? 'سطلة' : getProductUnit(product, db.categories)}`;
+            return `${item.quantityCartons} ${item.productPaintType ? 'سطلة' : getProductUnit(product, db.categories, item.productSaleMode)}`;
         } else {
             const parts = [];
             if (item.quantityCartons > 0) parts.push(`${item.quantityCartons} ${t('production.carton')}`);
@@ -98,6 +98,7 @@ export const ProductionConfirmationModal: React.FC<ProductionConfirmationModalPr
                                         <div>
                                             <h4 className="font-black text-gray-800 text-sm font-mono">{item.productName || db.products.find(p => String(p.id) === String(item.productId))?.name || item.productCode}</h4>
                                             <p className="text-[10px] text-gray-400 font-bold">{item.isSpecialRequest ? t('production.custom_dimensions') : item.productDimensions}</p>
+                                            {item.paintColor && <p className="mt-1 text-xs font-bold text-[#0e3c63] whitespace-pre-line">الألوان: {item.paintColor}</p>}
                                         </div>
                                     </div>
                                     <div className="bg-blue-50 text-blue-700 text-xs font-black px-3 py-1.5 rounded-lg font-mono" dir="ltr">

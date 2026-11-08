@@ -1,6 +1,6 @@
 import { ProductTechnicalDetails } from '../../../components/shared/ProductTechnicalDetails';
 import { ProductFamilySelector } from '../../../components/shared/ProductFamilySelector';
-import { PAINT_CATEGORY } from '../../../lib/productFamilies';
+import { PAINT_CATEGORY, isPieceProduct } from '../../../lib/productFamilies';
 import React, { useState, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -113,6 +113,7 @@ export const ProductsSubTab = ({ products, categories, orders, canEdit, onViewOr
     const [formBagPriceNormal, setFormBagPriceNormal] = useState<number>(0);
     const [formBagPriceVIP, setFormBagPriceVIP] = useState<number>(0);
     const [formMetersPerCarton, setFormMetersPerCarton] = useState<number>(0);
+    const [formSaleMode, setFormSaleMode] = useState<'CARTON' | 'PIECE'>('CARTON');
     const [mainType, setMainType] = useState<'STYROFOAM' | 'ADHESIVE' | 'PAINT'>('STYROFOAM');
 
     // Modals
@@ -123,6 +124,7 @@ export const ProductsSubTab = ({ products, categories, orders, canEdit, onViewOr
     // Dynamic Form Type: Derived from the selected category in the modal, fallback to mainType
     const selectedCategoryObject = categories.find((c: any) => c.name === modalCategory);
     const formType = selectedCategoryObject ? selectedCategoryObject.type : mainType;
+    const formIsPiece = formType === 'STYROFOAM' && formSaleMode === 'PIECE';
     const formBagsPerPallet = Math.max(0, Number(formMetersPerCarton ?? 80));
     const formPalletPriceNormal = Math.round((formBagPriceNormal * formBagsPerPallet) * 100) / 100;
     const formPalletPriceVIP = Math.round((formBagPriceVIP * formBagsPerPallet) * 100) / 100;
@@ -158,12 +160,14 @@ export const ProductsSubTab = ({ products, categories, orders, canEdit, onViewOr
     // Initialize controlled form state when editing a product or opening modal
     useEffect(() => {
         if (showProductModal && editingProduct) {
+            setFormSaleMode(editingProduct.saleMode ?? 'CARTON');
             setFormMeterPriceNormal(editingProduct.prices[AgentType.NORMAL].pricePerMeter || 0);
             setFormMeterPriceVIP(editingProduct.prices[AgentType.VIP].pricePerMeter || 0);
             setFormMetersPerCarton(editingProduct.metersPerCarton || 0);
             setFormBagPriceNormal(editingProduct.prices[AgentType.NORMAL].pricePerCarton || 0);
             setFormBagPriceVIP(editingProduct.prices[AgentType.VIP].pricePerCarton || 0);
         } else if (showProductModal && !editingProduct) {
+            setFormSaleMode('CARTON');
             setFormMeterPriceNormal(0);
             setFormMeterPriceVIP(0);
             setFormMetersPerCarton(mainType === 'ADHESIVE' ? 80 : 0);
@@ -265,7 +269,7 @@ export const ProductsSubTab = ({ products, categories, orders, canEdit, onViewOr
             // Determine type based on selected category, not just mainType
             const selectedCatObj = categories.find((c: any) => c.name === modalCategory);
             const effectiveType = selectedCatObj ? selectedCatObj.type : mainType;
-            const isAdh = effectiveType !== 'STYROFOAM';
+            const isAdh = effectiveType !== 'STYROFOAM' || formIsPiece;
 
             let finalImageUrl = editingProduct?.imageUrl || (effectiveType === 'PAINT' ? '' : `https://api.dicebear.com/9.x/shapes/svg?seed=${data.code}`);
 
@@ -274,7 +278,7 @@ export const ProductsSubTab = ({ products, categories, orders, canEdit, onViewOr
             }
 
             // For adhesive products, metersPerCarton stores bags-per-pallet so existing DB schema stays compatible.
-            const metersInCarton = effectiveType === 'PAINT' ? 1 : isAdh ? formBagsPerPallet : formMetersPerCarton;
+            const metersInCarton = formIsPiece ? 0 : effectiveType === 'PAINT' ? 1 : isAdh ? formBagsPerPallet : formMetersPerCarton;
             const meterPriceNormal = isAdh ? 0 : formMeterPriceNormal;
             const meterPriceVIP = isAdh ? 0 : formMeterPriceVIP;
             const cartonPriceNormal = isAdh ? Number(formBagPriceNormal || data.priceCartonNormal || 0) : Math.round((meterPriceNormal * metersInCarton) * 100) / 100;
@@ -283,6 +287,7 @@ export const ProductsSubTab = ({ products, categories, orders, canEdit, onViewOr
             const payload: any = {
                 code: data.code as string,
                 category: modalCategory || (isAdh ? ADHESIVE_CATEGORY : 'PAN'),
+                saleMode: effectiveType === 'STYROFOAM' ? formSaleMode : 'CARTON',
                 dimensions: data.dimensions as string,
                 metersPerCarton: metersInCarton,
                 volumePerCarton: 1,
@@ -345,6 +350,7 @@ export const ProductsSubTab = ({ products, categories, orders, canEdit, onViewOr
         ? categories.find((c: any) => c.name === viewingProduct.category)?.type || 'STYROFOAM'
         : 'STYROFOAM';
 
+    const viewingIsPiece = viewingProductType === 'STYROFOAM' && isPieceProduct(viewingProduct ?? undefined);
     return (
         <div className="space-y-8 animate-fade-in relative">
             {viewingProduct ? (
@@ -374,7 +380,7 @@ export const ProductsSubTab = ({ products, categories, orders, canEdit, onViewOr
                                             {viewingProductType === 'ADHESIVE' ? <Scale size={14} /> : <Ruler size={14} />}
                                             {viewingProductType === 'PAINT' ? 'الوزن / الحجم:' : viewingProductType === 'ADHESIVE' ? t("products_tab.weight_label") : t("products_tab.dimensions_label")} {viewingProduct.paintType ? `${viewingProduct.paintType} — ${viewingProduct.dimensions}` : viewingProduct.dimensions}
                                         </div>
-                                        {viewingProductType === 'PAINT' ? null : viewingProductType === 'ADHESIVE' ? (
+                                        {viewingIsPiece ? <span className="text-xs font-bold text-[#0e3c63]">يباع بالقطعة</span> : viewingProductType === 'PAINT' ? null : viewingProductType === 'ADHESIVE' ? (
                                             <div className="bg-purple-50 text-purple-700 px-3 py-1.5 rounded-xl border border-purple-100 text-xs font-black flex items-center gap-1.5">
                                                 <Layers size={14} />
                                                 {getBagsPerPallet(viewingProduct)} كيس / باليت
@@ -394,9 +400,9 @@ export const ProductsSubTab = ({ products, categories, orders, canEdit, onViewOr
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                                 <Card className="p-4 border-0 bg-gray-50/80 shadow-inner flex items-center gap-4">
                                     <div className="bg-white p-3 rounded-xl shadow-sm text-[#0e3c63] border border-gray-100"><Box size={22} /></div>
-                                    <div><p className="text-[9px] text-gray-400 font-black uppercase mb-0.5">{viewingProductType === 'PAINT' ? 'المباع — سطلة' : viewingProductType === 'ADHESIVE' ? t('products_tab.sold_bag') : t('products_tab.sold_carton')}</p><p className="text-2xl font-black text-gray-800 font-mono tracking-tighter">{productStats.totalSold.toLocaleString()}</p></div>
+                                    <div><p className="text-[9px] text-gray-400 font-black uppercase mb-0.5">{viewingIsPiece ? 'المباع — قطعة' : viewingProductType === 'PAINT' ? 'المباع — سطلة' : viewingProductType === 'ADHESIVE' ? t('products_tab.sold_bag') : t('products_tab.sold_carton')}</p><p className="text-2xl font-black text-gray-800 font-mono tracking-tighter">{productStats.totalSold.toLocaleString()}</p></div>
                                 </Card>
-                                {viewingProductType === 'STYROFOAM' && (
+                                {viewingProductType === 'STYROFOAM' && !viewingIsPiece && (
                                     <Card className="p-4 border-0 bg-gray-50/80 shadow-inner flex items-center gap-4">
                                         <div className="bg-white p-3 rounded-xl shadow-sm text-blue-500 border border-gray-100"><Ruler size={22} /></div>
                                         <div><p className="text-[9px] text-gray-400 font-black uppercase mb-0.5">{t("products_tab.sold_meter")}</p><p className="text-2xl font-black text-blue-600 font-mono tracking-tighter">{productStats.totalMetersSold.toLocaleString()}</p></div>
@@ -415,7 +421,7 @@ export const ProductsSubTab = ({ products, categories, orders, canEdit, onViewOr
                                             <div>
                                                 <div className="flex items-baseline gap-1">
                                                     <span className="font-black text-gray-800 font-mono text-xl">${viewingProduct.prices[AgentType.NORMAL].pricePerCarton}</span>
-                                                    <span className="text-[10px] text-gray-400 font-bold">{viewingProductType === 'PAINT' ? ' / سطلة' : viewingProductType === 'ADHESIVE' ? t('products_tab.per_bag') : t('products_tab.per_carton')}</span>
+                                                    <span className="text-[10px] text-gray-400 font-bold">{viewingIsPiece ? ' / قطعة' : viewingProductType === 'PAINT' ? ' / سطلة' : viewingProductType === 'ADHESIVE' ? t('products_tab.per_bag') : t('products_tab.per_carton')}</span>
                                                 </div>
                                                 {viewingProductType === 'ADHESIVE' && (
                                                     <div className="mt-1 flex items-center gap-2 text-[10px] font-black text-purple-600">
@@ -425,7 +431,7 @@ export const ProductsSubTab = ({ products, categories, orders, canEdit, onViewOr
                                                 )}
                                             </div>
                                         </div>
-                                        {viewingProductType === 'STYROFOAM' && viewingProduct.prices[AgentType.NORMAL].pricePerMeter > 0 && (
+                                        {viewingProductType === 'STYROFOAM' && !viewingIsPiece && viewingProduct.prices[AgentType.NORMAL].pricePerMeter > 0 && (
                                             <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-xl shadow-sm border border-gray-100">
                                                 <span className="font-bold text-gray-500 font-mono text-sm">${viewingProduct.prices[AgentType.NORMAL].pricePerMeter}</span>
                                                 <span className="text-[10px] text-gray-300 font-bold">{t("products_tab.per_meter")}</span>
@@ -441,7 +447,7 @@ export const ProductsSubTab = ({ products, categories, orders, canEdit, onViewOr
                                             <div>
                                                 <div className="flex items-baseline gap-1">
                                                     <span className="font-black text-white font-mono text-xl">${viewingProduct.prices[AgentType.VIP].pricePerCarton}</span>
-                                                    <span className="text-[10px] text-blue-200/60 font-bold">{viewingProductType === 'PAINT' ? ' / سطلة' : viewingProductType === 'ADHESIVE' ? t('products_tab.per_bag') : t('products_tab.per_carton')}</span>
+                                                    <span className="text-[10px] text-blue-200/60 font-bold">{viewingIsPiece ? ' / قطعة' : viewingProductType === 'PAINT' ? ' / سطلة' : viewingProductType === 'ADHESIVE' ? t('products_tab.per_bag') : t('products_tab.per_carton')}</span>
                                                 </div>
                                                 {viewingProductType === 'ADHESIVE' && (
                                                     <div className="mt-1 flex items-center gap-2 text-[10px] font-black text-blue-100">
@@ -451,7 +457,7 @@ export const ProductsSubTab = ({ products, categories, orders, canEdit, onViewOr
                                                 )}
                                             </div>
                                         </div>
-                                        {viewingProductType === 'STYROFOAM' && viewingProduct.prices[AgentType.VIP].pricePerMeter > 0 && (
+                                        {viewingProductType === 'STYROFOAM' && !viewingIsPiece && viewingProduct.prices[AgentType.VIP].pricePerMeter > 0 && (
                                             <div className="relative z-10 flex items-center gap-2 px-4 py-2 bg-white/10 rounded-xl border border-white/10 backdrop-blur-sm">
                                                 <span className="font-bold text-white font-mono text-sm">${viewingProduct.prices[AgentType.VIP].pricePerMeter}</span>
                                                 <span className="text-[10px] text-blue-200/60 font-bold">{t("products_tab.per_meter")}</span>
@@ -480,8 +486,8 @@ export const ProductsSubTab = ({ products, categories, orders, canEdit, onViewOr
                                         <th className="p-6">{t("products_tab.date")}</th>
                                         <th className="p-6">{t("products_tab.invoice_number")}</th>
                                         <th className="p-6">{t("products_tab.agent")}</th>
-                                        <th className="p-6 text-center">{viewingProductType === 'PAINT' ? 'سطلة' : t("products_tab.carton_bag")}</th>
-                                        {viewingProductType === 'STYROFOAM' && <th className="p-6 text-center">{t("products_tab.extra_meter")}</th>}
+                                        <th className="p-6 text-center">{viewingIsPiece ? 'قطعة' : viewingProductType === 'PAINT' ? 'سطلة' : t("products_tab.carton_bag")}</th>
+                                        {viewingProductType === 'STYROFOAM' && !viewingIsPiece && <th className="p-6 text-center">{t("products_tab.extra_meter")}</th>}
                                         <th className="p-6 text-left pl-10">{t("products_tab.total")}</th>
                                         <th className="p-6 text-center">{t("products_tab.action")}</th>
                                     </tr>
@@ -493,7 +499,7 @@ export const ProductsSubTab = ({ products, categories, orders, canEdit, onViewOr
                                             <td className="p-6 font-mono font-black text-[#0e3c63]">#{row.orderId}</td>
                                             <td className="p-6 font-black text-gray-700">{row.agentName}</td>
                                             <td className="p-6 text-center"><span className="bg-blue-50 text-[#0e3c63] px-3 py-1.5 rounded-xl font-black font-mono border border-blue-100">{row.quantityC}</span></td>
-                                            {viewingProductType === 'STYROFOAM' && <td className="p-6 text-center"><span className="bg-amber-50 text-amber-700 px-3 py-1.5 rounded-xl font-black font-mono border border-amber-100">{row.quantityM}</span></td>}
+                                            {viewingProductType === 'STYROFOAM' && !viewingIsPiece && <td className="p-6 text-center"><span className="bg-amber-50 text-amber-700 px-3 py-1.5 rounded-xl font-black font-mono border border-amber-100">{row.quantityM}</span></td>}
                                             <td className="p-6 text-left pl-10 font-mono font-black text-emerald-600">${row.total.toLocaleString()}</td>
                                             <td className="p-6 text-center"><button onClick={() => { const ord = orders.find((o: any) => o.id === row.orderId); if (ord) onViewOrder(ord); }} className="text-gray-300 hover:text-[#0e3c63] p-3 rounded-xl hover:bg-white hover:shadow-md transition-all"><Eye size={20} /></button></td>
                                         </tr>
@@ -543,6 +549,7 @@ export const ProductsSubTab = ({ products, categories, orders, canEdit, onViewOr
                         {filteredProducts.map((p: any) => {
                             const productType = categories.find((c: any) => c.name === p.category)?.type || 'STYROFOAM';
                             const isAdhesive = productType === 'ADHESIVE';
+                            const isPiece = productType === 'STYROFOAM' && isPieceProduct(p);
                             return (
                             <div key={p.id} onClick={() => setViewingProduct(p)} className="group relative bg-white rounded-[3rem] p-8 border border-gray-100 shadow-sm hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 cursor-pointer overflow-hidden">
                                 {canEdit && (
@@ -553,6 +560,7 @@ export const ProductsSubTab = ({ products, categories, orders, canEdit, onViewOr
                                     <div className="min-w-0 flex-1 pt-2">
                                         <h4 className={`text-gray-800 mb-1 ${productType === 'PAINT' ? 'text-base sm:text-lg font-bold leading-relaxed break-words' : 'text-3xl font-black font-mono tracking-tighter'}`}>{p.name || p.code}</h4>
                                         {productType === 'PAINT' && <p className="text-xs font-bold text-[#0e3c63] mb-2">{p.paintType} · {p.code}</p>}
+                                        {isPiece && <p className="text-xs font-bold text-[#0e3c63] mb-2">يباع بالقطعة</p>}
                                         {p.imageNote && <p className="text-[10px] font-medium text-gray-500 mb-2">{p.imageNote}</p>}
                                         <p className="text-xs font-bold text-gray-400 flex items-center gap-1.5">{isAdhesive ? <Scale size={12} /> : <Ruler size={12} />} {p.dimensions}</p>
                                         {isAdhesive && (
@@ -571,7 +579,7 @@ export const ProductsSubTab = ({ products, categories, orders, canEdit, onViewOr
                                             <div className="flex items-baseline justify-center gap-0.5">
                                                 <span className="text-xs font-bold text-gray-300 align-top">$</span>
                                                 <span className="font-black text-gray-800 font-mono text-xl">{p.prices[AgentType.NORMAL].pricePerCarton}</span>
-                                                <span className="text-[10px] text-gray-400 font-bold mr-1">{productType === 'PAINT' ? ' / سطلة' : isAdhesive ? t('products_tab.per_bag') : t('products_tab.per_carton')}</span>
+                                                <span className="text-[10px] text-gray-400 font-bold mr-1">{isPiece ? ' / قطعة' : productType === 'PAINT' ? ' / سطلة' : isAdhesive ? t('products_tab.per_bag') : t('products_tab.per_carton')}</span>
                                             </div>
                                             {isAdhesive && (
                                                 <div className="flex items-center justify-center gap-1 pt-2 mt-1 border-t border-dashed border-purple-100">
@@ -579,7 +587,7 @@ export const ProductsSubTab = ({ products, categories, orders, canEdit, onViewOr
                                                     <span className="text-[9px] text-purple-300 font-bold">/ باليت</span>
                                                 </div>
                                             )}
-                                            {productType === 'STYROFOAM' && p.prices[AgentType.NORMAL].pricePerMeter > 0 && (
+                                            {productType === 'STYROFOAM' && !isPiece && p.prices[AgentType.NORMAL].pricePerMeter > 0 && (
                                                 <div className="flex items-center justify-center gap-1 pt-2 mt-1 border-t border-dashed border-gray-100">
                                                     <span className="font-bold text-gray-500 font-mono text-xs">${p.prices[AgentType.NORMAL].pricePerMeter}</span>
                                                     <span className="text-[9px] text-gray-300 font-bold">{t("products_tab.per_meter")}</span>
@@ -598,7 +606,7 @@ export const ProductsSubTab = ({ products, categories, orders, canEdit, onViewOr
                                             <div className="flex items-baseline justify-center gap-0.5">
                                                 <span className="text-xs font-bold text-blue-300 align-top">$</span>
                                                 <span className="font-black text-white font-mono text-xl">{p.prices[AgentType.VIP].pricePerCarton}</span>
-                                                <span className="text-[10px] text-blue-200/60 font-bold mr-1">{productType === 'PAINT' ? ' / سطلة' : isAdhesive ? t('products_tab.per_bag') : t('products_tab.per_carton')}</span>
+                                                <span className="text-[10px] text-blue-200/60 font-bold mr-1">{isPiece ? ' / قطعة' : productType === 'PAINT' ? ' / سطلة' : isAdhesive ? t('products_tab.per_bag') : t('products_tab.per_carton')}</span>
                                             </div>
                                             {isAdhesive && (
                                                 <div className="flex items-center justify-center gap-1 pt-2 mt-1 border-t border-dashed border-white/10">
@@ -606,7 +614,7 @@ export const ProductsSubTab = ({ products, categories, orders, canEdit, onViewOr
                                                     <span className="text-[9px] text-blue-300/60 font-bold">/ باليت</span>
                                                 </div>
                                             )}
-                                            {productType === 'STYROFOAM' && p.prices[AgentType.VIP].pricePerMeter > 0 && (
+                                            {productType === 'STYROFOAM' && !isPiece && p.prices[AgentType.VIP].pricePerMeter > 0 && (
                                                 <div className="flex items-center justify-center gap-1 pt-2 mt-1 border-t border-dashed border-white/10">
                                                     <span className="font-bold text-blue-100 font-mono text-xs">${p.prices[AgentType.VIP].pricePerMeter}</span>
                                                     <span className="text-[9px] text-blue-300/60 font-bold">{t("products_tab.per_meter")}</span>
@@ -676,6 +684,7 @@ export const ProductsSubTab = ({ products, categories, orders, canEdit, onViewOr
                                         <Input required label={t("products_tab.product_code")} name="code" defaultValue={editingProduct?.code} placeholder={t("products_tab.product_code_placeholder")} />
                                         <CategorySelector label={t("products_tab.product_category")} categories={categories} value={modalCategory} onChange={setModalCategory} placeholder={t("products_tab.product_category_placeholder")} />
                                     </div>
+                                    {formType === 'STYROFOAM' && <div className="space-y-2"><label htmlFor="product-sale-mode" className="block text-sm font-bold text-gray-700">طريقة البيع</label><select id="product-sale-mode" value={formSaleMode} onChange={e => { setFormSaleMode(e.target.value as 'CARTON' | 'PIECE'); setFormBagPriceNormal(0); setFormBagPriceVIP(0); }} className="w-full h-14 rounded-xl border border-gray-200 px-4 font-bold"><option value="CARTON">كارتون</option><option value="PIECE">قطعة</option></select></div>}
                                     {formType === 'PAINT' && <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <Input required label="اسم المادة" name="name" defaultValue={editingProduct?.name} />
                                         <Input required label="نوع الصبغ" name="paintType" defaultValue={editingProduct?.paintType} />
@@ -684,11 +693,11 @@ export const ProductsSubTab = ({ products, categories, orders, canEdit, onViewOr
                                         <div>
                                             <Input required label={formType === 'PAINT' ? 'الوزن / الحجم' : formType === 'ADHESIVE' ? t('products_tab.weight_kg') : t('products_tab.dimensions_cm')} name="dimensions" defaultValue={editingProduct?.dimensions} placeholder={formType === 'PAINT' ? '18 لتر / 20 كغم / كالون' : formType === 'ADHESIVE' ? "25kg" : "200x50x5 cm"} />
                                         </div>
-                                        {formType !== 'PAINT' && <Input
+                                        {formType !== 'PAINT' && !formIsPiece && <Input
                                             type="number"
                                             required
                                             min="0"
-                                            label={formType === 'ADHESIVE' ? 'عدد الأكياس بالباليت' : t("products_tab.meters_in_carton")}
+                                            label={formType === 'ADHESIVE' ? 'عدد الأكياس بالباليت' : 'مجموع الأمتار بالكارتون'}
                                             name={formType === 'ADHESIVE' ? 'bagsPerPallet' : 'metersPerCarton'}
                                             value={formMetersPerCarton}
                                             onChange={(e: any) => setFormMetersPerCarton(Number(e.target.value) || 0)}
@@ -704,7 +713,7 @@ export const ProductsSubTab = ({ products, categories, orders, canEdit, onViewOr
                                         <div className="bg-white p-6 rounded-[2.5rem] border border-gray-100 shadow-md space-y-4">
                                             <div className="flex items-center gap-3 border-b border-gray-50 pb-3 mb-2"><div className="p-2 bg-gray-50 text-gray-400 rounded-xl"><User size={18} /></div><span className="font-black text-gray-700">{t("products_tab.normal_agents")}</span></div>
                                             <div className="space-y-4">
-                                                {formType === 'PAINT' ? (<Input type="number" min="0" step="0.01" required label="سعر السطلة" name="priceCartonNormal" value={formBagPriceNormal} onChange={(e: any) => setFormBagPriceNormal(Number(e.target.value) || 0)} />) : formType === 'ADHESIVE' ? (
+                                                {formType === 'PAINT' || formIsPiece ? (<Input type="number" min="0" step="any" required label={formIsPiece ? 'سعر القطعة' : 'سعر السطلة'} name="priceCartonNormal" value={formBagPriceNormal} onChange={(e: any) => setFormBagPriceNormal(Number(e.target.value) || 0)} />) : formType === 'ADHESIVE' ? (
                                                     <>
                                                         <Input type="number" step="0.01" required label={t('products_tab.price_bag_label')} name="priceCartonNormal" value={formBagPriceNormal} onChange={(e: any) => setFormBagPriceNormal(Number(e.target.value) || 0)} />
                                                         <div className="space-y-2">
@@ -736,7 +745,7 @@ export const ProductsSubTab = ({ products, categories, orders, canEdit, onViewOr
                                         <div className="bg-[#0e3c63] p-6 rounded-[2.5rem] shadow-2xl space-y-4 text-white">
                                             <div className="flex items-center gap-3 border-b border-white/10 pb-3 mb-2"><div className="p-2 bg-white/10 text-amber-400 rounded-xl"><Award size={18} /></div><span className="font-black">{t("products_tab.vip_agents")}</span></div>
                                             <div className="space-y-4">
-                                                {formType === 'PAINT' ? (<Input type="number" min="0" step="0.01" required label="سعر السطلة VIP" name="priceCartonVIP" value={formBagPriceVIP} onChange={(e: any) => setFormBagPriceVIP(Number(e.target.value) || 0)} />) : formType === 'ADHESIVE' ? (
+                                                {formType === 'PAINT' || formIsPiece ? (<div className="space-y-2"><label htmlFor="product-vip-unit-price" className="block text-xs font-black text-blue-200 mr-1">{formIsPiece ? 'سعر القطعة VIP' : 'سعر السطلة VIP'}</label><input id="product-vip-unit-price" type="number" min="0" step="any" required name="priceCartonVIP" value={formBagPriceVIP} onChange={(e: any) => setFormBagPriceVIP(Number(e.target.value) || 0)} className="w-full h-12 bg-white/10 border border-white/20 rounded-xl px-4 font-black font-mono text-white outline-none focus:bg-white/20 focus:border-blue-200" /></div>) : formType === 'ADHESIVE' ? (
                                                     <>
                                                         <div className="space-y-2">
                                                             <label className="block text-xs font-black text-blue-200 mr-1">{t('products_tab.price_bag_label')}</label>

@@ -1,3 +1,4 @@
+import { getProductUnit, isUnitPricedProduct } from '../../../lib/productFamilies';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
     CheckCircle2,
@@ -50,6 +51,7 @@ interface MergedItem {
     isAdhesive: boolean;
     unitLabel: string;
     productName?: string;
+    paintColor?: string;
     isSpecialRequest?: boolean;
     specialRequestNote?: string;
     invoiceRefs: MergedInvoiceRef[];
@@ -85,6 +87,7 @@ const compareDimensions = (a: string, b: string) => {
 const getItemKey = (item: OrderItem) => [
     item.productCode || '',
     item.productDimensions || '',
+    item.paintColor?.trim() || '',
     item.isSpecialRequest ? item.specialRequestNote || 'SPECIAL' : 'STANDARD',
 ].join('|');
 
@@ -142,11 +145,11 @@ export const InvoiceMergeTab = ({ orders, products, onViewOrder }: InvoiceMergeT
             order.items.forEach(item => {
                 const productInfo = categoryByProductId.get(String(item.productId));
                 const product = productInfo?.product;
-                const isAdhesive = productInfo?.type === 'ADHESIVE' || productInfo?.type === 'PAINT' || !!item.productPaintType;
-                const unitLabel = productInfo?.type === 'PAINT' || item.productPaintType ? 'سطلة' : isAdhesive ? 'كيس' : 'كرتون';
-                const metersPerCarton = isAdhesive ? 0 : Number(product?.metersPerCarton || 0);
+                const isAdhesive = isUnitPricedProduct(product, db.categories, item.productSaleMode) || !!item.productPaintType;
+                const unitLabel = item.productPaintType ? 'سطلة' : getProductUnit(product, db.categories, item.productSaleMode);
+                const metersPerCarton = isAdhesive ? 0 : Number(item.productMetersPerCarton ?? product?.metersPerCarton ?? 0);
                 const totalMeters = isAdhesive ? 0 : ((Number(item.quantityCartons || 0) * metersPerCarton) + Number(item.quantityMeters || 0));
-                const key = getItemKey(item);
+                const key = `${getItemKey(item)}|${unitLabel}|${metersPerCarton}`;
                 const existing = map.get(key);
                 const itemCartons = Number(item.quantityCartons || 0);
                 const itemMeters = Number(item.quantityMeters || 0);
@@ -195,6 +198,7 @@ export const InvoiceMergeTab = ({ orders, products, onViewOrder }: InvoiceMergeT
                     isAdhesive,
                     unitLabel,
                     productName: item.productName || product?.name,
+                    paintColor: item.paintColor,
                     isSpecialRequest: item.isSpecialRequest,
                     specialRequestNote: item.specialRequestNote,
                     invoiceRefs: [{ orderId: order.id, agentName: order.agentName }],
@@ -306,7 +310,7 @@ export const InvoiceMergeTab = ({ orders, products, onViewOrder }: InvoiceMergeT
                         {showInvoiceColumn && <th className="p-1.5 print:p-1">الفواتير</th>}
                         <th className="p-1.5 print:p-1">الكود</th>
                         <th className="p-1.5 print:p-1">القياس</th>
-                        <th className="p-1.5 print:p-1 text-center">كارتون/كيس</th>
+                        <th className="p-1.5 print:p-1 text-center">العدد / الوحدة</th>
                         <th className="p-1.5 print:p-1 text-center">أمتار</th>
                         <th className="p-1.5 print:p-1 text-center">متر/كارتون</th>
                         <th className="p-1.5 print:p-1 text-center">مجموع م</th>
@@ -335,9 +339,9 @@ export const InvoiceMergeTab = ({ orders, products, onViewOrder }: InvoiceMergeT
                                 <tr className={`text-[11px] print:text-[9px] leading-tight ${item.isSpecialRequest ? 'bg-amber-50 print:bg-white' : ''}`}>
                                     <td className="seq-cell px-1 py-0 print:px-1 print:py-0 text-center font-mono text-[7px] leading-none font-bold text-gray-400 print:text-black border-l print:border-gray-300 whitespace-nowrap">{index + 1}</td>
                                     {showInvoiceColumn && <td className="p-1.5 print:p-1 font-mono font-black text-[#0e3c63] print:text-black break-words">{invoiceText}</td>}
-                                    <td className="p-1.5 print:p-1 font-black text-gray-800 print:font-bold break-words">{item.productName || item.productCode}</td>
+                                    <td className="p-1.5 print:p-1 font-black text-gray-800 print:font-bold break-words">{item.productName || item.productCode}{item.paintColor && <p className="mt-1 text-[10px] font-bold whitespace-pre-line">الألوان: {item.paintColor}</p>}</td>
                                     <td className="p-1.5 print:p-1 text-gray-500 print:text-black break-words">{item.productDimensions}</td>
-                                    <td className="p-1.5 print:p-1 text-center font-bold">{formatNumber(item.quantityCartons)}</td>
+                                    <td className="p-1.5 print:p-1 text-center font-bold">{formatNumber(item.quantityCartons)} {item.unitLabel}</td>
                                     <td className="p-1.5 print:p-1 text-center font-mono">{item.isAdhesive || item.quantityMeters <= 0 ? '-' : formatNumber(item.quantityMeters)}</td>
                                     <td className="p-1.5 print:p-1 text-center font-mono">{item.isAdhesive ? '-' : formatNumber(item.metersPerCarton)}</td>
                                     <td className="p-1.5 print:p-1 text-center font-bold">{item.isAdhesive ? '-' : formatNumber(item.totalMeters)}</td>
@@ -439,7 +443,7 @@ export const InvoiceMergeTab = ({ orders, products, onViewOrder }: InvoiceMergeT
                         <p className="text-2xl font-black text-gray-800 font-mono">{summary.agents}</p>
                     </div>
                     <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
-                        <p className="text-[10px] font-black text-gray-400 uppercase mb-1">كارتون/كيس</p>
+                        <p className="text-[10px] font-black text-gray-400 uppercase mb-1">عدد الوحدات</p>
                         <p className="text-2xl font-black text-gray-800 font-mono">{formatNumber(summary.cartons)}</p>
                     </div>
                     <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
@@ -589,7 +593,7 @@ export const InvoiceMergeTab = ({ orders, products, onViewOrder }: InvoiceMergeT
                 </div>
                 <div className="grid grid-cols-4 gap-2 mb-4 text-xs">
                     <div className="border border-black p-2"><b>الوكلاء:</b> {summary.agents}</div>
-                    <div className="border border-black p-2"><b>كارتون/كيس:</b> {formatNumber(summary.cartons)}</div>
+                    <div className="border border-black p-2"><b>عدد الوحدات:</b> {formatNumber(summary.cartons)}</div>
                     <div className="border border-black p-2"><b>الأمتار:</b> {formatNumber(summary.meters)}</div>
                     <div className="border border-black p-2 price-col"><b>الإجمالي:</b> {formatMoney(summary.total)}</div>
                 </div>

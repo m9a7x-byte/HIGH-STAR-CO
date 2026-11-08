@@ -6,9 +6,9 @@ const categories = [{ id: 1, name: 'PAN', type: 'STYROFOAM' }, { id: 2, name: '�
 const product = { id: 1, code: 'PAN-1', category: 'PAN', dimensions: '10x20', metersPerCarton: 12, volumePerCarton: 1, imageUrl: '', isActive: true, prices: { 'عادي': { pricePerMeter: 2, pricePerCarton: 24 }, VIP: { pricePerMeter: 1.5, pricePerCarton: 18 } } };
 const bag = { ...product, id: 2, code: 'GLUE', category: 'لاصقة', metersPerCarton: 80, prices: { 'عادي': { pricePerMeter: 0, pricePerCarton: 5 }, VIP: { pricePerMeter: 0, pricePerCarton: 4 } } };
 
-test('each export contains only its independent prices', () => {
+test('each export contains its independent unit prices and foam supports piece prices', () => {
   assert(transferFields('STYROFOAM').includes('normalMeter'));
-  assert(!transferFields('STYROFOAM').includes('normalUnit'));
+  assert(transferFields('STYROFOAM').includes('normalUnit'));
   assert(!transferFields('ADHESIVE').includes('normalMeter'));
   assert(transferFields('ADHESIVE').includes('normalUnit'));
   assert(!transferFields('ADHESIVE').includes('normalPallet'));

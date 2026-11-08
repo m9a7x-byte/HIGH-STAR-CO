@@ -8,11 +8,12 @@ interface ShippingCalculatorProps {
     cartonCount: number;
     bagCount?: number;
     bucketCount?: number;
+    pieceCount?: number;
     targetVehicle?: string;
     onTargetVehicleChange?: (v: string) => void;
 }
 
-export const ShippingCalculator = ({ cartonCount, bagCount = 0, bucketCount = 0, targetVehicle, onTargetVehicleChange }: ShippingCalculatorProps) => {
+export const ShippingCalculator = ({ cartonCount, bagCount = 0, bucketCount = 0, pieceCount = 0, targetVehicle, onTargetVehicleChange }: ShippingCalculatorProps) => {
   const { t } = useTranslation();
   const [localSelectedType, setLocalSelectedType] = useState<'kia' | 'canter' | 'trailer'>('kia');
   const selectedType = targetVehicle ? (targetVehicle.toLowerCase() as 'kia'|'canter'|'trailer') : localSelectedType;
@@ -53,7 +54,7 @@ export const ShippingCalculator = ({ cartonCount, bagCount = 0, bucketCount = 0,
     { id: 'trailer', label: t('agent_dashboard.vehicle_trailer'), cap: config.trailerCapacity }
   ];
 
-  if (bucketCount > 0 && totalUnits === 0) return <Card className="p-5 mt-6"><p className="font-black text-[#0e3c63]">أصباغ: {bucketCount} سطلة</p><p className="text-sm text-gray-600 mt-2">يتم تحديد شحن الأصباغ حسب الوزن والكمية؛ تقدير مركبات الفلين واللاصقة لا ينطبق عليها.</p></Card>;
+  if ((bucketCount > 0 || pieceCount > 0) && totalUnits === 0) return <Card className="p-5 mt-6">{bucketCount > 0 && <p className="font-black text-[#0e3c63]">أصباغ: {bucketCount} سطلة</p>}{pieceCount > 0 && <p className="font-black text-[#0e3c63]">فلين: {pieceCount} قطعة</p>}<p className="text-sm text-gray-600 mt-2">شحن القطع والأصباغ يحدد حسب المقاس والوزن؛ لا تُحوّل إلى كارتونات في تقدير المركبات.</p></Card>;
 
   return (
     <Card className="p-5 bg-white border border-gray-100 shadow-sm mt-6">
@@ -65,6 +66,7 @@ export const ShippingCalculator = ({ cartonCount, bagCount = 0, bucketCount = 0,
       </div>
 
       {bucketCount > 0 && <p className="mb-4 p-3 bg-amber-50 rounded-xl text-sm font-bold text-amber-800">الأصباغ: {bucketCount} سطلة. تقدير المركبات أدناه للفلين واللاصقة فقط؛ شحن الأصباغ يحدد حسب الوزن.</p>}
+      {pieceCount > 0 && <p className="mb-4 p-3 bg-amber-50 rounded-xl text-sm font-bold text-amber-800">فلين بالقطعة: {pieceCount} قطعة. شحن القطع يحدد حسب المقاسات؛ لا تُحوّل إلى كارتونات في هذا التقدير.</p>}
       {/* Prominent Unit Count */}
       <div className="bg-gradient-to-br from-[#0e3c63] to-[#1a4d7a] rounded-xl p-4 mb-2 text-center text-white shadow-md relative overflow-hidden">
           <div className="absolute -top-6 -right-6 w-16 h-16 bg-white opacity-10 rounded-full"></div>

@@ -1,3 +1,4 @@
+import { getProductUnit } from '../../../lib/productFamilies';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -684,6 +685,9 @@ export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, i
 
     const toOrderUpdatePayload = (order: Order) => order.items.map(item => ({
         productId: item.productId,
+        paintColor: item.paintColor,
+        productSaleMode: item.productSaleMode,
+        productMetersPerCarton: item.productMetersPerCarton,
         qMeters: item.quantityMeters,
         qCartons: item.quantityCartons,
         isSpecialRequest: item.isSpecialRequest,
@@ -808,6 +812,9 @@ export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, i
         try {
             const payload = agentOrderEditModal.items.map(item => ({
                 productId: item.productId,
+                paintColor: item.paintColor,
+        productSaleMode: item.productSaleMode,
+                productMetersPerCarton: item.productMetersPerCarton,
                 qMeters: item.quantityMeters,
                 qCartons: item.quantityCartons,
                 isSpecialRequest: item.isSpecialRequest,
@@ -2019,7 +2026,7 @@ export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, i
                                 <div key={item.id || idx} className="bg-gray-50 rounded-2xl border border-gray-100 p-4 grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-center">
                                     <div><div className="font-mono font-black text-[#0e3c63]">{item.productName || item.productCode}</div><div className="text-[10px] text-gray-400 font-bold">{item.productDimensions}</div></div>
                                     <div className="flex items-center gap-2">
-                                        <label className="text-[10px] font-black text-gray-400">كارتون</label>
+                                        <label className="text-[10px] font-black text-gray-400">{item.productPaintType ? "سطلة" : getProductUnit(db.products.find(p => p.id == item.productId), db.categories, item.productSaleMode)}</label>
                                         <input type="number" min="0" value={item.quantityCartons} onChange={e => {
                                             const next = [...agentOrderEditModal.items];
                                             next[idx].quantityCartons = Math.max(0, Number(e.target.value));
