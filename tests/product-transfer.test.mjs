@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { transferFields, buildProductRow, buildImportPayload, rowsFromCells, parseDelimitedRows, findImportTarget } from '../src/lib/productTransfer.ts';
 
 const categories = [{ id: 1, name: 'PAN', type: 'STYROFOAM' }, { id: 2, name: 'لاصقة', type: 'ADHESIVE' }];
-const product = { id: 1, code: 'PAN-1', category: 'PAN', dimensions: '10x20', metersPerCarton: 12, volumePerCarton: 1, imageUrl: '', isActive: true, prices: { NORMAL: { pricePerMeter: 2, pricePerCarton: 24 }, VIP: { pricePerMeter: 1.5, pricePerCarton: 18 } } };
-const bag = { ...product, id: 2, code: 'GLUE', category: 'لاصقة', metersPerCarton: 80, prices: { NORMAL: { pricePerMeter: 0, pricePerCarton: 5 }, VIP: { pricePerMeter: 0, pricePerCarton: 4 } } };
+const product = { id: 1, code: 'PAN-1', category: 'PAN', dimensions: '10x20', metersPerCarton: 12, volumePerCarton: 1, imageUrl: '', isActive: true, prices: { 'عادي': { pricePerMeter: 2, pricePerCarton: 24 }, VIP: { pricePerMeter: 1.5, pricePerCarton: 18 } } };
+const bag = { ...product, id: 2, code: 'GLUE', category: 'لاصقة', metersPerCarton: 80, prices: { 'عادي': { pricePerMeter: 0, pricePerCarton: 5 }, VIP: { pricePerMeter: 0, pricePerCarton: 4 } } };
 
 test('each export contains only its independent prices', () => {
   assert(transferFields('STYROFOAM').includes('normalMeter'));
@@ -15,25 +15,25 @@ test('each export contains only its independent prices', () => {
 });
 test('foam carton totals follow edited meter prices and quantity, ignoring stale totals', () => {
   const payload = buildImportPayload({ normalMeter: '3.25', vipMeter: '2', packageUnits: '10', normalUnit: '24' }, product, categories, 'STYROFOAM');
-  assert.equal(payload.prices.NORMAL.pricePerCarton, 32.5);
+  assert.equal(payload.prices['عادي'].pricePerCarton, 32.5);
   assert.equal(payload.prices.VIP.pricePerCarton, 20);
 });
 test('bag unit prices are never overwritten by old pallet totals', () => {
   const payload = buildImportPayload({ normalUnit: '6', vipUnit: '0', normalPallet: '400', packageUnits: '100' }, bag, categories, 'ADHESIVE');
-  assert.equal(payload.prices.NORMAL.pricePerCarton, 6);
+  assert.equal(payload.prices['عادي'].pricePerCarton, 6);
   assert.equal(payload.prices.VIP.pricePerCarton, 0);
-  assert.equal(payload.prices.NORMAL.pricePerMeter, 0);
+  assert.equal(payload.prices['عادي'].pricePerMeter, 0);
   assert.equal(payload.meters_per_carton, 100);
 });
 test('blank cells preserve prices; zero is an intentional value', () => {
   const payload = buildImportPayload({ normalMeter: '', vipMeter: '0' }, product, categories, 'STYROFOAM');
-  assert.equal(payload.prices.NORMAL.pricePerCarton, 24);
+  assert.equal(payload.prices['عادي'].pricePerCarton, 24);
   assert.equal(payload.prices.VIP.pricePerCarton, 0);
 });
 test('rejects invalid, negative or zero package quantities before writes', () => {
   for (const value of ['bad', '-1', '0']) assert.throws(() => buildImportPayload({ packageUnits: value }, product, categories, 'STYROFOAM'));
   for (const value of ['bad', '-1', 'Infinity']) assert.throws(() => buildImportPayload({ normalMeter: value }, product, categories, 'STYROFOAM'));
-  assert.equal(buildImportPayload({ normalMeter: '٣٫٥' }, product, categories, 'STYROFOAM').prices.NORMAL.pricePerMeter, 3.5);
+  assert.equal(buildImportPayload({ normalMeter: '٣٫٥' }, product, categories, 'STYROFOAM').prices['عادي'].pricePerMeter, 3.5);
 });
 test('rejects importing a different product family or changing it', () => {
   assert.throws(() => buildImportPayload({}, bag, categories, 'STYROFOAM'));
