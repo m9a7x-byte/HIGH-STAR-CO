@@ -1,3 +1,5 @@
+import i18n from 'i18next';
+const t = i18n.t.bind(i18n);
 import React, { useState, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { Search, ChevronDown, Check } from 'lucide-react';
@@ -11,24 +13,24 @@ interface Country {
 
 // Common countries + Iraq focused
 const COUNTRIES: Country[] = [
-    { code: 'IQ', name: 'العراق', dial_code: '+964', flag: '🇮🇶' },
-    { code: 'SA', name: 'المملكة العربية السعودية', dial_code: '+966', flag: '🇸🇦' },
-    { code: 'AE', name: 'الإمارات العربية المتحدة', dial_code: '+971', flag: '🇦🇪' },
-    { code: 'KW', name: 'الكويت', dial_code: '+965', flag: '🇰🇼' },
-    { code: 'QA', name: 'قطر', dial_code: '+974', flag: '🇶🇦' },
-    { code: 'BH', name: 'البحرين', dial_code: '+973', flag: '🇧🇭' },
-    { code: 'OM', name: 'عمان', dial_code: '+968', flag: '🇴🇲' },
-    { code: 'JO', name: 'الأردن', dial_code: '+962', flag: '🇯🇴' },
-    { code: 'LB', name: 'لبنان', dial_code: '+961', flag: '🇱🇧' },
-    { code: 'EG', name: 'مصر', dial_code: '+20', flag: '🇪🇬' },
-    { code: 'TR', name: 'تركيا', dial_code: '+90', flag: '🇹🇷' },
-    { code: 'IR', name: 'إيران', dial_code: '+98', flag: '🇮🇷' },
-    { code: 'US', name: 'الولايات المتحدة', dial_code: '+1', flag: '🇺🇸' },
-    { code: 'GB', name: 'المملكة المتحدة', dial_code: '+44', flag: '🇬🇧' },
-    { code: 'DE', name: 'ألمانيا', dial_code: '+49', flag: '🇩🇪' },
-    { code: 'FR', name: 'فرنسا', dial_code: '+33', flag: '🇫🇷' },
-    { code: 'CN', name: 'الصين', dial_code: '+86', flag: '🇨🇳' },
-    { code: 'IN', name: 'الهند', dial_code: '+91', flag: '🇮🇳' },
+    { code: 'IQ', name: t('batch4.txt_l5ggee_6960'), dial_code: '+964', flag: '🇮🇶' },
+    { code: 'SA', name: t('batch4.txt_z6l7ip_6960'), dial_code: '+966', flag: '🇸🇦' },
+    { code: 'AE', name: t('batch4.txt_mygqff_6960'), dial_code: '+971', flag: '🇦🇪' },
+    { code: 'KW', name: t('batch4.txt_ho4q2v_6960'), dial_code: '+965', flag: '🇰🇼' },
+    { code: 'QA', name: t('batch4.txt_ee9nwt_6960'), dial_code: '+974', flag: '🇶🇦' },
+    { code: 'BH', name: t('batch4.txt_whvo8s_6960'), dial_code: '+973', flag: '🇧🇭' },
+    { code: 'OM', name: t('batch4.txt_kvdjiv_6960'), dial_code: '+968', flag: '🇴🇲' },
+    { code: 'JO', name: t('batch4.txt_l3qqpt_6960'), dial_code: '+962', flag: '🇯🇴' },
+    { code: 'LB', name: t('batch4.txt_22iz5c_6960'), dial_code: '+961', flag: '🇱🇧' },
+    { code: 'EG', name: t('batch4.txt_p7jvtu_6960'), dial_code: '+20', flag: '🇪🇬' },
+    { code: 'TR', name: t('batch4.txt_mp4gmv_6960'), dial_code: '+90', flag: '🇹🇷' },
+    { code: 'IR', name: t('batch4.txt_w6lbqn_6960'), dial_code: '+98', flag: '🇮🇷' },
+    { code: 'US', name: t('batch4.txt_1mv33q_6960'), dial_code: '+1', flag: '🇺🇸' },
+    { code: 'GB', name: t('batch4.txt_h0e59q_6960'), dial_code: '+44', flag: '🇬🇧' },
+    { code: 'DE', name: t('batch4.txt_cq8r25_6960'), dial_code: '+49', flag: '🇩🇪' },
+    { code: 'FR', name: t('batch4.txt_wfry4i_6960'), dial_code: '+33', flag: '🇫🇷' },
+    { code: 'CN', name: t('batch4.txt_y619fs_6960'), dial_code: '+86', flag: '🇨🇳' },
+    { code: 'IN', name: t('batch4.txt_akschd_6960'), dial_code: '+91', flag: '🇮🇳' },
     // Add more as needed
 ];
 
@@ -56,6 +58,18 @@ export const PhoneInput: React.FC<PhoneInputProps> = ({ value, onChange, label, 
     // Extract number part
     const initialNumber = value?.replace(initialCountry.dial_code, '').trim() || '';
     const [phoneNumber, setPhoneNumber] = useState(initialNumber);
+
+    // Sync state with value prop when it changes (fixes first load issue)
+    useEffect(() => {
+        if (value) {
+            const country = COUNTRIES.find(c => value.startsWith(c.dial_code)) || COUNTRIES[0];
+            const number = value.replace(country.dial_code, '').trim();
+            setSelectedCountry(country);
+            setPhoneNumber(number);
+        } else {
+            setPhoneNumber('');
+        }
+    }, [value]);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -134,7 +148,7 @@ export const PhoneInput: React.FC<PhoneInputProps> = ({ value, onChange, label, 
                             alt={selectedCountry.name}
                             className="rounded-sm object-cover shadow-sm"
                         />
-                        <span className="text-sm font-bold text-gray-600 dir-ltr font-mono">{selectedCountry.dial_code}</span>
+                        <span dir="ltr" className="text-sm font-bold text-gray-600 font-mono">{selectedCountry.dial_code}</span>
                         <ChevronDown size={14} className="text-gray-400" />
                     </button>
 
@@ -163,7 +177,7 @@ export const PhoneInput: React.FC<PhoneInputProps> = ({ value, onChange, label, 
                                     type="text"
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
-                                    placeholder="بحث عن دولة..."
+                                    placeholder={t('batch4.txt_vkwxml_6960')}
                                     className="w-full pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#0e3c63] transition-colors text-right"
                                     autoFocus
                                 />
@@ -184,7 +198,7 @@ export const PhoneInput: React.FC<PhoneInputProps> = ({ value, onChange, label, 
                                 </button>
                             ))}
                             {filteredCountries.length === 0 && (
-                                <div className="p-4 text-center text-gray-400 text-sm">لا توجد نتائج</div>
+                                <div className="p-4 text-center text-gray-400 text-sm">{t('batch4.txt_qu3bmh_6960')}</div>
                             )}
                         </div>
                     </div>,

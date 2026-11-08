@@ -1,9 +1,18 @@
+import i18n from 'i18next';
+const t = i18n.t.bind(i18n);
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User } from '../types';
 import { db } from '../lib/db';
 import { supabase } from '../lib/supabase';
 import { SessionConflictOverlay } from '../components/shared/SessionConflictOverlay';
+import {
+  clearSecureSession,
+  ensureSecureSession,
+  startSecureSession,
+  touchSecureSession,
+  validateSecureSession
+} from '../lib/sessionSecurity';
 
 import { getPublicIP, getDetailedDeviceInfo } from '../lib/deviceUtils';
 
@@ -25,6 +34,37 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }: { children?: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [showSessionConflict, setShowSessionConflict] = useState(false);
+  const [isSessionExpiring, setIsSessionExpiring] = useState(false);
+
+  const clearAuthState = () => {
+    clearSecureSession();
+    localStorage.removeItem('user_role');
+    setUser(null);
+    setShowSessionConflict(false);
+    setIsSessionExpiring(false);
+  };
+
+  const expireCurrentSession = async () => {
+    if (isSessionExpiring) return;
+
+    setIsSessionExpiring(true);
+    try {
+      if (user?.id && typeof db.setOffline === 'function') {
+        await db.setOffline(user.id);
+      }
+    } catch (e) {
+      console.error('Error marking expired session offline:', e);
+    }
+
+    try {
+      await db.logout();
+    } catch (e) {
+      console.error('Error signing out expired session:', e);
+      await supabase.auth.signOut().catch(console.error);
+    }
+
+    clearAuthState();
+  };
 
   // Track presence whenever user is set & Enforce Single Session
   useEffect(() => {
@@ -36,31 +76,57 @@ export const AuthProvider = ({ children }: { children?: React.ReactNode }) => {
         db.updatePresence(user.id, ip, deviceString).catch(console.error);
       }).catch(console.error);
 
-      // 2. Subscribe to DB changes to check for session validity (Single Session Enforcement)
-      const unsubscribe = db.subscribe(() => {
-        // Find the user in the updated db.users list
-        const updatedUser = db.users.find(u => u.id === user.id);
+      const validateAndTouch = () => {
+        const result = validateSecureSession(user);
+        if (!result.valid) {
+          expireCurrentSession();
+          return;
+        }
 
-        // If the user exists in DB state and has a defined currentSessionId
+        touchSecureSession(user);
+      };
+
+      validateAndTouch();
+
+      const activityEvents = ['click', 'keydown', 'pointerdown', 'scroll', 'focus', 'visibilitychange'];
+      activityEvents.forEach(eventName => window.addEventListener(eventName, validateAndTouch, { passive: true }));
+      const sessionTimer = window.setInterval(validateAndTouch, 60 * 1000);
+
+      // 2. Subscribe to DB changes to keep current user live and enforce single session
+      const unsubscribe = db.subscribe(() => {
+        const updatedUser = db.users.find(u => String(u.id) === String(user.id));
+
         if (updatedUser && updatedUser.currentSessionId && user.currentSessionId) {
-          // Compare: if DB session ID != Local session ID, it means a new login occurred elsewhere.
           if (updatedUser.currentSessionId !== user.currentSessionId) {
             console.warn('Session Invalidated: Logged in from another device.');
+            clearSecureSession();
             setShowSessionConflict(true);
+            return;
           }
+        }
+
+        if (updatedUser) {
+          setUser(prev => {
+            if (!prev || String(prev.id) !== String(updatedUser.id)) return prev;
+            if (JSON.stringify(prev) === JSON.stringify(updatedUser)) return prev;
+            return { ...updatedUser };
+          });
         }
       });
 
       return () => {
+        activityEvents.forEach(eventName => window.removeEventListener(eventName, validateAndTouch));
+        window.clearInterval(sessionTimer);
         unsubscribe();
       }
     }
-  }, [user?.id, user?.currentSessionId]);
+  }, [user?.id, user?.currentSessionId, isSessionExpiring]);
 
   const login = async (email: string, password?: string) => {
     try {
       const user = await db.login(email, password);
       // user setting will trigger the useEffect above
+      startSecureSession(user);
       setUser(user);
     } catch (e: any) {
       throw e;
@@ -71,7 +137,7 @@ export const AuthProvider = ({ children }: { children?: React.ReactNode }) => {
     if (user?.id) {
       try {
         // Log Logout Event
-        db.logActivity(user.id, 'تسجيل خروج', 'AUTH', 'تسجيل خروج من النظام').catch(console.error);
+        db.logActivity(user.id, t('batch4.txt_gq12fh_6964'), 'AUTH', t('batch4.txt_0zflf9_6964')).catch(console.error);
 
         // Best effort to mark offline
         // Check if setOffline exists before calling to prevent crash during hot-reload/updates
@@ -83,22 +149,47 @@ export const AuthProvider = ({ children }: { children?: React.ReactNode }) => {
       }
     }
 
-    await supabase.auth.signOut();
-    localStorage.removeItem('user_role');
-    setUser(null);
-    setShowSessionConflict(false);
+    await db.logout();
+    clearAuthState();
   };
 
   const updateUser = (updatedUser: User) => {
     if (updatedUser) {
+      ensureSecureSession(updatedUser);
       setUser(updatedUser);
     }
   };
 
-  // Restore session on mount - minimal implementation to prevent crash
+  // Restore session on mount to persist login state across app restarts
   useEffect(() => {
-    // Placeholder for session restore logic if needed in future
-    // Currently db.ts handles state, this context just mirrors it when actions occur
+    const restoreUserSession = async () => {
+      try {
+        const restoredUser = await db.restoreSession();
+        if (restoredUser) {
+          const result = validateSecureSession(restoredUser);
+          if (result.valid) {
+            setUser(restoredUser);
+          } else {
+            await db.logout();
+            clearAuthState();
+          }
+        }
+      } catch (e) {
+        console.error('Failed to restore session:', e);
+      }
+    };
+    
+    restoreUserSession();
+    
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT') {
+        clearAuthState();
+      }
+    });
+    
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   return (

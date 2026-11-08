@@ -26,6 +26,23 @@ function getCorsHeaders(requestOrigin: string | null) {
     };
 }
 
+function getSafeRedirectTo(requestOrigin: string | null, requestedRedirectTo?: string) {
+    const fallbackOrigin = requestOrigin && (
+        ALLOWED_ORIGINS.includes(requestOrigin) ||
+        requestOrigin.endsWith('.high-star.iq')
+    ) ? requestOrigin : 'https://v.high-star.iq';
+
+    if (!requestedRedirectTo) return `${fallbackOrigin}/accept-invite`;
+
+    try {
+        const url = new URL(requestedRedirectTo);
+        const isAllowed = ALLOWED_ORIGINS.includes(url.origin) || url.hostname.endsWith('.high-star.iq');
+        return isAllowed ? url.toString() : `${fallbackOrigin}/accept-invite`;
+    } catch {
+        return `${fallbackOrigin}/accept-invite`;
+    }
+}
+
 Deno.serve(async (req) => {
     const origin = req.headers.get('Origin');
     const corsHeaders = getCorsHeaders(origin);
@@ -138,6 +155,7 @@ Deno.serve(async (req) => {
                 if (payload.invite) {
                     // Invite User
                     const { data, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(payload.email, {
+                        redirectTo: getSafeRedirectTo(origin, payload.redirectTo),
                         data: { full_name: payload.fullName, role: payload.role, phone: payload.phone }
                     });
                     if (error) throw error;
@@ -228,21 +246,36 @@ Deno.serve(async (req) => {
 
             case 'delete_user': {
                 // Smart Delete: Remove auth access but KEEP historical data
-                // - Delete auth account (removes login ability)
-                // - Clear email/phone in profile (allows reuse)
-                // - Mark profile as deleted (for filtering)
-                // - KEEP all orders, transactions, logs for reporting
                 if (!payload.userId) throw new Error('User ID required');
 
-                // 1. Update profile: mark as deleted and clear email/phone for reuse
+                // 1. Update Auth User (removes login ability, frees email/phone)
+                // Use a dummy email to free up the real email for future registrations
+                const dummyEmail = `deleted_${Date.now()}_${payload.userId.substring(0,8)}@voga.deleted`;
+
+                const { error: authErr } = await supabaseAdmin.auth.admin.updateUserById(payload.userId, {
+                    email: dummyEmail,
+                    phone: "", // Reset phone
+                    password: crypto.randomUUID(), // Resets password to an impossible random UUID
+                    ban_duration: '876000h' // Suspend account
+                });
+
+                if (authErr) {
+                    console.error('Auth update error:', authErr);
+                    throw new Error(`فشل تفريغ بيانات الدخول: ${authErr.message}`);
+                }
+
+                // 2. Update profile: mark as deleted and clear email/phone for reuse
+                // IMPORTANT: 'email' is NOT NULL and UNIQUE in 'profiles', so we use dummyEmail instead of null
                 const { error: profileErr } = await supabaseAdmin
                     .from('profiles')
                     .update({
-                        status: 'deleted',
+                        status: 'suspended', // Use 'suspended' because 'deleted' violates DB check constraint
                         deleted_at: new Date().toISOString(),
-                        email: null,  // Clear to allow reuse
-                        phone: null,  // Clear to allow reuse
-                        full_name: `[محذوف] ${payload.userId.substring(0, 8)}` // Mark as deleted
+                        email: dummyEmail,  // Free up email in profiles table too
+                        phone: null,        // If phone is unique, this frees it up
+                        full_name: `[محذوف] ${payload.userId.substring(0, 8)}`, // Mark as deleted
+                        avatar_url: null,
+                        avatar_path: null
                     })
                     .eq('id', payload.userId);
 
@@ -250,14 +283,7 @@ Deno.serve(async (req) => {
                     console.error('Profile update error:', profileErr);
                 }
 
-                // 2. Delete auth user (removes login ability)
-                const { error: delErr } = await supabaseAdmin.auth.admin.deleteUser(payload.userId);
-                if (delErr) {
-                    console.error('Auth delete error:', delErr);
-                    throw new Error(`فشل حذف المستخدم: ${delErr.message}`);
-                }
-
-                result = { success: true, message: 'تم حذف الحساب مع الحفاظ على البيانات' };
+                result = { success: true, message: 'تم سحب صلاحيات الدخول وتفريغ الإيميل بنجاح مع الحفاظ على الأرشيف' };
                 break;
             }
 

@@ -1,3 +1,5 @@
+import i18n from 'i18next';
+const t = i18n.t.bind(i18n);
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Search, ChevronLeft, Check } from 'lucide-react';
@@ -35,7 +37,7 @@ export const UserSelector = ({ users, selectedUserId, onChange, placeholder }: U
                 className="w-full h-[54px] flex justify-between items-center bg-gray-50 border border-gray-200 rounded-[1.2rem] px-4 text-sm outline-none font-bold text-gray-700 hover:border-[#0e3c63] transition-colors"
             >
                 <div className="flex items-center gap-2 overflow-hidden">
-                    <span className="truncate">{selectedUserId === 'ALL' ? 'الكل' : selectedUser?.fullName || placeholder}</span>
+                    <span className="truncate">{selectedUserId === 'ALL' ? t('batch4.k239') : selectedUser?.fullName || placeholder}</span>
                     {selectedUserId !== 'ALL' && selectedUser?.agentDetails?.type && (
                         <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-black shrink-0 ${selectedUser.agentDetails.type === 'VIP' ? 'bg-amber-100 text-amber-600 border border-amber-200' : 'bg-gray-100 text-gray-500'}`}>
                             {selectedUser.agentDetails.type}
@@ -51,7 +53,7 @@ export const UserSelector = ({ users, selectedUserId, onChange, placeholder }: U
                         <div className="relative">
                             <input
                                 className="w-full bg-gray-50 border border-gray-200 rounded-lg pl-8 pr-3 py-2 text-xs focus:border-[#0e3c63] outline-none"
-                                placeholder="بحث بالاسم..."
+                                placeholder={t('batch4.k131')}
                                 value={search}
                                 onChange={e => setSearch(e.target.value)}
                                 autoFocus
@@ -64,7 +66,7 @@ export const UserSelector = ({ users, selectedUserId, onChange, placeholder }: U
                             onClick={() => { onChange('ALL'); setIsOpen(false); }}
                             className={`w-full text-right px-3 py-2.5 rounded-lg text-sm font-bold flex justify-between items-center ${selectedUserId === 'ALL' ? 'bg-blue-50 text-[#0e3c63]' : 'text-gray-600 hover:bg-gray-50'}`}
                         >
-                            الكل
+                            {t('batch4.k239')}
                             {selectedUserId === 'ALL' && <Check size={14} />}
                         </button>
                         {filteredUsers.map(u => (
@@ -84,7 +86,7 @@ export const UserSelector = ({ users, selectedUserId, onChange, placeholder }: U
                                 {selectedUserId === u.id && <Check size={14} />}
                             </button>
                         ))}
-                        {filteredUsers.length === 0 && <p className="text-xs text-gray-400 text-center py-2">لا توجد نتائج</p>}
+                        {filteredUsers.length === 0 && <p className="text-xs text-gray-400 text-center py-2">{t('batch4.k132')}</p>}
                     </div>
                 </div>
             )}

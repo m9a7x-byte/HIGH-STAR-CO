@@ -1,5 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
     Wallet, TrendingUp, TrendingDown, History, ArrowDownLeft,
     ArrowUpRight, Clock, User, Filter, DollarSign, Calculator,
@@ -19,7 +20,9 @@ import { ModernSingleDatePicker, materialLabels } from '../../factory/components
 import carbonFibre from '../../../assets/patterns/carbon-fibre.png';
 
 export const SafeTab = () => {
+    const { t } = useTranslation();
     const { user: currentUser } = useAuth();
+    const isSuperAdmin = currentUser?.role === 'SUPER_ADMIN';
     const toast = useToast();
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -52,10 +55,22 @@ export const SafeTab = () => {
         return target >= start && target <= end;
     };
 
+    const getMaterialName = (tx: FactoryTransaction) => {
+        if (!tx.materialType) return '';
+        const labelKey = materialLabels[tx.materialType];
+        return labelKey ? t(labelKey) : tx.materialType;
+    };
+
+    const withOptionalDetail = (title: string, detail?: string) => {
+        const cleanDetail = detail?.trim();
+        return cleanDetail ? `${title} (${cleanDetail})` : title;
+    };
+
     const allSafeEvents = useMemo(() => {
         const events: any[] = [];
-        db.getAllTransactions().filter(t => t.type === 'DEPOSIT').forEach(t => {
+        db.getAllTransactions().filter(t => t.type === 'DEPOSIT' || (t.amount < 0 && t.description.includes('ترجيع كاش فعلي للوكيل'))).forEach(t => {
             const agent = db.users.find(u => u.id === t.agentId);
+            const isAgentCashRefund = t.amount < 0 && t.description.includes('ترجيع كاش فعلي للوكيل');
             // Extract real user if present in description
             let finalDesc = t.description;
             let finalUser = { name: 'النظام الآلي', avatarPath: undefined, avatarUrl: undefined };
@@ -77,9 +92,9 @@ export const SafeTab = () => {
             events.push({
                 id: `agent-dep-${t.id}`,
                 date: t.createdAt,
-                type: 'IN',
-                amount: t.amount,
-                title: 'استلام نقدي (وكيل)',
+                type: isAgentCashRefund ? 'OUT' : 'IN',
+                amount: Math.abs(t.amount),
+                title: isAgentCashRefund ? 'ترجيع كاش فعلي (وكيل)' : 'استلام نقدي (وكيل)',
                 sourcePage: 'نظام الوكلاء',
                 sourceTab: 'المحفظة المالية',
                 details: finalDesc,
@@ -95,46 +110,87 @@ export const SafeTab = () => {
         factoryTxs.forEach(tx => {
             // Explicitly handle SAFE categories to ensure they appear
             const isSafeTx = ['SAFE_WITHDRAWAL', 'SAFE_DEPOSIT'].includes(tx.category);
-            const isDirectExpense = ['SALARY', 'RENT', 'FOOD', 'DAILY_EXPENSE', 'ELECTRICITY'].includes(tx.category) || isSafeTx;
+            const isSupplierSafeTx = ['SUPPLIER_PAYMENT', 'SUPPLIER_DEPOSIT', 'SUPPLIER_WITHDRAWAL'].includes(tx.category);
+            const isInboundShipment = tx.category === 'TRANSPORT_IN' && tx.paidAmount > 0;
+            const isDirectExpense = ['SALARY', 'RENT', 'FOOD', 'DAILY_EXPENSE', 'ELECTRICITY'].includes(tx.category) || isSafeTx || isSupplierSafeTx || isInboundShipment;
 
             if (isDirectExpense) {
                 const staff = db.users.find(u => u.fullName === tx.withdrawnBy);
                 const categoryLabels: any = {
                     SALARY: 'الرواتب', RENT: 'الإيجار', FOOD: 'الطعام', DAILY_EXPENSE: 'نثرية', ELECTRICITY: 'الطاقة',
-                    SAFE_DEPOSIT: 'إيداع إداري', SAFE_WITHDRAWAL: 'سحب إداري'
+                    SAFE_DEPOSIT: 'إيداع إداري', SAFE_WITHDRAWAL: 'سحب إداري',
+                    SUPPLIER_PAYMENT: 'تسديد دين مورد', SUPPLIER_DEPOSIT: 'إيداع رصيد مورد', SUPPLIER_WITHDRAWAL: 'استرداد من مورد',
+                    TRANSPORT_IN: 'دفع شحنة واردة'
                 };
 
                 // Determine title/details
                 let title = categoryLabels[tx.category] || 'مصروف نقد';
                 if (tx.category === 'SAFE_WITHDRAWAL') title = 'سحب إداري';
                 if (tx.category === 'SAFE_DEPOSIT') title = 'إيداع إداري';
+                if (tx.category === 'SUPPLIER_PAYMENT') title = 'تسديد دين مورد';
+                if (tx.category === 'SUPPLIER_DEPOSIT') title = 'إيداع رصيد مورد';
+                if (tx.category === 'SUPPLIER_WITHDRAWAL') title = 'استرداد من مورد';
+                if (tx.category === 'TRANSPORT_IN') title = 'دفع شحنة واردة';
+
+                // Determine direction
+                const isInflow = tx.category === 'SAFE_DEPOSIT' || tx.category === 'SUPPLIER_WITHDRAWAL';
+
+                // Determine beneficiary
+                let beneficiary = 'حساب المصنع';
+                if (tx.category === 'SAFE_WITHDRAWAL') {
+                    beneficiary = tx.notes?.split(':')[1]?.split('|')[0]?.trim() || 'الإدارة';
+                } else if (isSupplierSafeTx) {
+                    beneficiary = tx.supplierName || tx.notes?.split(':')[1]?.split('|')[0]?.trim() || 'مورد';
+                } else if (isInboundShipment) {
+                    beneficiary = tx.supplierName || tx.source || 'شحنة واردة';
+                }
 
                 events.push({
                     id: `fact-direct-${tx.id}`,
                     date: tx.date || new Date().toISOString(),
-                    type: (tx.category === 'SAFE_DEPOSIT') ? 'IN' : 'OUT',
+                    type: isInflow ? 'IN' : 'OUT',
                     amount: tx.amount || 0,
                     title: title,
-                    sourcePage: 'إدارة المصنع',
-                    sourceTab: isSafeTx ? 'العمليات الإدارية' : 'المصروفات التشغيلية',
-                    details: tx.subType || categoryLabels[tx.category] || tx.notes,
-                    beneficiary: tx.category === 'SAFE_WITHDRAWAL' ? (tx.notes?.split(':')[1]?.split('|')[0] || 'الإدارة') : 'حساب المصنع',
+                    sourcePage: isSupplierSafeTx ? 'نظام الموردين' : (isInboundShipment ? 'اللوجستيات' : 'إدارة المصنع'),
+                    sourceTab: isSupplierSafeTx ? 'حركات المورد' : (isInboundShipment ? 'شحنات واردة' : (isSafeTx ? 'العمليات الإدارية' : 'المصروفات التشغيلية')),
+                    details: isInboundShipment ? withOptionalDetail(tx.notes || 'شحنة واردة', getMaterialName(tx)) : (tx.subType || tx.notes || categoryLabels[tx.category]),
+                    beneficiary: beneficiary,
                     user: { name: tx.withdrawnBy || 'موظف', avatarPath: staff?.avatar_path, avatarUrl: staff?.avatar_url },
-                    isManual: isSafeTx,
+                    isManual: isSafeTx, // Only manual SAFE entries are editable, supplier/logistics entries are locked
                     rawTx: tx
                 });
-            } else {
+            } else if (tx.category !== 'INVENTORY') {
                 tx.paymentHistory?.forEach(pay => {
+                    if (tx.supplierId && pay.notes === 'تسديد موحد') {
+                        return;
+                    }
+
                     const staff = db.users.find(u => u.fullName === pay.addedBy);
+                    const isOutboundShipmentPayment = tx.category === 'TRANSPORT_OUT';
+                    const isInboundShipmentPayment = tx.category === 'TRANSPORT_IN';
+                    const paymentTitle = tx.category === 'SUPPLIER'
+                        ? 'شراء مواد'
+                        : (tx.category === 'INVENTORY'
+                            ? 'شراء مواد أولية'
+                            : (isOutboundShipmentPayment ? 'شحنة صادرة' : (isInboundShipmentPayment ? 'شحنة واردة' : 'أجور شحن')));
+                    const paymentDetail = tx.category === 'SUPPLIER' || tx.category === 'INVENTORY'
+                        ? getMaterialName(tx)
+                        : (tx.notes || tx.source || tx.province || tx.brokerName || tx.supplierName || '');
+                    const sourcePage = isOutboundShipmentPayment || isInboundShipmentPayment ? 'لوجستيات' : 'إدارة المصنع';
+                    const sourceTab = tx.category === 'SUPPLIER'
+                        ? 'الموردين'
+                        : (tx.category === 'INVENTORY'
+                            ? 'المخزن والمواد'
+                            : (isOutboundShipmentPayment ? 'شحنات صادرة' : (isInboundShipmentPayment ? 'شحنات واردة' : 'اللوجستيات')));
                     events.push({
                         id: `fact-pay-${pay.id}`,
                         date: pay.date || new Date().toISOString(),
                         type: 'OUT',
                         amount: pay.amount || 0,
-                        title: 'تسديد فاتورة',
-                        sourcePage: 'إدارة المصنع',
-                        sourceTab: tx.category === 'SUPPLIER' ? 'الموردين' : (tx.category === 'INVENTORY' ? 'المخزن والمواد' : 'اللوجستيات'),
-                        details: `${tx.category === 'SUPPLIER' ? 'شراء مواد' : (tx.category === 'INVENTORY' ? 'شراء مواد أولية' : 'أجور شحن')} (${materialLabels[tx.materialType!] || tx.materialType || ''})`,
+                        title: isOutboundShipmentPayment ? 'دفع شحنة صادرة' : (isInboundShipmentPayment ? 'دفع شحنة واردة' : 'تسديد فاتورة'),
+                        sourcePage,
+                        sourceTab,
+                        details: withOptionalDetail(paymentTitle, paymentDetail),
                         beneficiary: tx.category === 'INVENTORY' ? (tx.source || 'غير محدد') : (tx.supplierName || tx.brokerName || 'جهة خارجية'),
                         user: { name: pay.addedBy || 'موظف', avatarPath: staff?.avatar_path, avatarUrl: staff?.avatar_url },
                         isManual: false,
@@ -146,11 +202,26 @@ export const SafeTab = () => {
 
 
 
+        const withRunningBalance = [...events]
+            .sort((a, b) => {
+                const dA = new Date(a.date).getTime() || 0;
+                const dB = new Date(b.date).getTime() || 0;
+                if (dA !== dB) return dA - dB;
+                return String(a.id).localeCompare(String(b.id));
+            })
+            .reduce((acc: any[], event) => {
+                const previousBalance = acc.length ? acc[acc.length - 1].balanceAfter : 0;
+                const signedAmount = event.type === 'IN' ? event.amount : -event.amount;
+                acc.push({ ...event, balanceAfter: previousBalance + signedAmount });
+                return acc;
+            }, []);
+
         // Sort safely
-        return events.sort((a, b) => {
+        return withRunningBalance.sort((a, b) => {
             const dA = new Date(a.date).getTime() || 0;
             const dB = new Date(b.date).getTime() || 0;
-            return dB - dA;
+            if (dA !== dB) return dB - dA;
+            return String(b.id).localeCompare(String(a.id));
         });
     }, [refreshTrigger]);
 
@@ -349,11 +420,14 @@ export const SafeTab = () => {
                                     <th className="p-6">البيان و المستفيد (المسار)</th>
                                     <th className="p-6">بواسطة</th>
                                     <th className="p-6 text-left">المبلغ ($)</th>
+                                    <th className="p-6 text-left">الرصيد بعد الحركة</th>
                                     <th className="p-6 text-center">إجراء</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50 bg-white">
-                                {currentEvents.map((e: any) => (
+                                {currentEvents.map((e: any) => {
+                                    const balanceAfter = Number(e.balanceAfter || 0);
+                                    return (
                                     <tr key={e.id} className="hover:bg-blue-50/20 transition-all group">
                                         <td className="p-6 pr-10">
                                             <div className="flex flex-col font-mono">
@@ -362,10 +436,19 @@ export const SafeTab = () => {
                                             </div>
                                         </td>
                                         <td className="p-6">
-                                            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase ${e.type === 'IN' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-red-50 text-red-600 border border-red-100'}`}>
-                                                {e.type === 'IN' ? <ArrowDownLeft size={14} /> : <ArrowUpRight size={14} />}
-                                                {e.title}
-                                            </span>
+                                            {(() => {
+                                                const isSupplier = e.sourcePage === 'نظام الموردين';
+                                                let badgeClass = e.type === 'IN' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-red-50 text-red-600 border border-red-100';
+                                                if (isSupplier) {
+                                                    badgeClass = e.type === 'IN' ? 'bg-teal-50 text-teal-700 border border-teal-200' : 'bg-amber-50 text-amber-700 border border-amber-200';
+                                                }
+                                                return (
+                                                    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase ${badgeClass}`}>
+                                                        {isSupplier ? <ArrowRightLeft size={14} /> : (e.type === 'IN' ? <ArrowDownLeft size={14} /> : <ArrowUpRight size={14} />)}
+                                                        {e.title}
+                                                    </span>
+                                                );
+                                            })()}
                                         </td>
                                         <td className="p-6">
                                             <div className="flex flex-col">
@@ -396,6 +479,9 @@ export const SafeTab = () => {
                                         <td className={`p-6 text-left font-mono font-black text-2xl ${e.type === 'IN' ? 'text-emerald-600' : 'text-red-600'}`} dir="ltr">
                                             {e.type === 'IN' ? '+' : '-'}${e.amount.toLocaleString()}
                                         </td>
+                                        <td className={`p-6 text-left font-mono font-black text-xl ${balanceAfter < 0 ? 'text-red-600' : 'text-[#0e3c63]'}`} dir="ltr">
+                                            {balanceAfter < 0 ? '-' : ''}${Math.abs(balanceAfter).toLocaleString()}
+                                        </td>
                                         <td className="p-6 text-center">
                                             {e.isManual && !e.rawTx?.isLocked ? (
                                                 <div className="flex items-center justify-center gap-2">
@@ -403,12 +489,35 @@ export const SafeTab = () => {
                                                     <button onClick={() => { db.updateFactoryTransaction(currentUser!.id, e.rawTx.id, { isLocked: true }); toast.success('تم قفل الحركة'); refresh(); }} className="p-2 bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-600 hover:text-white transition-all shadow-sm" title="قفل الحركة"><Lock size={16} /></button>
                                                     <button onClick={() => setDeleteConfirm(e)} className="p-2 bg-red-50 text-red-500 rounded-lg hover:bg-red-600 hover:text-white transition-all shadow-sm" title="حذف"><Trash2 size={16} /></button>
                                                 </div>
-                                            ) : <div className="p-2.5 bg-gray-50 text-gray-300 rounded-xl" title={e.rawTx?.isLocked ? 'حركة مقفلة' : 'عملية مرتبطة بنظام تلقائي'}><Lock size={16} className="mx-auto" /></div>}
+                                            ) : e.isManual && e.rawTx?.isLocked ? (
+                                                <div className="flex items-center justify-center">
+                                                    <button 
+                                                        onDoubleClick={() => {
+                                                            if (isSuperAdmin) {
+                                                                db.updateFactoryTransaction(currentUser!.id, e.rawTx.id, { isLocked: false });
+                                                                toast.success('تم فتح قفل الحركة');
+                                                                refresh();
+                                                            }
+                                                        }}
+                                                        className={`p-2.5 rounded-xl transition-all ${isSuperAdmin ? 'bg-amber-50 text-amber-500 hover:bg-amber-100 cursor-pointer' : 'bg-gray-50 text-gray-300 cursor-not-allowed'}`} 
+                                                        title={isSuperAdmin ? 'انقر مرتين لفتح القفل' : 'حركة مقفلة'}
+                                                    >
+                                                        <Lock size={16} className="mx-auto" />
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-center justify-center">
+                                                    <span className="p-2.5 bg-gray-50 text-gray-300 rounded-xl" title="عملية مرتبطة - التعديل من صفحة المورد">
+                                                        <Lock size={16} className="mx-auto" />
+                                                    </span>
+                                                </div>
+                                            )}
                                         </td>
                                     </tr>
-                                ))}
+                                    );
+                                })}
                                 {currentEvents.length === 0 && (
-                                    <tr><td colSpan={6} className="p-32 text-center text-gray-400 font-black italic opacity-30 flex flex-col items-center gap-4"><Wallet size={64} /><p className="text-xl">لا توجد حركات نقدية مطابقة في هذه الفترة</p></td></tr>
+                                    <tr><td colSpan={7} className="p-32 text-center text-gray-400 font-black italic opacity-30 flex flex-col items-center gap-4"><Wallet size={64} /><p className="text-xl">لا توجد حركات نقدية مطابقة في هذه الفترة</p></td></tr>
                                 )}
                             </tbody>
                         </table>

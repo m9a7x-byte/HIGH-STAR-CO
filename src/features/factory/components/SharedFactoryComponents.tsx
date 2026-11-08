@@ -1,30 +1,37 @@
 
+import i18n from 'i18next';
+const t = i18n.t.bind(i18n);
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Calendar, ChevronDown, Check, Search, X, ChevronRight, ChevronLeft, CalendarDays, RotateCcw, ArrowLeft } from 'lucide-react';
 import { MaterialType } from '../../../types';
 import { formatDate } from '../../../lib/dateUtils';
 import carbonFibre from '../../../assets/patterns/carbon-fibre.png';
 
-export const MONTHS_AR = [
+export const MONTHS_AR = (i18n.t('factory_shared.months', { returnObjects: true }) as string[]) || [
     'كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران',
     'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول'
 ];
 
-const WEEKDAYS_AR = ['أ', 'إ', 'ث', 'ر', 'خ', 'ج', 'س'];
+const WEEKDAYS_AR = (i18n.t('factory_shared.weekdays', { returnObjects: true }) as string[]) || ['أ', 'إ', 'ث', 'ر', 'خ', 'ج', 'س'];
 
 export const materialLabels: Record<string, string> = {
-    'SILICON_HOT': 'سليكون حار',
-    'SILICON_COLD': 'سليكون بارد',
-    'SAND': 'رمل فلين',
-    'SAND_ADHESIVE': 'رمل لاصق',
-    'CEMENT_BLACK': 'سمنت أسود',
-    'CEMENT_WHITE': 'سمنت أبيض',
-    'EPS_RAW': 'حبيبات الفلين',
-    'POLYMER_ADHESIVE': 'بوليمر ( للمادة اللاصقة )',
-    'SILOSH_ADHESIVE': 'سليليوز ( للمادة اللاصقة )',
-    'SHASTA_ADHESIVE': 'نشاسته ( للمادة اللاصقة )',
-    'CARTON_FOAM': 'كارتون فلين',
-    'CHEMICAL': 'أكياس المادة اللاصقة',
+    'SILICON_HOT': 'factory_shared.mat_silicon_hot',
+    'SILICON_COLD': 'factory_shared.mat_silicon_cold',
+    'SAND': 'factory_shared.mat_sand',
+    'SAND_ADHESIVE': 'factory_shared.mat_sand_adhesive',
+    'CEMENT_BLACK': 'factory_shared.mat_cement_black',
+    'CEMENT_WHITE': 'factory_shared.mat_cement_white',
+    'EPS_RAW': 'factory_shared.mat_eps_raw',
+    'POLYMER_ADHESIVE': 'factory_shared.mat_polymer',
+    'SILOSH_ADHESIVE': 'factory_shared.mat_silosh',
+    'SHASTA_ADHESIVE': 'factory_shared.mat_shasta',
+    'CARTON_FOAM': 'factory_shared.mat_carton_foam',
+    'BAGS_1051': 'factory_shared.mat_bags_1051',
+    'BAGS_1052': 'factory_shared.mat_bags_1052',
+    'BAGS_1053': 'factory_shared.mat_bags_1053',
+    'BAGS_1054': 'factory_shared.mat_bags_1054',
+    'BAGS_1059': 'factory_shared.mat_bags_1059',
 };
 
 export const materials: MaterialType[] = Object.keys(materialLabels) as MaterialType[];
@@ -122,7 +129,7 @@ export const ModernSingleDatePicker = ({ label, value, onChange }: { label: stri
         return <div className="grid grid-cols-7 gap-1 animate-fade-in">{days}</div>;
     };
 
-    const displayValue = value ? formatDate(value, { day: '2-digit', month: 'long', year: 'numeric' }) : 'اختر التاريخ...';
+    const displayValue = value ? formatDate(value, { day: '2-digit', month: 'long', year: 'numeric' }) : t('factory_shared.pick_date');
 
     return (
         <div className="space-y-2 relative" ref={containerRef}>
@@ -198,8 +205,8 @@ export const ModernSingleDatePicker = ({ label, value, onChange }: { label: stri
                         </div>
 
                         <div className="mt-4 pt-4 border-t border-gray-50 flex justify-between items-center">
-                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">اختر تاريخاً</span>
-                            <button type="button" onClick={() => { handleDateSelect(new Date().getDate()); setViewDate(new Date()); }} className="text-[10px] font-black text-[#0e3c63] bg-blue-50 px-4 py-2 rounded-xl hover:bg-blue-100 transition-colors">اليوم</button>
+                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{t('batch4.k658')}</span>
+                            <button type="button" onClick={() => { handleDateSelect(new Date().getDate()); setViewDate(new Date()); }} className="text-[10px] font-black text-[#0e3c63] bg-blue-50 px-4 py-2 rounded-xl hover:bg-blue-100 transition-colors">{t('batch4.k135')}</button>
                         </div>
                     </div>
                 </div>
@@ -242,7 +249,7 @@ export const ModernMonthYearPicker = ({ label, value, onChange }: { label: strin
     const d = parseDate(value);
     const displayValue = value
         ? `${MONTHS_AR[d.getMonth()]} (${d.getMonth() + 1}) ${d.getFullYear()}`
-        : 'اختر الشهر...';
+        : t('factory_shared.pick_month');
 
     return (
         <div className="space-y-2 relative" ref={containerRef}>
@@ -304,7 +311,7 @@ export const ModalModernSelect = ({ label, value, options, onChange, icon: Icon 
     }, []);
 
     const filtered = options.filter((o: any) => o.label.toLowerCase().includes(search.toLowerCase()));
-    const selectedLabel = options.find((o: any) => o.value === value)?.label || 'اختر من القائمة...';
+    const selectedLabel = options.find((o: any) => o.value === value)?.label || t('factory_shared.pick_from_list');
 
     return (
         <div className="relative w-full" ref={containerRef}>
@@ -328,7 +335,7 @@ export const ModalModernSelect = ({ label, value, options, onChange, icon: Icon 
                             <div className="relative">
                                 <input
                                     className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-4 py-2.5 text-xs font-bold outline-none focus:border-[#0e3c63] shadow-inner"
-                                    placeholder="بحث سريع..."
+                                    placeholder={t('batch4.k659')}
                                     value={search}
                                     onChange={e => setSearch(e.target.value)}
                                     autoFocus
@@ -349,7 +356,7 @@ export const ModalModernSelect = ({ label, value, options, onChange, icon: Icon 
                                 {value === opt.value && <Check size={16} />}
                             </button>
                         ))}
-                        {filtered.length === 0 && <p className="p-8 text-center text-xs text-gray-300 font-bold italic">لا توجد نتائج مطابقة</p>}
+                        {filtered.length === 0 && <p className="p-8 text-center text-xs text-gray-300 font-bold italic">{t('batch4.k660')}</p>}
                     </div>
                 </div>
             )}

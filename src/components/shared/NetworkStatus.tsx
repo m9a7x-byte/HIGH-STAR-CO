@@ -1,3 +1,5 @@
+import i18n from 'i18next';
+const t = i18n.t.bind(i18n);
 
 import React, { useState, useEffect } from 'react';
 import { Wifi, WifiOff, RefreshCw } from 'lucide-react';
@@ -41,8 +43,8 @@ export const NetworkStatus = () => {
               <WifiOff size={24} />
             </div>
             <div>
-              <h4 className="font-black text-sm">انقطع الاتصال بالإنترنت</h4>
-              <p className="text-[11px] font-bold opacity-90 mt-0.5">يرجى التحقق من الشبكة وعدم حفظ أي بيانات حالياً.</p>
+              <h4 className="font-black text-sm">{t('batch4.k108')}</h4>
+              <p className="text-[11px] font-bold opacity-90 mt-0.5">{t('batch4.k109')}</p>
             </div>
           </div>
         </div>
@@ -54,8 +56,8 @@ export const NetworkStatus = () => {
               <Wifi size={24} />
             </div>
             <div>
-              <h4 className="font-black text-sm">عاد الاتصال بنجاح</h4>
-              <p className="text-[11px] font-bold opacity-90 mt-0.5">تمت استعادة المزامنة مع النظام.</p>
+              <h4 className="font-black text-sm">{t('batch4.k110')}</h4>
+              <p className="text-[11px] font-bold opacity-90 mt-0.5">{t('batch4.k111')}</p>
             </div>
         </div>
       )}

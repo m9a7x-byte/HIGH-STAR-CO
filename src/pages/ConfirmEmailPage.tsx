@@ -1,6 +1,9 @@
+import i18n from 'i18next';
+const t = i18n.t.bind(i18n);
 import React, { useState, useEffect } from 'react';
 import { Mail, CheckCircle, AlertCircle, Loader2, Sparkles } from 'lucide-react';
 import { Card, Button } from '../components/ui';
+import { FloatingLanguageSwitcher } from '../components/shared/FloatingLanguageSwitcher';
 import { supabase } from '../lib/supabase';
 
 interface ConfirmEmailPageProps {
@@ -39,6 +42,7 @@ export const ConfirmEmailPage: React.FC<ConfirmEmailPageProps> = ({ onSuccess, o
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-[#0e3c63] to-slate-900 p-4" dir="rtl">
+            <FloatingLanguageSwitcher />
             {/* Background Effects */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
                 <div className="absolute top-1/4 right-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse" />
@@ -75,7 +79,7 @@ export const ConfirmEmailPage: React.FC<ConfirmEmailPageProps> = ({ onSuccess, o
                     {status === 'success' && (
                         <div className="flex items-center justify-center gap-2 text-emerald-500 animate-pulse">
                             <Sparkles size={20} />
-                            <span className="text-sm font-bold">جاري توجيهك...</span>
+                            <span className="text-sm font-bold">{t('batch4.k859')}</span>
                         </div>
                     )}
 

@@ -6,6 +6,7 @@ declare global {
             minimize: () => void;
             maximize: () => void;
             close: () => void;
+            checkForUpdates: () => void;
             onUpdateStatus: (callback: (status: any) => void) => void;
             downloadUpdate: () => void;
             quitAndInstall: () => void;

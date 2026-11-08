@@ -1,9 +1,12 @@
 import type { Category, Product } from '../types';
 
-export type ProductFamily = 'STYROFOAM' | 'ADHESIVE';
+import type { ProductFamily } from './productFamilies';
+export type { ProductFamily } from './productFamilies';
 export type ProductRow = {
     id: string;
     code: string;
+    name: string;
+    paintType: string;
     category: string;
     dimensions: string;
     packageUnits: number;
@@ -16,19 +19,23 @@ export type ProductRow = {
 export type ImportedProductRow = Partial<Record<keyof ProductRow, string | number>>;
 
 const commonLabels: Record<keyof ProductRow, string> = {
-    id: 'ID', code: 'كود المنتج', category: 'التصنيف', dimensions: 'الابعاد / الوزن',
+    id: 'ID', code: 'كود المنتج', name: 'اسم المادة', paintType: 'نوع الصبغ', category: 'التصنيف', dimensions: 'الابعاد / الوزن',
     packageUnits: 'عدد الأمتار في الكارتون', normalMeter: 'عادي - سعر المتر', vipMeter: 'VIP - سعر المتر',
     normalUnit: 'عادي - سعر الكيس', vipUnit: 'VIP - سعر الكيس', isActive: 'الحالة'
 };
 
 export const transferLabels = (family: ProductFamily) => ({
     ...commonLabels,
-    packageUnits: family === 'ADHESIVE' ? 'عدد الأكياس في الباليت' : commonLabels.packageUnits
+    packageUnits: family === 'ADHESIVE' ? 'عدد الأكياس في الباليت' : commonLabels.packageUnits,
+    normalUnit: family === 'PAINT' ? 'عادي - سعر السطلة' : commonLabels.normalUnit,
+    vipUnit: family === 'PAINT' ? 'VIP - سعر السطلة' : commonLabels.vipUnit,
+    dimensions: family === 'PAINT' ? 'الوزن / الحجم' : commonLabels.dimensions
 });
 
 export const transferFields = (family: ProductFamily): (keyof ProductRow)[] => [
-    'id', 'code', 'category', 'dimensions', 'packageUnits',
-    ...(family === 'ADHESIVE' ? ['normalUnit', 'vipUnit'] as const : ['normalMeter', 'vipMeter'] as const),
+    'id', 'code', ...(family === 'PAINT' ? ['name', 'paintType'] as const : []), 'category', 'dimensions',
+    ...(family === 'PAINT' ? [] : ['packageUnits'] as const),
+    ...(family !== 'STYROFOAM' ? ['normalUnit', 'vipUnit'] as const : ['normalMeter', 'vipMeter'] as const),
     'isActive'
 ];
 
@@ -51,7 +58,7 @@ const numberValue = (value: unknown, fallback: number, label: string, positive =
 };
 
 export const buildProductRow = (product: Product, categories: Category[]): ProductRow => ({
-    id: String(product.id), code: product.code, category: product.category, dimensions: product.dimensions,
+    id: String(product.id), code: product.code, name: product.name || '', paintType: product.paintType || '', category: product.category, dimensions: product.dimensions,
     packageUnits: Number(product.metersPerCarton || (getCategoryType(categories, product.category) === 'ADHESIVE' ? 80 : 1)),
     normalMeter: Number(product.prices['عادي']?.pricePerMeter || 0),
     vipMeter: Number(product.prices.VIP?.pricePerMeter || 0),
@@ -66,9 +73,9 @@ export const buildImportPayload = (row: ImportedProductRow, target: Product, cat
     if (getCategoryType(categories, target.category) !== family || getCategoryType(categories, category) !== family) {
         throw new Error('نوع المنتج لا يطابق القسم المختار؛ استورد ملف الفلين واللاصقة كل واحد بقسمه');
     }
-    const adhesive = family === 'ADHESIVE';
-    const quantity = numberValue(row.packageUnits, Number(target.metersPerCarton || (adhesive ? 80 : 1)), 'عدد وحدات العبوة', true);
-    if (adhesive && !Number.isInteger(quantity)) throw new Error('عدد الأكياس في الباليت يجب أن يكون عدداً صحيحاً');
+    const adhesive = family !== 'STYROFOAM';
+    const quantity = family === 'PAINT' ? 1 : numberValue(row.packageUnits, Number(target.metersPerCarton || (adhesive ? 80 : 1)), 'عدد وحدات العبوة', true);
+    if (family === 'ADHESIVE' && !Number.isInteger(quantity)) throw new Error('عدد الأكياس في الباليت يجب أن يكون عدداً صحيحاً');
     const normal = numberValue(adhesive ? row.normalUnit : row.normalMeter,
         adhesive ? target.prices['عادي'].pricePerCarton : target.prices['عادي'].pricePerMeter, 'سعر العادي');
     const vip = numberValue(adhesive ? row.vipUnit : row.vipMeter,
@@ -78,6 +85,8 @@ export const buildImportPayload = (row: ImportedProductRow, target: Product, cat
     if (status && !['فعال', 'متوقف'].includes(status)) throw new Error('الحالة يجب أن تكون فعال أو متوقف');
     return {
         code: nonBlank(row.code) ? String(row.code).trim() : target.code,
+        name: nonBlank(row.name) ? String(row.name).trim() : target.name || null,
+        paint_type: nonBlank(row.paintType) ? String(row.paintType).trim() : target.paintType || null,
         category,
         dimensions: nonBlank(row.dimensions) ? String(row.dimensions).trim() : target.dimensions,
         meters_per_carton: quantity,
@@ -101,14 +110,14 @@ export const findImportTarget = (row: ImportedProductRow, products: Product[], c
 
 export const rowsFromCells = (cells: string[][], family: ProductFamily): ImportedProductRow[] => {
     const aliases = new Map<string, keyof ProductRow>();
-    for (const type of ['STYROFOAM', 'ADHESIVE'] as const) {
+    for (const type of ['STYROFOAM', 'ADHESIVE', 'PAINT'] as const) {
         for (const [field, label] of Object.entries(transferLabels(type))) aliases.set(label, field as keyof ProductRow);
     }
     aliases.set('متر/كارتون أو أكياس/باليت', 'packageUnits');
     aliases.set('عادي - سعر الكارتون/الكيس', 'normalUnit');
     aliases.set('VIP - سعر الكارتون/الكيس', 'vipUnit');
     const header = (cells[0] || []).map(value => aliases.get(value.replace(/^\uFEFF/, '').trim()));
-    const required = family === 'ADHESIVE' ? ['normalUnit', 'vipUnit'] : ['normalMeter', 'vipMeter'];
+    const required = family !== 'STYROFOAM' ? ['normalUnit', 'vipUnit'] : ['normalMeter', 'vipMeter'];
     if ((!header.includes('id') && !header.includes('code')) || required.some(field => !header.includes(field as keyof ProductRow))) {
         throw new Error('أعمدة الملف لا تطابق القسم؛ صدّر ملفاً جديداً من قسم الفلين أو المادة اللاصقة ثم عدّله');
     }

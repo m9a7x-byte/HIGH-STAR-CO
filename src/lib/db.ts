@@ -1,11 +1,26 @@
 
-import { User, Product, Order, AuditLog, VehicleConfig, UserRole, AgentType, PaymentStatus, ProductionStatus, OrderItem, Category, WalletTransaction, LogContext, FactoryTransaction, FactoryCategory, Supplier, Profile, AgentDetails } from '../types';
+import { User, Product, Order, AuditLog, VehicleConfig, UserRole, AgentType, PaymentStatus, ProductionStatus, OrderItem, Category, WalletTransaction, LogContext, FactoryTransaction, FactoryCategory, Supplier, Profile, AgentDetails, AppNotification } from '../types';
 import { invokeAdminAction } from './edgeFunctions';
 import { STYROFOAM_CATEGORIES, ADHESIVE_CATEGORY } from './constants';
 import { supabase } from './supabase';
 import { RealtimeChannel } from '@supabase/supabase-js';
+import { getAdjustedProductPrices } from './pricing';
 
 type Listener = () => void;
+
+const APP_MODE = (import.meta.env.VITE_APP_MODE || 'all') as 'admin' | 'agent' | 'all';
+
+const getAuthOrigin = () => {
+  const origin = window.location.origin;
+
+  if (origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1') || origin.endsWith('.high-star.iq') || origin === 'https://v.high-star.iq' || origin === 'https://agents.high-star.iq') {
+    return origin;
+  }
+
+  return APP_MODE === 'agent' ? 'https://agents.high-star.iq' : 'https://v.high-star.iq';
+};
+
+const getAuthRedirectUrl = (path: string) => `${getAuthOrigin()}${path.startsWith('/') ? path : `/${path}`}`;
 
 class SupabaseService {
   users: User[] = [];
@@ -16,20 +31,274 @@ class SupabaseService {
   auditLogs: AuditLog[] = [];
   walletTransactions: WalletTransaction[] = [];
   factoryTransactions: FactoryTransaction[] = [];
+  notifications: AppNotification[] = [];
 
   vehicleConfig: VehicleConfig = {
     kiaCapacity: 140, canterCapacity: 180, trailerCapacity: 240, showProductionQueueToAgents: true,
     maintenanceMode: false, maintenanceMessage: '', enableToasts: true, toastPosition: 'bottom-left',
-    enablePrint: true, printHeaderUrl: '', printFooterUrl: ''
+    enablePrint: true, enableLanguageSwitcher: true, printHeaderUrl: '', printFooterUrl: '',
+    orderConstraintMode: 'OPEN', maxKiaVehicles: 1, maxCanterVehicles: 1, maxTrailerVehicles: 1
   };
 
   private listeners: Listener[] = [];
   private realtimeChannel: RealtimeChannel | null = null;
   private initialized = false;
+  private settingsLoaded = false;
+  private hasRemoteVehicleConfig = false;
 
   constructor() {
     this.init();
   }
+
+  
+  
+  getSupplierTransactions(supplierId?: number | string): import('../types').SupplierTransaction[] {
+    let txs = this.factoryTransactions
+      .filter(tx => ['SUPPLIER_PAYMENT', 'SUPPLIER_DEPOSIT', 'SUPPLIER_WITHDRAWAL', 'RAW_MATERIALS'].includes(tx.category) || tx.supplierId);
+    
+    if (supplierId) {
+      txs = txs.filter(tx => String(tx.supplierId) === String(supplierId));
+    }
+
+    return txs.map(tx => {
+        let type: import('../types').SupplierTransactionType = 'DEBT';
+        if (tx.category === 'SUPPLIER_PAYMENT') type = 'PAYMENT';
+        else if (tx.category === 'SUPPLIER_DEPOSIT') type = 'DEPOSIT';
+        else if (tx.category === 'SUPPLIER_WITHDRAWAL') type = 'WITHDRAWAL';
+
+        // For CUSTOMS transactions, show category info in description
+        const isCustoms = tx.category === 'CUSTOMS';
+        const desc = isCustoms
+          ? `كمرك: ${tx.notes || ''} (${tx.materialType || ''})`
+          : (tx.notes || tx.supplierName || '');
+
+        return {
+          id: tx.id,
+          supplierId: tx.supplierId!,
+          type,
+          amount: tx.amount,
+          description: desc,
+          createdAt: tx.date,
+          createdBy: tx.withdrawnBy || 'نظام المصنع',
+          locked: tx.is_locked,
+          linkedTxId: (isCustoms || tx.category === 'SUPPLIER' || tx.category === 'TRANSPORT_IN') ? tx.id : undefined
+        };
+      }).filter(tx => tx.supplierId);
+  }
+
+  async addSupplierTransaction(userId: string, data: any) {
+    let category = 'RAW_MATERIALS';
+    let transactionType = 'OUT';
+    
+    if (data.type === 'PAYMENT') { category = 'SUPPLIER_PAYMENT'; transactionType = 'OUT'; }
+    else if (data.type === 'DEPOSIT') { category = 'SUPPLIER_DEPOSIT'; transactionType = 'IN'; }
+    else if (data.type === 'WITHDRAWAL') { category = 'SUPPLIER_WITHDRAWAL'; transactionType = 'OUT'; }
+
+    const supplier = this.suppliers.find(s => String(s.id) === String(data.supplierId));
+    
+    return this.addFactoryTransaction(userId, {
+      category: category as any,
+      amount: data.amount,
+      notes: data.description,
+      supplierId: data.supplierId,
+      supplierName: supplier?.name,
+      transactionType: transactionType as any,
+      isLocked: true // Add locked state flag to pass to addFactoryTransaction
+    } as any);
+  }
+
+  async deleteSupplierTransaction(userId: string, txId: string | number) {
+    return this.deleteFactoryTransaction(userId, txId);
+  }
+
+  async toggleLockSupplierTransaction(userId: string, txId: string | number, isLocked: boolean) {
+    const { error } = await supabase.from('factory_transactions').update({ is_locked: isLocked }).eq('id', txId);
+    if (error) throw error;
+    
+    // Log activity
+    await this.logActivity(userId, isLocked ? 'قفل حركة مورد' : 'فتح قفل حركة مورد', 'FACTORY', `تم تغيير حالة القفل للحركة #${txId}`);
+    
+    // Optimistic update
+    const tx = this.factoryTransactions.find(t => String(t.id) === String(txId));
+    if (tx) {
+        (tx as any).is_locked = isLocked;
+        this.notify();
+    }
+  }
+
+  async updateSupplierTransaction(userId: string, txId: string | number, updates: { amount?: number; description?: string }) {
+    const dbUpdates: any = {};
+    if (updates.amount !== undefined) dbUpdates.amount = updates.amount;
+    if (updates.description !== undefined) dbUpdates.notes = updates.description;
+    return this.updateFactoryTransaction(userId, txId, dbUpdates);
+  }
+
+
+  async restoreSession(): Promise<User | null> {
+    try {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (error || !session?.user) return null;
+      
+      if (this.users.length === 0) {
+        await this.fetchUsers();
+      }
+      
+      const user = this.users.find(u => u.id === session.user.id);
+      return user || null;
+    } catch (e) {
+      console.error('Error restoring session:', e);
+      return null;
+    }
+  }
+
+  async fetchNotifications() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+        
+      if (error) throw error;
+      
+      this.notifications = (data || []).map(n => ({
+        id: n.id,
+        userId: n.user_id,
+        title: n.title,
+        message: n.message,
+        type: n.type,
+        isRead: n.is_read,
+        relatedEntityId: n.related_entity_id,
+        relatedEntityType: n.related_entity_type,
+        actionUrl: n.action_url,
+        actionLabel: n.action_label,
+        imageUrl: n.image_url,
+        createdAt: n.created_at
+      }));
+      this.notify();
+    } catch (e) {
+      console.error('Error fetching notifications:', e);
+    }
+  }
+
+  shownNotifications: Set<string> = new Set();
+
+  consumeNewNotifications(): AppNotification[] {
+    const newNotifs = this.notifications.filter(n => !n.isRead && !this.shownNotifications.has(n.id));
+    newNotifs.forEach(n => this.shownNotifications.add(n.id));
+    return newNotifs;
+  }
+
+  async markNotificationAsRead(id: string) {
+    try {
+      const { error } = await supabase.from('notifications').update({ is_read: true }).eq('id', id);
+      if (error) throw error;
+      
+      const notif = this.notifications.find(n => n.id === id);
+      if (notif) {
+        notif.isRead = true;
+        this.notify();
+      }
+    } catch (e) {
+      console.error('Error marking notification as read:', e);
+    }
+  }
+
+  async markAllNotificationsAsRead() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      
+      const { error } = await supabase.from('notifications').update({ is_read: true }).eq('user_id', user.id).eq('is_read', false);
+      if (error) throw error;
+      
+      this.notifications.forEach(n => n.isRead = true);
+      this.notify();
+    } catch (e) {
+      console.error('Error marking all notifications as read:', e);
+    }
+  }
+
+  async deleteAllNotifications() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      
+      const { error } = await supabase.from('notifications').delete().eq('user_id', user.id);
+      if (error) throw error;
+      
+      this.notifications = [];
+      this.notify();
+    } catch (e) {
+      console.error('Error deleting notifications:', e);
+    }
+  }
+
+  async uploadNotificationImage(userId: string, file: File): Promise<string> {
+    const extension = (file.name.split('.').pop() || 'png').replace(/[^a-zA-Z0-9]/g, '').toLowerCase() || 'png';
+    const filePath = `notifications/${userId}/${Date.now()}-${this.generateUUID()}.${extension}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('avatars')
+      .upload(filePath, file, {
+        contentType: file.type || 'image/png',
+        upsert: false
+      });
+
+    if (uploadError) throw uploadError;
+
+    const { data, error: signedUrlError } = await supabase.storage
+      .from('avatars')
+      .createSignedUrl(filePath, 315360000);
+
+    if (signedUrlError) throw signedUrlError;
+    return data.signedUrl;
+  }
+
+  async sendBroadcastNotification(userId: string, data: {
+    title: string;
+    message: string;
+    type?: AppNotification['type'];
+    actionUrl?: string;
+    actionLabel?: string;
+    imageUrl?: string;
+    target?: 'ALL' | 'STAFF' | 'AGENTS';
+  }) {
+    const cleanTitle = data.title.trim();
+    const cleanMessage = data.message.trim();
+    if (!cleanTitle || !cleanMessage) throw new Error('عنوان ووصف الإشعار مطلوبة.');
+
+    const recipients = this.users.filter(user => {
+      if (user.status === 'suspended' || user.deleted_at) return false;
+      if (data.target === 'STAFF') return user.role !== UserRole.AGENT;
+      if (data.target === 'AGENTS') return user.role === UserRole.AGENT;
+      return true;
+    });
+
+    if (recipients.length === 0) throw new Error('لا يوجد مستلمين لهذا الإشعار.');
+
+    const payload = recipients.map(recipient => ({
+      user_id: recipient.id,
+      title: cleanTitle,
+      message: cleanMessage,
+      type: data.type || 'info',
+      related_entity_type: 'BROADCAST',
+      action_url: data.actionUrl?.trim() || null,
+      action_label: data.actionLabel?.trim() || null,
+      image_url: data.imageUrl || null
+    }));
+
+    const { error } = await supabase.from('notifications').insert(payload);
+    if (error) throw error;
+
+    await this.logActivity(userId, 'إرسال إشعار عام', 'SETTINGS', `تم إرسال إشعار "${cleanTitle}" إلى ${recipients.length} مستخدم`);
+    await this.fetchNotifications();
+    return recipients.length;
+  }
+
 
   async init() {
     if (this.initialized) return;
@@ -44,7 +313,8 @@ class SupabaseService {
       this.fetchOrders(),
       this.fetchFactoryTransactions(),
       this.fetchWalletTransactions(),
-      this.fetchAuditLogs()
+      this.fetchAuditLogs(),
+      this.fetchNotifications()
     ]);
 
     this.setupRealtimeSubscription();
@@ -63,6 +333,10 @@ class SupabaseService {
   }
 
   private notify() { this.listeners.forEach(listener => listener()); }
+
+  isLanguageSwitcherEnabled() {
+    return this.settingsLoaded && this.hasRemoteVehicleConfig && this.vehicleConfig.enableLanguageSwitcher !== false;
+  }
 
   private generateUUID() {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -88,6 +362,7 @@ class SupabaseService {
             break;
           case 'products': this.fetchProducts(); break;
           case 'factory_transactions': this.fetchFactoryTransactions().then(() => this.notify()); break;
+          case 'supplier_transactions': this.fetchFactoryTransactions().then(() => this.notify()); break;
           case 'wallet_transactions': this.fetchWalletTransactions().then(() => this.notify()); break;
           case 'profiles': this.fetchUsers().then(() => this.notify()); break;
           case 'agent_details': this.fetchUsers().then(() => this.notify()); break;
@@ -95,6 +370,7 @@ class SupabaseService {
           case 'audit_logs': this.fetchAuditLogs().then(() => this.notify()); break;
           case 'system_settings': this.fetchSettings().then(() => this.notify()); break;
           case 'categories': this.fetchCategories(); break;
+          case 'notifications': this.fetchNotifications().then(() => this.notify()); break;
         }
       })
       .subscribe();
@@ -113,13 +389,17 @@ class SupabaseService {
     const { data } = await supabase.from('system_settings').select('*');
     if (data) {
       const config = data.find(d => d.key === 'vehicle_config');
-      if (config) this.vehicleConfig = config.value;
+      this.settingsLoaded = true;
+      this.hasRemoteVehicleConfig = Boolean(config);
+      if (config) this.vehicleConfig = { ...this.vehicleConfig, ...config.value };
       this.notify();
     }
   }
 
   async updateVehicleConfig(userId: any, newConfig: any) {
     // Optimistic Update
+    this.settingsLoaded = true;
+    this.hasRemoteVehicleConfig = true;
     this.vehicleConfig = newConfig;
     this.notify();
 
@@ -154,6 +434,9 @@ class SupabaseService {
       this.products = data.map(p => ({
         ...p,
         imageUrl: p.image_url,
+        paintType: p.paint_type,
+        imageNote: p.image_note,
+        technicalSheetUrl: p.technical_sheet_url,
         isActive: p.is_active,
         metersPerCarton: p.meters_per_carton,
         volumePerCarton: p.volume_per_carton
@@ -202,12 +485,15 @@ class SupabaseService {
       last_ip: p.last_ip,
       device_info: p.device_info,
       last_active_at: p.last_active_at,
+      status: p.status,
+      deleted_at: p.deleted_at,
       agentDetails: p.agent_details ? {
         id: p.id,
         type: p.agent_details.agent_type === 'NORMAL' ? 'عادي' : p.agent_details.agent_type,
         currentBalance: p.agent_details.current_balance,
         isFrozen: p.agent_details.is_frozen,
         freezeMessage: p.agent_details.freeze_message,
+        priceIncreasePercent: Number(p.agent_details.price_increase_percent || 0),
         permissions: p.agent_details.permissions,
         phone: p.agent_details.phone,
         internalNotes: p.agent_details.internal_notes
@@ -235,6 +521,7 @@ class SupabaseService {
       paidAt: o.paid_at,
       movedToProductionAt: o.moved_to_production_at,
       estimatedDays: o.estimated_days,
+      agentEditUnlocked: o.agent_edit_unlocked === true,
       createdAt: o.created_at,
       agentId: o.agent_id,
       agentName: o.agent_name,
@@ -363,6 +650,7 @@ class SupabaseService {
             currentBalance: profile.agent_details.current_balance,
             isFrozen: profile.agent_details.is_frozen,
             freezeMessage: profile.agent_details.freeze_message,
+            priceIncreasePercent: Number(profile.agent_details.price_increase_percent || 0),
             permissions: profile.agent_details.permissions,
             phone: profile.agent_details.phone,
             internalNotes: profile.agent_details.internal_notes
@@ -458,18 +746,21 @@ class SupabaseService {
       const p = this.products.find(prod => prod.id == item.productId);
       if (!p) throw new Error(`المنتج غير موجود (ID: ${item.productId})`);
 
-      const prices = p.prices[user.agentDetails!.type];
+      const prices = getAdjustedProductPrices(p, user.agentDetails);
       const totalPrice = (item.qCartons * prices.pricePerCarton) + (item.qMeters * prices.pricePerMeter);
       return {
         id: Math.random(),
         productId: p.id,
         productCode: p.code,
+        productName: p.name,
+        productPaintType: p.paintType,
         productDimensions: p.dimensions,
         quantityCartons: item.qCartons,
         quantityMeters: item.qMeters,
         unitPriceCarton: prices.pricePerCarton,
         unitPriceMeter: prices.pricePerMeter,
-        totalPrice
+        totalPrice,
+        priceAdjustmentNote: prices.increasePercent > 0 ? `زيادة ${prices.increasePercent}%` : undefined
       };
     });
 
@@ -509,9 +800,9 @@ class SupabaseService {
     if (error) throw error;
     const newOrder = data;
 
-    // Update Wallet
-    const remaining = subTotal - paidAmount;
-    const newBalance = user.agentDetails.currentBalance - remaining;
+    // Update Wallet (Deferred Billing Logic)
+    // We only add paidAmount (deposit) upfront. Subtotal deduction happens when order is COMPLETED.
+    const newBalance = user.agentDetails.currentBalance + paidAmount;
 
     // Update Agent Profile (Balance)
     // Note: We update agent_details table
@@ -523,12 +814,7 @@ class SupabaseService {
     }
 
     // Wallet Transactions
-    await supabase.from('wallet_transactions').insert({
-      agent_id: user.id,
-      amount: -subTotal,
-      type: 'PAYMENT',
-      description: `شراء طلبية #${newOrder.id}`
-    });
+    // DO NOT insert 'PAYMENT' for -subTotal here. Deferred until 'COMPLETED'.
 
     if (paidAmount > 0) {
       await supabase.from('wallet_transactions').insert({
@@ -595,7 +881,7 @@ class SupabaseService {
   }
 
   // --- Placeholders/Todo ---
-  async updateOrder(userId: any, orderId: any, items: any[], paymentAddition: number, discountValue: number, discountType: 'FIXED' | 'PERCENT') {
+  async updateOrder(userId: any, orderId: any, items: any[], paymentAddition: number, discountValue: number, discountType: 'FIXED' | 'PERCENT', options: { recordPaymentTransaction?: boolean; agentEditUnlocked?: boolean } = {}) {
     // 1. Get Existing Order
     const existingOrder = this.orders.find(o => o.id == orderId);
     if (!existingOrder) throw new Error('الطلب غير موجود');
@@ -619,6 +905,8 @@ class SupabaseService {
         id: Math.random() + idx, // Regenerate IDs to avoid conflicts
         productId: item.productId,
         productCode: item.productCode || (item.isSpecialRequest ? 'طلب خاص' : product?.code || '?'),
+        productName: item.productName || product?.name,
+        productPaintType: item.productPaintType || product?.paintType,
         productDimensions: item.productDimensions || (item.isSpecialRequest ? 'أبعاد مخصصة' : product?.dimensions || '-'),
         quantityCartons: Number(item.qCartons),
         quantityMeters: Number(item.qMeters),
@@ -626,7 +914,8 @@ class SupabaseService {
         unitPriceMeter: Number(item.unitPriceMeter),
         totalPrice: totalPrice,
         isSpecialRequest: item.isSpecialRequest,
-        specialRequestNote: item.specialRequestNote
+        specialRequestNote: item.specialRequestNote,
+        priceAdjustmentNote: item.priceAdjustmentNote
       };
     });
 
@@ -659,7 +948,7 @@ class SupabaseService {
     // 5. Update Database
     const hasSpecial = newItems.some(i => i.isSpecialRequest);
 
-    const { error: updateError } = await supabase.from('orders').update({
+    const updatePayload = {
       sub_total_amount: newSubTotal,
       discount_value: discountValue,
       discount_type: discountType,
@@ -670,10 +959,19 @@ class SupabaseService {
       payment_status: newPaidAmount >= newTotalAmount && newTotalAmount > 0 ? PaymentStatus.PAID : (newPaidAmount > 0 ? PaymentStatus.PARTIALLY_PAID : PaymentStatus.PENDING),
       items: newItems,
       payment_history: newPaymentHistory,
-      paid_at: newPaidAmount >= newTotalAmount && newTotalAmount > 0 ? (existingOrder.paidAt || new Date().toISOString()) : null
-    }).eq('id', orderId);
+      paid_at: newPaidAmount >= newTotalAmount && newTotalAmount > 0 ? (existingOrder.paidAt || new Date().toISOString()) : null,
+      ...(options.agentEditUnlocked !== undefined ? { agent_edit_unlocked: options.agentEditUnlocked } : {})
+    };
+
+    const { data: updatedOrder, error: updateError } = await supabase
+      .from('orders')
+      .update(updatePayload)
+      .eq('id', orderId)
+      .select('id')
+      .maybeSingle();
 
     if (updateError) throw updateError;
+    if (!updatedOrder) throw new Error('لم يتم تحديث الطلب. تحقق من صلاحية التعديل وحاول مرة ثانية.');
 
     // 6. Wallet & Balance Adjustments
     // a) Adjust for Cost Difference (If order is more expensive, deduct more. If cheaper, refund difference).
@@ -684,7 +982,9 @@ class SupabaseService {
     // b) Adjust for New Payment
     // Logic: Balance = Balance + Payment
 
-    const totalBalanceChange = -costDifference + paymentAddition;
+    const isBilled = existingOrder.productionStatus === ProductionStatus.COMPLETED;
+    const appliedCostDifference = isBilled ? costDifference : 0;
+    const totalBalanceChange = -appliedCostDifference + paymentAddition;
 
     if (totalBalanceChange !== 0) {
       const newBalance = agent.agentDetails.currentBalance + totalBalanceChange;
@@ -696,16 +996,16 @@ class SupabaseService {
     }
 
     // 7. Log Transactions
-    if (costDifference !== 0) {
+    if (appliedCostDifference !== 0) {
       await supabase.from('wallet_transactions').insert({
         agent_id: agent.id,
-        amount: -costDifference, // Negative means "Spend", so if Cost goes UP (Diff > 0), Amount is Negative.
+        amount: -appliedCostDifference, // Negative means "Spend", so if Cost goes UP (Diff > 0), Amount is Negative.
         type: 'ADJUSTMENT',
-        description: `تعديل قيمة الطلب #${orderId} (${costDifference > 0 ? 'زيادة' : 'نقصان'})`
+        description: `تعديل قيمة الطلب #${orderId} (${appliedCostDifference > 0 ? 'زيادة' : 'نقصان'})`
       });
     }
 
-    if (paymentAddition > 0) {
+    if (paymentAddition > 0 && options.recordPaymentTransaction !== false) {
       await supabase.from('wallet_transactions').insert({
         agent_id: agent.id,
         amount: paymentAddition,
@@ -720,11 +1020,142 @@ class SupabaseService {
     await this.fetchOrders();
     this.notify();
   }
+
+  private isOrderBeforeProduction(order: Order) {
+    return order.productionStatus === ProductionStatus.PENDING_TRANSFER || order.productionStatus === ProductionStatus.PENDING_PAYMENT;
+  }
+
+  async setOrderAgentEditUnlocked(userId: any, orderId: any, unlocked: boolean) {
+    const existingOrder = this.orders.find(o => o.id == orderId);
+    if (!existingOrder) throw new Error('الطلب غير موجود');
+    if (!this.isOrderBeforeProduction(existingOrder)) {
+      throw new Error('لا يمكن فتح تعديل الوكيل بعد ترحيل الطلب لخط الإنتاج');
+    }
+
+    const { data, error } = await supabase
+      .from('orders')
+      .update({ agent_edit_unlocked: unlocked })
+      .eq('id', orderId)
+      .select('id')
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) throw new Error('لم يتم تحديث صلاحية تعديل الوكيل');
+
+    this.orders = this.orders.map(o => o.id == orderId ? { ...o, agentEditUnlocked: unlocked } : o);
+    this.logActivity(userId, unlocked ? 'فتح تعديل الوكيل' : 'قفل تعديل الوكيل', 'ORDERS', `${unlocked ? 'تم فتح' : 'تم قفل'} تعديل الوكيل للطلب #${orderId}`);
+    this.notify();
+  }
+
+  async updateOrderByAgent(agentId: any, orderId: any, items: any[]) {
+    const existingOrder = this.orders.find(o => o.id == orderId);
+    if (!existingOrder) throw new Error('الطلب غير موجود');
+    if (String(existingOrder.agentId) !== String(agentId)) throw new Error('لا تملك صلاحية تعديل هذا الطلب');
+    if (!existingOrder.agentEditUnlocked) throw new Error('تعديل هذا الطلب غير مفتوح من الإدارة');
+    if (!this.isOrderBeforeProduction(existingOrder)) throw new Error('لا يمكن تعديل الطلب بعد ترحيله لخط الإنتاج');
+
+    await this.updateOrder(agentId, orderId, items, 0, existingOrder.discountValue || 0, existingOrder.discountType || 'FIXED', {
+      recordPaymentTransaction: false,
+      agentEditUnlocked: false
+    });
+
+    this.orders = this.orders.map(o => o.id == orderId ? { ...o, agentEditUnlocked: false } : o);
+    this.logActivity(agentId, 'تعديل وكيل للطلب', 'ORDERS', `تم تعديل الطلب #${orderId} من بوابة الوكيل وانقفل التعديل تلقائياً`);
+    await this.fetchOrders();
+    this.notify();
+  }
+
+  async addAgentLedgerTransaction(userId: any, agentId: any, amount: number, description: string, type: 'DEPOSIT' | 'ADJUSTMENT' = 'DEPOSIT') {
+    const agent = this.users.find(u => u.id == agentId);
+    if (!agent) throw new Error('وكيل غير موجود');
+
+    const finalDescription = `${description || 'حركة مالية'} | بواسطة: ${this.users.find(u => u.id == userId)?.fullName || 'مستخدم'}`;
+    const tempTx = {
+      id: Date.now(),
+      agent_id: agentId,
+      agentId,
+      amount,
+      type,
+      description: finalDescription,
+      created_at: new Date().toISOString(),
+      createdAt: new Date().toISOString()
+    };
+
+    this.walletTransactions = [tempTx as any, ...this.walletTransactions];
+    this.notify();
+
+    const { error } = await supabase.from('wallet_transactions').insert({
+      agent_id: agentId,
+      amount,
+      type,
+      description: finalDescription
+    });
+    if (error) throw error;
+
+    await this.fetchWalletTransactions();
+    this.logActivity(userId, 'تسجيل حركة مالية', 'AGENTS', `تسجيل حركة موحدة للوكيل ${agent.fullName} بمبلغ ${amount}`);
+    this.notify();
+  }
+
+  async updateOrderPaymentHistory(userId: any, orderId: any, paymentHistory: any[]) {
+    const existingOrder = this.orders.find(o => o.id == orderId);
+    if (!existingOrder) throw new Error('الطلب غير موجود');
+
+    const agent = this.users.find(u => u.id == existingOrder.agentId);
+    if (!agent || !agent.agentDetails) throw new Error('بيانات الوكيل غير موجودة');
+
+    const normalizedHistory = paymentHistory
+      .filter(pay => Number(pay.amountAdded) > 0)
+      .map(pay => ({ ...pay, amountAdded: Number(pay.amountAdded) }));
+
+    let runningPaid = 0;
+    const recalculatedHistory = normalizedHistory.map(pay => {
+      const previousPaid = runningPaid;
+      runningPaid += pay.amountAdded;
+      return {
+        ...pay,
+        previousPaid,
+        newTotalPaid: runningPaid
+      };
+    });
+
+    if (runningPaid > existingOrder.totalAmount) {
+      throw new Error('مجموع الدفعات أكبر من قيمة الفاتورة');
+    }
+
+    const { error: updateError } = await supabase.from('orders').update({
+      paid_amount: runningPaid,
+      payment_status: runningPaid >= existingOrder.totalAmount && existingOrder.totalAmount > 0 ? PaymentStatus.PAID : (runningPaid > 0 ? PaymentStatus.PARTIALLY_PAID : PaymentStatus.PENDING),
+      payment_history: recalculatedHistory,
+      paid_at: runningPaid >= existingOrder.totalAmount && existingOrder.totalAmount > 0 ? (existingOrder.paidAt || new Date().toISOString()) : null
+    }).eq('id', orderId);
+
+    if (updateError) throw updateError;
+
+    const balanceChange = runningPaid - existingOrder.paidAmount;
+    if (balanceChange !== 0) {
+      const newBalance = agent.agentDetails.currentBalance + balanceChange;
+      await supabase.from('agent_details').update({ current_balance: newBalance }).eq('id', agent.id);
+      agent.agentDetails.currentBalance = newBalance;
+
+      await supabase.from('wallet_transactions').insert({
+        agent_id: agent.id,
+        amount: balanceChange,
+        type: 'ADJUSTMENT',
+        description: `تعديل دفعات الطلب #${orderId} | بواسطة: ${this.users.find(u => u.id == userId)?.fullName || 'مستخدم'}`
+      });
+    }
+
+    this.logActivity(userId, 'تعديل دفعات طلب', 'ORDERS', `تعديل دفعات الطلب #${orderId}`, existingOrder.paidAmount.toString(), runningPaid.toString());
+    await this.fetchOrders();
+    this.notify();
+  }
+
   updateOrderStatus(userId: any, orderId: any, type: 'payment' | 'production', newVal: string) {
     // Optimistic update
     const originalOrders = [...this.orders];
     if (type === 'production') {
-      this.orders = this.orders.map(o => o.id == orderId ? { ...o, productionStatus: newVal as any } : o);
+      const shouldLockAgentEdit = newVal !== ProductionStatus.PENDING_TRANSFER && newVal !== ProductionStatus.PENDING_PAYMENT;
+      this.orders = this.orders.map(o => o.id == orderId ? { ...o, productionStatus: newVal as any, ...(shouldLockAgentEdit ? { agentEditUnlocked: false } : {}) } : o);
     } else {
       this.orders = this.orders.map(o => o.id == orderId ? { ...o, paymentStatus: newVal as any } : o);
     }
@@ -733,14 +1164,60 @@ class SupabaseService {
     // Real update - async
     (async () => {
       try {
+        const shouldLockAgentEdit = type === 'production' && newVal !== ProductionStatus.PENDING_TRANSFER && newVal !== ProductionStatus.PENDING_PAYMENT;
         const updateData = type === 'production'
-          ? { production_status: newVal, ...(newVal === ProductionStatus.WAITING ? { moved_to_production_at: new Date().toISOString() } : {}) }
+          ? { production_status: newVal, ...(newVal === ProductionStatus.WAITING ? { moved_to_production_at: new Date().toISOString() } : {}), ...(shouldLockAgentEdit ? { agent_edit_unlocked: false } : {}) }
           : { payment_status: newVal };
 
         const { error } = await supabase.from('orders').update(updateData).eq('id', orderId);
         if (error) throw error;
-        const oldStatus = originalOrders.find(o => o.id == orderId)?.[type === 'production' ? 'productionStatus' : 'paymentStatus'];
-        this.logActivity(userId, 'تحديث حالة', 'SYSTEM', `تحديث حالة ${type} لطلب #${orderId}`, oldStatus, newVal);
+        
+        const targetOrder = originalOrders.find(o => o.id == orderId);
+        const oldStatus = targetOrder?.[type === 'production' ? 'productionStatus' : 'paymentStatus'];
+
+        if (type === 'production' && targetOrder) {
+            const isNowCompleted = newVal === ProductionStatus.COMPLETED;
+            const wasCompleted = oldStatus === ProductionStatus.COMPLETED;
+
+            if (isNowCompleted && !wasCompleted) {
+                const agent = this.users.find(u => u.id == targetOrder.agentId);
+                if (agent && agent.agentDetails) {
+                    const { data: existingTx } = await supabase.from('wallet_transactions')
+                        .select('id').eq('agent_id', agent.id).eq('description', `شراء طلبية #${orderId}`);
+                        
+                    if (!existingTx || existingTx.length === 0) {
+                        const newBalance = agent.agentDetails.currentBalance - targetOrder.totalAmount;
+                        await supabase.from('agent_details').update({ current_balance: newBalance }).eq('id', agent.id);
+                        if (agent.agentDetails) agent.agentDetails.currentBalance = newBalance;
+                        
+                        await supabase.from('wallet_transactions').insert({
+                            agent_id: agent.id,
+                            amount: -targetOrder.totalAmount,
+                            type: 'PAYMENT',
+                            description: `شراء طلبية #${orderId}`
+                        });
+                        this.fetchWalletTransactions();
+                    }
+                }
+            } else if (!isNowCompleted && wasCompleted) {
+                const agent = this.users.find(u => u.id == targetOrder.agentId);
+                if (agent && agent.agentDetails) {
+                    const { data: existingTx } = await supabase.from('wallet_transactions')
+                        .select('id').eq('agent_id', agent.id).eq('description', `شراء طلبية #${orderId}`);
+                    
+                    if (existingTx && existingTx.length > 0) {
+                        const newBalance = agent.agentDetails.currentBalance + targetOrder.totalAmount;
+                        await supabase.from('agent_details').update({ current_balance: newBalance }).eq('id', agent.id);
+                        if (agent.agentDetails) agent.agentDetails.currentBalance = newBalance;
+                        
+                        await supabase.from('wallet_transactions').delete().eq('agent_id', agent.id).eq('description', `شراء طلبية #${orderId}`);
+                        this.fetchWalletTransactions();
+                    }
+                }
+            }
+        }
+
+        this.logActivity(userId, 'تحديث حالة', 'SYSTEM', `تحديث حالة ${type} لطلب #${orderId}`, oldStatus as string, newVal);
       } catch (err) {
         console.error('Update status failed, reverting:', err);
         this.orders = originalOrders;
@@ -1031,11 +1508,14 @@ class SupabaseService {
   }
 
   async createProduct(userId: any, productData: any) {
-    const { id, imageUrl, isActive, metersPerCarton, volumePerCarton, ...rest } = productData;
+    const { id, imageUrl, isActive, metersPerCarton, volumePerCarton, paintType, paint_type, imageNote, image_note, technicalSheetUrl, technical_sheet_url, ...rest } = productData;
     // Map frontend camelCase to DB snake_case
     const dbPayload = {
       ...rest,
       image_url: imageUrl,
+      paint_type: paintType ?? paint_type ?? null,
+      image_note: imageNote ?? image_note ?? null,
+      technical_sheet_url: technicalSheetUrl ?? technical_sheet_url ?? null,
       is_active: isActive,
       meters_per_carton: metersPerCarton,
       volume_per_carton: volumePerCarton
@@ -1047,10 +1527,13 @@ class SupabaseService {
     this.notify();
   }
   async updateProduct(userId: any, productData: any) {
-    const { id, imageUrl, isActive, metersPerCarton, volumePerCarton, ...rest } = productData;
+    const { id, imageUrl, isActive, metersPerCarton, volumePerCarton, paintType, paint_type, imageNote, image_note, technicalSheetUrl, technical_sheet_url, ...rest } = productData;
     const dbPayload = {
       ...rest,
       image_url: imageUrl,
+      paint_type: paintType ?? paint_type ?? null,
+      image_note: imageNote ?? image_note ?? null,
+      technical_sheet_url: technicalSheetUrl ?? technical_sheet_url ?? null,
       is_active: isActive,
       meters_per_carton: metersPerCarton,
       volume_per_carton: volumePerCarton
@@ -1092,7 +1575,7 @@ class SupabaseService {
     this.notify();
     supabase.from('categories').delete().eq('id', id).then();
   }
-  updateCategory(userId: any, id: any, name: string, type?: 'STYROFOAM' | 'ADHESIVE') {
+  updateCategory(userId: any, id: any, name: string, type?: 'STYROFOAM' | 'ADHESIVE' | 'PAINT') {
     // Optimistic Update
     this.categories = this.categories.map(c => c.id === id ? { ...c, name, ...(type ? { type } : {}) } : c);
     this.notify();
@@ -1166,7 +1649,8 @@ class SupabaseService {
       country: transaction.country || null,
       province: transaction.province || null,
       withdrawn_by: actorName,
-      agent_id: transaction.agentId || null// Map Agent ID
+      agent_id: transaction.agentId || null, // Map Agent ID
+      is_locked: transaction.isLocked || false
     };
 
     // Optimistic local update - add to local array immediately for instant UI response
@@ -1319,6 +1803,7 @@ class SupabaseService {
       email: empData.email,
       password: empData.password,
       invite: empData.invite,
+      redirectTo: getAuthRedirectUrl('/accept-invite'),
       fullName: empData.fullName,
       role: empData.role,
       phone: empData.phone
@@ -1355,6 +1840,7 @@ class SupabaseService {
           internal_notes: d.internalNotes,
           permissions: d.permissions,
           agent_type: d.type,
+          price_increase_percent: Number(d.priceIncreasePercent || 0),
           is_frozen: d.isFrozen,
           freeze_message: d.freezeMessage,
           current_balance: 0 // Initialize balance
@@ -1381,6 +1867,7 @@ class SupabaseService {
     const defaults = {
       agent_type: 'عادي',
       current_balance: 0,
+      price_increase_percent: 0,
       is_frozen: false,
       permissions: {
         allowCreditOrders: false,
@@ -1410,6 +1897,7 @@ class SupabaseService {
       // FIX: Check 'updates' explicitly or prioritize camelCase to ensure UI updates aren't ignored
       is_frozen: updates.isFrozen !== undefined ? updates.isFrozen : (merged.is_frozen !== undefined ? merged.is_frozen : false),
       freeze_message: updates.freezeMessage !== undefined ? updates.freezeMessage : (merged.freeze_message || merged.freezeMessage),
+      price_increase_percent: updates.priceIncreasePercent !== undefined ? Number(updates.priceIncreasePercent || 0) : Number((merged as any).price_increase_percent || merged.priceIncreasePercent || 0),
       current_balance: updates.currentBalance !== undefined ? updates.currentBalance : (merged.current_balance !== undefined ? merged.current_balance : 0),
     };
 
@@ -1461,7 +1949,7 @@ class SupabaseService {
     this.notify();
   }
 
-  async addBalance(userId: any, agentId: any, amount: number, notes: string) {
+  async addBalance(userId: any, agentId: any, amount: number, notes: string, options: { affectsSafe?: boolean; recordTransaction?: boolean } = {}) {
     const agent = this.users.find(u => u.id == agentId);
     if (!agent || !agent.agentDetails) throw new Error('وكيل غير موجود');
 
@@ -1472,32 +1960,39 @@ class SupabaseService {
     const newBalance = agent.agentDetails.currentBalance + amount;
     agent.agentDetails.currentBalance = newBalance;
     this.users = [...this.users]; // Trigger update
+    const affectsSafe = options.affectsSafe ?? amount > 0;
+    const transactionType = amount > 0 && affectsSafe ? 'DEPOSIT' : 'ADJUSTMENT';
+    const shouldRecordTransaction = options.recordTransaction ?? true;
 
-    const tempTx = {
-      id: Date.now(),
-      agent_id: agentId,
-      agentId: agentId,
-      amount: amount,
-      type: amount > 0 ? 'DEPOSIT' : 'ADJUSTMENT' as any,
-      description: notes || 'تعديل رصيد يدوي',
-      created_at: new Date().toISOString(),
-      createdAt: new Date().toISOString()
-    };
-    this.walletTransactions = [tempTx as any, ...this.walletTransactions];
+    if (shouldRecordTransaction) {
+      const tempTx = {
+        id: Date.now(),
+        agent_id: agentId,
+        agentId: agentId,
+        amount: amount,
+        type: transactionType as any,
+        description: notes || 'تعديل رصيد يدوي',
+        created_at: new Date().toISOString(),
+        createdAt: new Date().toISOString()
+      };
+      this.walletTransactions = [tempTx as any, ...this.walletTransactions];
+    }
     this.notify();
 
     try {
       await supabase.from('agent_details').update({ current_balance: newBalance }).eq('id', agentId);
-      await supabase.from('wallet_transactions').insert({
-        agent_id: agentId,
-        amount: amount,
-        type: amount > 0 ? 'DEPOSIT' : 'ADJUSTMENT',
-        description: `${notes || 'تعديل رصيد يدوي'} | بواسطة: ${this.users.find(u => u.id == userId)?.fullName}`
-      });
+      if (shouldRecordTransaction) {
+        await supabase.from('wallet_transactions').insert({
+          agent_id: agentId,
+          amount: amount,
+          type: transactionType,
+          description: `${notes || 'تعديل رصيد يدوي'} | بواسطة: ${this.users.find(u => u.id == userId)?.fullName}`
+        });
+      }
 
       // Re-sync to confirm
       await this.fetchUsers();
-      await this.fetchWalletTransactions();
+      if (shouldRecordTransaction) await this.fetchWalletTransactions();
       this.logActivity(userId, 'تعديل رصيد', 'AGENTS', `تعديل رصيد الوكيل ${agent.fullName} بمبلغ ${amount}`);
 
     } catch (err) {
@@ -1623,22 +2118,85 @@ class SupabaseService {
     this.notify();
   }
 
-  async sendPasswordResetEmail(email: string) {
-    // URL to redirect key to. Uses the current origin (admin vs agent subdomain)
-    const currentOrigin = window.location.origin;
-    const redirectTo = `${currentOrigin}/auth/reset-password`;
-
-    // Use public API instead of Admin Action to allow unauthenticated users (Agents) to reset
+  async sendPasswordResetCode(email: string) {
+    // Uses the recovery email template. The template should show {{ .Token }} as the code.
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo,
+      redirectTo: getAuthRedirectUrl('/reset-password'),
     });
 
     if (error) {
       console.error('Reset Password Error:', error);
-      // Customize error messages if needed
-      throw new Error(error.message || 'فشل إرسال رابط استعادة كلمة المرور');
+      throw new Error(error.message || 'فشل إرسال كود استعادة كلمة المرور');
     }
 
+    return { success: true };
+  }
+
+  async verifyPasswordResetCode(email: string, token: string) {
+    const { data, error } = await supabase.auth.verifyOtp({
+      email,
+      token,
+      type: 'recovery',
+    });
+
+    if (error) {
+      console.error('Verify Reset Code Error:', error);
+      throw new Error('الكود غير صحيح أو منتهي الصلاحية');
+    }
+
+    if (!data.session) {
+      throw new Error('تعذر إنشاء جلسة آمنة لتغيير كلمة المرور');
+    }
+
+    return data.session;
+  }
+
+  async verifyEmailChangeCode(currentEmail: string, newEmail: string, token: string) {
+    const emailsToTry = Array.from(new Set([newEmail.trim(), currentEmail.trim()].filter(Boolean)));
+    let lastError: any = null;
+
+    for (const email of emailsToTry) {
+      const { error } = await supabase.auth.verifyOtp({
+        email,
+        token,
+        type: 'email_change',
+      });
+
+      if (!error) {
+        const { data: authData } = await supabase.auth.getUser();
+        const confirmedEmail = authData.user?.email;
+        const completed = confirmedEmail?.toLowerCase() === newEmail.trim().toLowerCase();
+
+        if (completed && authData.user?.id) {
+          await supabase.from('profiles').update({ email: newEmail.trim() }).eq('id', authData.user.id);
+          await this.fetchUsers();
+          this.notify();
+        }
+
+        return { completed, email: confirmedEmail };
+      }
+
+      lastError = error;
+    }
+
+    console.error('Verify Email Change Code Error:', lastError);
+    throw new Error('كود تأكيد البريد غير صحيح أو منتهي الصلاحية');
+  }
+
+  async sendPasswordResetEmail(email: string) {
+    return this.sendPasswordResetCode(email);
+  }
+
+  async sendMagicLink(email: string) {
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        shouldCreateUser: false,
+        emailRedirectTo: getAuthRedirectUrl('/magic-link'),
+      },
+    });
+
+    if (error) throw new Error(error.message || 'فشل إرسال الرابط السحري');
     return { success: true };
   }
 }

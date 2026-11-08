@@ -17,12 +17,15 @@ if (process.env.GH_TOKEN) {
 const appName = app.getName(); // Will be 'Voga Admin' or 'Voga Agent'
 if (appName.includes('Admin')) {
     autoUpdater.channel = 'admin';
+    app.setAppUserModelId('VOGA Admin');
     console.log('Update Channel: admin');
 } else if (appName.includes('Agent')) {
     autoUpdater.channel = 'agent';
+    app.setAppUserModelId('VOGA Agents');
     console.log('Update Channel: agent');
 } else {
     // Default fallback
+    app.setAppUserModelId(appName);
     console.log('Update Channel: default (latest)');
 }
 

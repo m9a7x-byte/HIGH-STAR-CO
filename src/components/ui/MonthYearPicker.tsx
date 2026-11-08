@@ -1,3 +1,5 @@
+import i18n from 'i18next';
+const t = i18n.t.bind(i18n);
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Calendar, ChevronRight, ChevronLeft, X, ChevronDown } from 'lucide-react';
@@ -59,7 +61,7 @@ export const MonthYearPicker: React.FC<MonthYearPickerProps> = ({ selectedDate, 
                         <Calendar size={16} />
                     </div>
                     <div className="flex flex-col">
-                        <span className="text-[9px] font-bold text-gray-400">الفترة الزمنية</span>
+                        <span className="text-[9px] font-bold text-gray-400">{t('batch4.k136')}</span>
                         <span className={`text-xs font-black ${selectedDate ? 'text-gray-800' : 'text-gray-400'}`}>
                             {selectedDate ? `${MONTHS_AR[selectedDate.getMonth()]} ${selectedDate.getFullYear()}` : 'كل الفترات'}
                         </span>

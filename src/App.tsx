@@ -1,3 +1,5 @@
+import i18n from 'i18next';
+import { useTranslation } from 'react-i18next';
 
 import React, { useState, useEffect } from 'react';
 import 'flag-icons/css/flag-icons.min.css';
@@ -36,6 +38,7 @@ const getInitialView = () => {
 };
 
 export const App = () => {
+  const { t } = useTranslation();
   const { user, logout } = useAuth();
   const [adminActiveTab, setAdminActiveTab] = useState('overview');
   const [view, setView] = useState<'LANDING' | 'AGENT_PORTAL' | 'LOGIN_AGENT' | 'LOGIN_STAFF' | 'FORGOT_PASSWORD' | 'FORGOT_PASSWORD_AGENT_PORTAL' | 'RESET_PASSWORD' | 'EMAIL_CHANGE_SUCCESS' | 'AUTH_ERROR' | 'CONFIRM_EMAIL' | 'ACCEPT_INVITE' | 'MAGIC_LINK' | 'CONFIRM_EMAIL_CHANGE'>(getInitialView());
@@ -44,8 +47,12 @@ export const App = () => {
   useEffect(() => {
     // Check URL for special routes
     const path = window.location.pathname;
-    if (path === '/reset-password') {
+    if (path === '/reset-password' || path === '/auth/reset-password') {
       setView('RESET_PASSWORD');
+    } else if (path === '/accept-invite' || path === '/auth/accept-invite') {
+      setView('ACCEPT_INVITE');
+    } else if (path === '/magic-link' || path === '/auth/magic-link') {
+      setView('MAGIC_LINK');
     } else if (path === '/agent-voga') {
       setView('AGENT_PORTAL');
     }
@@ -60,12 +67,12 @@ export const App = () => {
         const errorCode = params.get('error_code');
         const errorDesc = params.get('error_description');
 
-        let title = 'حدث خطأ';
-        let message = 'الرابط المستخدم غير صالح.';
+        let title = t('login.error_occurred');
+        let message = t('login.invalid_link');
 
         if (errorCode === 'otp_expired') {
-          title = 'الرابط منتهي الصلاحية';
-          message = 'لقد انتهت صلاحية هذا الرابط. يرجى طلب تغيير كلمة المرور أو البريد الإلكتروني مرة أخرى.';
+          title = t('login.link_expired');
+          message = t('login.link_expired_msg');
         } else if (errorDesc) {
           message = errorDesc.replace(/\+/g, ' ');
         }
@@ -97,8 +104,8 @@ export const App = () => {
       if (APP_MODE === 'agent' && !isAgent) {
         logout();
         setErrorDetails({
-          title: 'غير مصرح',
-          message: 'هذه البوابة مخصصة للوكلاء فقط. يرجى استخدام بوابة الإدارة.'
+          title: t('batch4.k101'),
+          message: t('batch4.k102')
         });
         setView('AUTH_ERROR');
         return;
@@ -108,8 +115,8 @@ export const App = () => {
       if (APP_MODE === 'admin' && isAgent) {
         logout();
         setErrorDetails({
-          title: 'غير مصرح',
-          message: 'هذه البوابة مخصصة للإدارة والموظفين فقط. يرجى استخدام بوابة الوكلاء.'
+          title: t('batch4.k101'),
+          message: t('batch4.k103')
         });
         setView('AUTH_ERROR');
         return;
@@ -149,8 +156,8 @@ export const App = () => {
       <>
         <ToastContainer />
         <OperationSuccessPage
-          title="تم تحديث البريد الإلكتروني"
-          message="لقد تم تأكيد بريدك الإلكتروني الجديد بنجاح. يمكنك الآن استخدام البريد الجديد لتسجيل الدخول واستلام الإشعارات."
+          title={t('batch4.k104')}
+          message={t('login.email_confirmed_msg')}
           onContinue={() => {
             setView('LANDING'); // Or redirect to dashboard if logged in
             window.history.pushState({}, '', '/');
@@ -255,9 +262,9 @@ export const App = () => {
           />
         )}
 
-        {view === 'FORGOT_PASSWORD' && <ForgotPasswordPage onBack={handleBack} />}
+        {view === 'FORGOT_PASSWORD' && <ForgotPasswordPage onBack={handleBack} onVerified={() => setView('RESET_PASSWORD')} />}
 
-        {view === 'FORGOT_PASSWORD_AGENT_PORTAL' && <ForgotPasswordPage onBack={() => setView('AGENT_PORTAL')} />}
+        {view === 'FORGOT_PASSWORD_AGENT_PORTAL' && <ForgotPasswordPage onBack={() => setView('AGENT_PORTAL')} onVerified={() => setView('RESET_PASSWORD')} />}
 
 
         {view === 'RESET_PASSWORD' && <ResetPasswordPage onSuccess={() => { setView('LANDING'); window.history.pushState({}, '', '/'); }} />}
@@ -292,3 +299,4 @@ export const App = () => {
     </>
   );
 };
+

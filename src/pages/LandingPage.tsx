@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Users, ShieldCheck, ArrowLeft } from 'lucide-react';
 
 interface LandingPageProps {
@@ -8,10 +9,13 @@ interface LandingPageProps {
 
 import carbonFibre from '../assets/patterns/carbon-fibre.png';
 import cubes from '../assets/patterns/cubes.png';
+import { FloatingLanguageSwitcher } from '../components/shared/FloatingLanguageSwitcher';
 
 export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
+    const { t } = useTranslation();
     return (
         <div className="min-h-screen flex items-center justify-center bg-gray-100 p-6 relative overflow-hidden" dir="rtl">
+            <FloatingLanguageSwitcher />
 
             {/* Background Decorations */}
             <div className="absolute top-0 right-0 w-full h-full opacity-5" style={{ backgroundImage: `url(${carbonFibre})` }}></div>
@@ -20,8 +24,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
 
             <div className="w-full max-w-5xl relative z-10">
                 <div className="text-center mb-16 space-y-4">
-                    <h1 className="text-5xl md:text-7xl font-black text-[#0e3c63] tracking-tighter drop-shadow-sm">نظام معمل فوكا</h1>
-                    <p className="text-xl text-gray-500 font-bold tracking-widest">VOGA FACTORY ERP SYSTEM</p>
+                    <h1 className="text-5xl md:text-7xl font-black text-[#0e3c63] tracking-tighter drop-shadow-sm">{t('landing.title')}</h1>
+                    <p className="text-xl text-gray-500 font-bold tracking-widest">{t('landing.subtitle')}</p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12">
@@ -35,12 +39,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
                         <div className="w-28 h-28 bg-emerald-50 rounded-[2rem] flex items-center justify-center mb-8 group-hover:scale-110 transition-transform duration-500 shadow-inner">
                             <Users size={48} className="text-emerald-600" />
                         </div>
-                        <h2 className="text-3xl font-black text-gray-800 mb-3 group-hover:text-emerald-700 transition-colors">بوابة الوكلاء</h2>
+                        <h2 className="text-3xl font-black text-gray-800 mb-3 group-hover:text-emerald-700 transition-colors">{t('landing.agent_portal')}</h2>
                         <p className="text-gray-400 font-bold leading-relaxed mb-8 px-4">
-                            تسجيل الدخول المخصص للوكلاء المعتمدين لمتابعة الطلبات والحسابات.
+                            {t('landing.agent_portal_desc')}
                         </p>
                         <div className="mt-auto w-full py-4 bg-gray-50 rounded-2xl font-black text-gray-400 group-hover:bg-emerald-500 group-hover:text-white transition-all flex items-center justify-center gap-3">
-                            دخول النظام <ArrowLeft size={20} className="transform group-hover:-translate-x-1 transition-transform" />
+                            {t('common.enter_system')} <ArrowLeft size={20} className="transform group-hover:-translate-x-1 transition-transform" />
                         </div>
                     </button>
 
@@ -53,12 +57,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
                         <div className="w-28 h-28 bg-white/10 rounded-[2rem] flex items-center justify-center mb-8 group-hover:scale-110 transition-transform duration-500 shadow-inner backdrop-blur-sm relative z-10">
                             <ShieldCheck size={48} className="text-white" />
                         </div>
-                        <h2 className="text-3xl font-black text-white mb-3 relative z-10">بوابة الإدارة والموظفين</h2>
+                        <h2 className="text-3xl font-black text-white mb-3 relative z-10">{t('landing.staff_portal')}</h2>
                         <p className="text-blue-200/60 font-bold leading-relaxed mb-8 px-4 relative z-10">
-                            الدخول الإداري المخصص لطاقم العمل والمشرفين والمدير العام.
+                            {t('landing.staff_portal_desc')}
                         </p>
                         <div className="mt-auto w-full py-4 bg-white/5 rounded-2xl font-black text-blue-200 group-hover:bg-white group-hover:text-[#0e3c63] transition-all flex items-center justify-center gap-3 relative z-10">
-                            دخول آمن <ArrowLeft size={20} className="transform group-hover:-translate-x-1 transition-transform" />
+                            {t('common.secure_login')} <ArrowLeft size={20} className="transform group-hover:-translate-x-1 transition-transform" />
                         </div>
                     </button>
 

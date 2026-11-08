@@ -1,6 +1,9 @@
+import i18n from 'i18next';
+const t = i18n.t.bind(i18n);
+import { useTranslation } from 'react-i18next';
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { FileText, Search, Clock, Filter, CheckCircle2, Loader2, Hourglass, AlertCircle, Banknote, AlertTriangle, ListOrdered, Wallet, Eye, RotateCcw, Sparkles, Calendar } from 'lucide-react';
+import { FileText, Search, Clock, Filter, CheckCircle2, Loader2, Hourglass, AlertCircle, Banknote, AlertTriangle, ListOrdered, Wallet, Eye, RotateCcw, Sparkles, Calendar, Edit } from 'lucide-react';
 import { Card, Badge, Button } from '../../../components/ui';
 import { MonthYearPicker } from '../../../components/ui/MonthYearPicker';
 import { PaginationControl } from '../../../components/shared/PaginationControl';
@@ -11,9 +14,12 @@ import { formatDate } from '../../../lib/dateUtils';
 interface HistoryTabProps {
     myOrders: Order[];
     onViewOrder: (order: Order) => void;
+    onEditOrder: (order: Order) => void;
+    lockedAgentEditOrderIds?: string[];
 }
 
-export const HistoryTab: React.FC<HistoryTabProps> = ({ myOrders, onViewOrder }) => {
+export const HistoryTab: React.FC<HistoryTabProps> = ({ myOrders, onViewOrder, onEditOrder, lockedAgentEditOrderIds = [] }) => {
+  const { t } = useTranslation();
     const [historyPage, setHistoryPage] = useState(0);
     const [historyRowsPerPage, setHistoryRowsPerPage] = useState(10);
     const [historySearch, setHistorySearch] = useState('');
@@ -123,6 +129,12 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ myOrders, onViewOrder })
     }, [filteredOrders, historyPage, historyRowsPerPage]);
 
     const isFiltered = historySearch || historyDate || selectedStatus;
+    const locallyLockedEditOrders = useMemo(() => new Set(lockedAgentEditOrderIds), [lockedAgentEditOrderIds]);
+    const canAgentEditOrder = (order: Order) => {
+        return !locallyLockedEditOrders.has(String(order.id)) &&
+            order.agentEditUnlocked === true &&
+            (order.productionStatus === ProductionStatus.PENDING_TRANSFER || order.productionStatus === ProductionStatus.PENDING_PAYMENT);
+    };
 
     return (
         <div className="space-y-6 animate-fade-in">
@@ -134,13 +146,13 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ myOrders, onViewOrder })
                 <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center bg-gray-50 p-5 rounded-2xl border border-gray-100 mb-6">
                     <div className="flex items-center gap-3">
                         <ListOrdered size={28} className="text-[#0e3c63]" />
-                        <h2 className="text-2xl font-black text-gray-800 whitespace-nowrap">سجل الطلبات</h2>
+                        <h2 className="text-2xl font-black text-gray-800 whitespace-nowrap">{t('agent.order_history')}</h2>
                         <span className="bg-[#0e3c63] text-white text-xs font-bold px-2.5 py-1 rounded-full">{filteredOrders.length}</span>
                         {isFiltered && (
                             <button
                                 onClick={handleResetFilters}
                                 className="bg-red-50 hover:bg-red-100 text-red-500 hover:text-red-600 p-2 rounded-xl transition-all mr-2"
-                                title="إعادة تعيين الفلاتر"
+                                title={t('batch3.txt_0leeqw_7062')}
                             >
                                 <RotateCcw size={20} />
                             </button>
@@ -151,7 +163,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ myOrders, onViewOrder })
                         <div className="relative flex-1 w-full lg:w-40 group">
                             <input
                                 className="w-full pl-4 pr-10 h-[50px] bg-white border border-gray-200 rounded-[1.5rem] outline-none text-sm transition-all focus:border-[#0e3c63] focus:ring-4 focus:ring-[#0e3c63]/5 shadow-sm group-hover:border-gray-300 font-medium"
-                                placeholder="بحث برقم الطلب..."
+                                placeholder={t('agent.by_order_number')}
                                 value={historySearch}
                                 onChange={(e) => { setHistorySearch(e.target.value); setHistoryPage(0); }}
                             />
@@ -170,9 +182,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ myOrders, onViewOrder })
                     {/* Production Status */}
                     <div>
                         <h4 className="font-bold text-gray-700 mb-4 flex items-center gap-2 text-sm border-b border-gray-200 pb-2">
-                            <ListOrdered size={16} className="text-blue-500" />
-                            حالات الإنتاج (اضغط للفلترة)
-                        </h4>
+                            <ListOrdered size={16} className="text-blue-500" />{t('agent.production_status_filter')}</h4>
                         <div className="grid grid-cols-3 gap-4">
                             <div
                                 onClick={() => handleStatusClick('PRODUCTION', ProductionStatus.WAITING)}
@@ -180,7 +190,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ myOrders, onViewOrder })
                             >
                                 <div className="mb-2 text-gray-400 flex justify-center"><Hourglass size={24} /></div>
                                 <h4 className="text-2xl font-black text-gray-800">{historyStats.waiting}</h4>
-                                <p className="text-xs text-gray-500 font-bold mt-1">انتظار</p>
+                                <p className="text-xs text-gray-500 font-bold mt-1">{t('batch3.txt_5r0kom_7062')}</p>
                             </div>
                             <div
                                 onClick={() => handleStatusClick('PRODUCTION', ProductionStatus.IN_PROGRESS)}
@@ -188,7 +198,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ myOrders, onViewOrder })
                             >
                                 <div className="mb-2 text-blue-500 flex justify-center"><Loader2 size={24} /></div>
                                 <h4 className="text-2xl font-black text-blue-600">{historyStats.inProgress}</h4>
-                                <p className="text-xs text-blue-600 font-bold mt-1">تحضير</p>
+                                <p className="text-xs text-blue-600 font-bold mt-1">{t('batch3.txt_ltfgll_7062')}</p>
                             </div>
                             <div
                                 onClick={() => handleStatusClick('PRODUCTION', ProductionStatus.COMPLETED)}
@@ -196,7 +206,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ myOrders, onViewOrder })
                             >
                                 <div className="mb-2 text-green-500 flex justify-center"><CheckCircle2 size={24} /></div>
                                 <h4 className="text-2xl font-black text-green-600">{historyStats.completed}</h4>
-                                <p className="text-xs text-green-600 font-bold mt-1">جاهز</p>
+                                <p className="text-xs text-green-600 font-bold mt-1">{t('batch3.txt_9bk634_7062')}</p>
                             </div>
                         </div>
                     </div>
@@ -204,9 +214,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ myOrders, onViewOrder })
                     {/* Payment Status */}
                     <div>
                         <h4 className="font-bold text-gray-700 mb-4 flex items-center gap-2 text-sm border-b border-gray-200 pb-2">
-                            <Wallet size={16} className="text-orange-500" />
-                            حالات الدفع (اضغط للفلترة)
-                        </h4>
+                            <Wallet size={16} className="text-orange-500" />{t('agent.payment_status_filter')}</h4>
                         <div className="grid grid-cols-3 gap-4">
                             <div
                                 onClick={() => handleStatusClick('PAYMENT', PaymentStatus.PENDING)}
@@ -214,7 +222,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ myOrders, onViewOrder })
                             >
                                 <div className="mb-2 text-red-500 flex justify-center"><AlertCircle size={24} /></div>
                                 <h4 className="text-2xl font-black text-red-600">{historyStats.pending}</h4>
-                                <p className="text-xs text-red-600 font-bold mt-1">دين</p>
+                                <p className="text-xs text-red-600 font-bold mt-1">{t('batch3.txt_8uzm5j_7062')}</p>
                             </div>
                             <div
                                 onClick={() => handleStatusClick('PAYMENT', PaymentStatus.PARTIALLY_PAID)}
@@ -222,7 +230,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ myOrders, onViewOrder })
                             >
                                 <div className="mb-2 text-orange-500 flex justify-center"><AlertTriangle size={24} /></div>
                                 <h4 className="text-2xl font-black text-orange-600">{historyStats.partial}</h4>
-                                <p className="text-xs text-orange-600 font-bold mt-1">جزئي</p>
+                                <p className="text-xs text-orange-600 font-bold mt-1">{t('batch3.txt_54njbg_7062')}</p>
                             </div>
                             <div
                                 onClick={() => handleStatusClick('PAYMENT', PaymentStatus.PAID)}
@@ -230,7 +238,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ myOrders, onViewOrder })
                             >
                                 <div className="mb-2 text-emerald-500 flex justify-center"><Banknote size={24} /></div>
                                 <h4 className="text-2xl font-black text-emerald-600">{historyStats.paid}</h4>
-                                <p className="text-xs text-emerald-600 font-bold mt-1">مدفوع</p>
+                                <p className="text-xs text-emerald-600 font-bold mt-1">{t('batch3.txt_zatlrt_7062')}</p>
                             </div>
                         </div>
                     </div>
@@ -256,7 +264,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ myOrders, onViewOrder })
             ) : currentHistory.length === 0 ? (
                 <div className="text-center py-20 text-gray-400 bg-white rounded-3xl border border-dashed border-gray-200">
                     <FileText size={48} className="mx-auto mb-4 opacity-20" />
-                    <p>لا توجد طلبات مطابقة للبحث</p>
+                    <p>{t('batch3.txt_7mnhul_7062')}</p>
                 </div>
             ) : (
                 currentHistory.map(o => (
@@ -267,7 +275,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ myOrders, onViewOrder })
                                 <div className="relative">
                                     <div className="bg-blue-50 w-16 h-16 rounded-2xl flex items-center justify-center text-[#0e3c63] font-bold font-mono text-lg border border-blue-100">#{o.id}</div>
                                     {o.hasSpecialRequest && (
-                                        <div className="absolute -top-2 -right-2 bg-amber-500 text-white p-1.5 rounded-full shadow-sm border-2 border-white z-10" title="طلب خاص">
+                                        <div className="absolute -top-2 -right-2 bg-amber-500 text-white p-1.5 rounded-full shadow-sm border-2 border-white z-10" title={t('batch3.txt_ujb7g0_7062')}>
                                             <Sparkles size={14} className="fill-current" />
                                         </div>
                                     )}
@@ -279,26 +287,29 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ myOrders, onViewOrder })
                             </div>
                             <div className="flex gap-6">
                                 <div className="flex flex-col items-center">
-                                    <span className="text-[10px] text-gray-400 mb-1">الدفع</span>
+                                    <span className="text-[10px] text-gray-400 mb-1">{t('batch3.txt_8pwd83_7062')}</span>
                                     <Badge color={getPaymentStatusColor(o.paymentStatus)}>{PaymentStatusLabels[o.paymentStatus]}</Badge>
                                 </div>
                                 <div className="w-px h-10 bg-gray-200"></div>
                                 <div className="flex flex-col items-center">
-                                    <span className="text-[10px] text-gray-400 mb-1">التجهيز</span>
+                                    <span className="text-[10px] text-gray-400 mb-1">{t('batch3.txt_fhpqia_7062')}</span>
                                     <Badge color={o.productionStatus === ProductionStatus.COMPLETED ? 'blue' : 'gray'}>{ProductionStatusLabels[o.productionStatus]}</Badge>
                                 </div>
                                 <div className="w-px h-10 bg-gray-200"></div>
                                 <div className="flex flex-col items-center min-w-[80px]">
-                                    <span className="text-[10px] text-gray-400 mb-1">
-                                        {o.productionStatus === ProductionStatus.COMPLETED ? 'تم الإنجاز في' : 'الوقت المتوقع'}
-                                    </span>
+                                    <span className="text-[10px] text-gray-400 mb-1">{o.productionStatus === ProductionStatus.COMPLETED ? t('agent.completed_in') : t('agent.expected_time')}</span>
                                     <div className="flex items-center gap-1 font-bold text-gray-600">
                                         <Clock size={14} />
-                                        <span>{o.estimatedDays ? `${o.estimatedDays} يوم` : '-'}</span>
+                                        <span>{o.estimatedDays ? `${o.estimatedDays} ${t('agent.days')}` : '-'}</span>
                                     </div>
                                 </div>
                             </div>
-                            <div>
+                            <div className="flex items-center gap-2">
+                                {canAgentEditOrder(o) && (
+                                    <Button onClick={() => onEditOrder(o)} variant="ghost" className="text-amber-600 hover:bg-amber-50">
+                                        <Edit size={22} />
+                                    </Button>
+                                )}
                                 <Button onClick={() => onViewOrder(o)} variant="ghost" className="text-[#0e3c63] hover:bg-blue-50">
                                     <Eye size={24} />
                                 </Button>
@@ -328,16 +339,22 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ myOrders, onViewOrder })
                                     <Badge color={o.productionStatus === ProductionStatus.COMPLETED ? 'blue' : 'gray'} className="text-[10px] px-2 py-0.5">{ProductionStatusLabels[o.productionStatus]}</Badge>
                                     {o.estimatedDays && (
                                         <span className="text-[10px] text-gray-400 flex items-center gap-0.5">
-                                            <Clock size={10} /> {o.estimatedDays}د
-                                        </span>
+                                            <Clock size={10} />{o.estimatedDays} {t('agent.days')}</span>
                                     )}
                                 </div>
                             </div>
 
-                            {/* View Button */}
-                            <button onClick={() => onViewOrder(o)} className="p-2 text-[#0e3c63] hover:bg-blue-50 rounded-xl shrink-0">
-                                <Eye size={20} />
-                            </button>
+                            {/* Action Buttons */}
+                            <div className="flex items-center gap-1 shrink-0">
+                                {canAgentEditOrder(o) && (
+                                    <button onClick={() => onEditOrder(o)} className="p-2 text-amber-600 hover:bg-amber-50 rounded-xl">
+                                        <Edit size={19} />
+                                    </button>
+                                )}
+                                <button onClick={() => onViewOrder(o)} className="p-2 text-[#0e3c63] hover:bg-blue-50 rounded-xl">
+                                    <Eye size={20} />
+                                </button>
+                            </div>
                         </div>
                     </Card>
                 ))

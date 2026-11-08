@@ -58,3 +58,17 @@ test('export preserves original unit prices for each family', () => {
   assert.equal(buildProductRow(product, categories).normalMeter, 2);
   assert.equal(buildProductRow(bag, categories).normalUnit, 5);
 });
+
+test('invalid categories, states and fractional bag counts are rejected', () => {
+  assert.throws(() => buildImportPayload({ category: 'missing' }, product, categories, 'STYROFOAM'));
+  assert.throws(() => buildImportPayload({ isActive: 'unknown' }, product, categories, 'STYROFOAM'));
+  assert.throws(() => buildImportPayload({ packageUnits: '1.5' }, bag, categories, 'ADHESIVE'));
+  assert.equal(buildImportPayload({ isActive: 'متوقف' }, product, categories, 'STYROFOAM').is_active, false);
+  assert.equal(buildImportPayload({ normalMeter: '۲٫۵' }, product, categories, 'STYROFOAM').prices['عادي'].pricePerCarton, 30);
+});
+
+test('malformed files fail validation instead of silently changing prices', () => {
+  assert.throws(() => parseDelimitedRows('code,price\nA,"broken'));
+  assert.throws(() => rowsFromCells([['ID', 'عادي - سعر المتر', 'عادي - سعر المتر', 'VIP - سعر المتر']], 'STYROFOAM'));
+  assert.deepEqual(parseDelimitedRows('code\tprice\r\nA\t2\r\n'), [['code', 'price'], ['A', '2']]);
+});

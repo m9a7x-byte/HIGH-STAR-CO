@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Factory, Truck, DollarSign, Box, BarChart3, Users } from 'lucide-react';
@@ -20,6 +21,7 @@ import { LogisticsTab } from './tabs/LogisticsTab';
 import { SuppliersTab } from './tabs/SuppliersTab';
 
 export const FactoryDashboard = () => {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'INVENTORY' | 'EXPENSES' | 'SUPPLIERS' | 'LOGISTICS'>('OVERVIEW');
   
@@ -39,11 +41,11 @@ export const FactoryDashboard = () => {
   }, [refresh]);
 
   const tabs = [
-    { id: 'OVERVIEW', label: 'نظرة عامة', icon: BarChart3 },
-    { id: 'INVENTORY', label: 'المخزن', icon: Box },
-    { id: 'EXPENSES', label: 'المصاريف', icon: DollarSign },
-    { id: 'SUPPLIERS', label: 'الموردين', icon: Users },
-    { id: 'LOGISTICS', label: 'اللوجستيات', icon: Truck },
+    { id: 'OVERVIEW', label: t('batch4.k672'), icon: BarChart3 },
+    { id: 'INVENTORY', label: t('batch4.k673'), icon: Box },
+    { id: 'EXPENSES', label: t('batch4.k674'), icon: DollarSign },
+    { id: 'SUPPLIERS', label: t('batch4.k675'), icon: Users },
+    { id: 'LOGISTICS', label: t('batch4.k676'), icon: Truck },
   ];
 
   const handleOpenModal = (cat: any, metadata?: any) => {
@@ -95,7 +97,7 @@ export const FactoryDashboard = () => {
       <div className="bg-white rounded-[1.5rem] md:rounded-[2rem] p-3 md:p-4 shadow-sm border border-gray-100 flex flex-col xl:flex-row justify-between items-center gap-4">
          <div className="flex items-center gap-3 px-2 w-full xl:w-auto shrink-0">
              <div className="bg-[#0e3c63] text-white p-2.5 rounded-xl shadow-lg"><Factory size={20}/></div>
-             <div><h2 className="text-lg md:text-2xl font-black text-gray-800 whitespace-nowrap">إدارة المصنع</h2></div>
+             <div><h2 className="text-lg md:text-2xl font-black text-gray-800 whitespace-nowrap">{t('batch4.k677')}</h2></div>
          </div>
          <div className="flex bg-gray-50 p-1 rounded-2xl w-full xl:w-auto overflow-x-auto border border-gray-100 no-scrollbar">
              {tabs.map(tab => (
@@ -114,3 +116,4 @@ export const FactoryDashboard = () => {
     </div>
   );
 };
+

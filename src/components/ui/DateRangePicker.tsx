@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 
 import React, { useState, useRef, useEffect } from 'react';
 import { CalendarDays, X, ArrowLeft, ChevronRight, ChevronLeft, Calendar as CalendarIcon, RotateCcw } from 'lucide-react';
@@ -21,6 +22,7 @@ const WEEKDAYS_AR = ['أ', 'إ', 'ث', 'ر', 'خ', 'ج', 'س'];
 type CalendarView = 'DAYS' | 'MONTHS' | 'YEARS';
 
 export const DateRangePicker: React.FC<DateRangePickerProps> = ({ from, to, onChangeFrom, onChangeTo }) => {
+  const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState<'FROM' | 'TO' | null>(null);
   const [viewDate, setViewDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<CalendarView>('DAYS');
@@ -159,9 +161,9 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({ from, to, onCh
           <div className="flex items-center gap-3">
             <CalendarDays size={18} className={from ? 'text-[#0e3c63]' : 'text-gray-300'} />
             <div className="flex flex-col">
-              <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">من تاريخ</span>
+              <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">{t('batch4.k133')}</span>
               <span className={`text-xs font-black truncate max-w-[80px] ${from ? 'text-gray-800' : 'text-gray-300'}`}>
-                {formatDate(from) || 'البداية'}
+                {formatDate(from) || t('datepicker.start', 'البداية')}
               </span>
             </div>
           </div>
@@ -175,9 +177,9 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({ from, to, onCh
         >
           <ArrowLeft size={18} className={to ? 'text-[#0e3c63]' : 'text-gray-300'} />
           <div className="flex flex-col items-end">
-            <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">إلى تاريخ</span>
+            <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">{t('batch4.k134')}</span>
             <span className={`text-xs font-black truncate max-w-[80px] ${to ? 'text-gray-800' : 'text-gray-300'}`}>
-              {formatDate(to) || 'النهاية'}
+              {formatDate(to) || t('datepicker.end', 'النهاية')}
             </span>
           </div>
         </div>
@@ -247,9 +249,9 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({ from, to, onCh
 
             <div className="mt-4 pt-4 border-t border-gray-50 flex justify-between items-center">
               <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                {isOpen === 'FROM' ? 'تحديد البداية' : 'تحديد النهاية'}
+                {isOpen === 'FROM' ? t('datepicker.select_start', 'تحديد البداية') : t('datepicker.select_end', 'تحديد النهاية')}
               </span>
-              <button onClick={() => { handleDateSelect(new Date().getDate()); setViewDate(new Date()); }} className="text-[10px] font-black text-[#0e3c63] bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors">اليوم</button>
+              <button onClick={() => { handleDateSelect(new Date().getDate()); setViewDate(new Date()); }} className="text-[10px] font-black text-[#0e3c63] bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors">{t('batch4.k135')}</button>
             </div>
           </div>
         </div>

@@ -1,6 +1,9 @@
+import i18n from 'i18next';
+const t = i18n.t.bind(i18n);
 import React, { useState, useEffect } from 'react';
 import { Wand2, CheckCircle, AlertCircle, Loader2, Sparkles, Shield } from 'lucide-react';
 import { Card, Button } from '../components/ui';
+import { FloatingLanguageSwitcher } from '../components/shared/FloatingLanguageSwitcher';
 import { supabase } from '../lib/supabase';
 
 interface MagicLinkPageProps {
@@ -41,6 +44,7 @@ export const MagicLinkPage: React.FC<MagicLinkPageProps> = ({ onSuccess, onError
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-4" dir="rtl">
+            <FloatingLanguageSwitcher />
             {/* Background Effects */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
                 <div className="absolute top-1/4 right-1/4 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-pulse" />
@@ -82,7 +86,7 @@ export const MagicLinkPage: React.FC<MagicLinkPageProps> = ({ onSuccess, onError
                                 <div className="w-3 h-3 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
                                 <div className="w-3 h-3 bg-purple-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                             </div>
-                            <p className="text-xs text-gray-400 font-bold">يرجى الانتظار...</p>
+                            <p className="text-xs text-gray-400 font-bold">{t('batch4.k861')}</p>
                         </div>
                     )}
 
@@ -91,19 +95,19 @@ export const MagicLinkPage: React.FC<MagicLinkPageProps> = ({ onSuccess, onError
                         <div className="space-y-6">
                             {userEmail && (
                                 <div className="bg-emerald-50 p-4 rounded-2xl text-center">
-                                    <p className="text-xs text-emerald-600 font-bold mb-1">تم تسجيل الدخول كـ</p>
+                                    <p className="text-xs text-emerald-600 font-bold mb-1">{t('batch4.k862')}</p>
                                     <p className="text-emerald-700 font-black">{userEmail}</p>
                                 </div>
                             )}
 
                             <div className="flex items-center justify-center gap-2 text-emerald-500">
                                 <Sparkles size={20} className="animate-pulse" />
-                                <span className="text-sm font-bold">جاري توجيهك للنظام...</span>
+                                <span className="text-sm font-bold">{t('batch4.k863')}</span>
                             </div>
 
                             <div className="flex items-center justify-center gap-2 text-gray-400 text-xs">
                                 <Shield size={14} />
-                                <span>اتصال آمن ومشفر</span>
+                                <span>{t('batch4.k864')}</span>
                             </div>
                         </div>
                     )}

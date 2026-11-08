@@ -8,30 +8,7 @@ export const usePresence = (activeTab: string = 'dashboard', enabled: boolean = 
 
     // Map internal tab IDs to Arabic readable names
     const getPageName = (tabId: string) => {
-        const mapping: Record<string, string> = {
-            'overview': 'الصفحة الرئيسية',
-            'production': 'إدارة الإنتاج',
-            'orders': 'إدارة الطلبات',
-            'catalog': 'كتالوج المنتجات',
-            'agents': 'شؤون الوكلاء',
-            'sales': 'المبيعات',
-            'reports': 'التقارير',
-            'staff': 'إدارة الموظفين',
-            'activity_log': 'سجل الأحداث',
-            'presence': 'المتواجدين',
-            'factory': 'المصنع',
-            'safe': 'الصندوق المالي',
-            'settings': 'النظام والإعدادات',
-            'profile': 'الملف الشخصي',
-
-            // Agent Specific Tabs
-            'dashboard': 'لوحة التحكم',
-            'history': 'سجل الطلبات',
-            'queue': 'جدول الإنتاج',
-            'finance': 'كشف الحساب'
-        };
-
-        return mapping[tabId] || `صفحة: ${tabId}`;
+        return `tab:${tabId}`;
     };
 
     useEffect(() => {

@@ -1,9 +1,12 @@
+import i18n from 'i18next';
+const t = i18n.t.bind(i18n);
 
 import React, { useState } from 'react';
 import { LifeBuoy, Phone, Mail, Eye, EyeOff } from 'lucide-react';
 import vogaLogo from '../assets/logo/voga-logo.svg';
 import { useAuth } from '../context/AuthContext';
 import { Card, Button } from '../components/ui';
+import { FloatingLanguageSwitcher } from '../components/shared/FloatingLanguageSwitcher';
 import { useToast } from '../context/ToastContext';
 import { db } from '../lib/db';
 import { UserRole } from '../types';
@@ -31,27 +34,26 @@ export const AgentPortalPage: React.FC<AgentPortalPageProps> = ({ onForgot }) =>
             const tempUser = await db.login(email, password);
 
             if (tempUser.role !== UserRole.AGENT) {
-                throw new Error('هذا الحساب غير مصرح له بالدخول من بوابة الوكلاء.');
+                throw new Error(t('batch4.txt_zj6m84_7123'));
             }
 
             updateUser(tempUser);
         } catch (err: any) {
             let errorMessage = err.message;
             if (err.message?.includes('banned')) {
-                errorMessage = 'هذا الحساب مجمد. تواصل مع الإدارة لفك التجميد.';
+                errorMessage = t('batch4.txt_byp6e3_7123');
             } else if (err.message?.includes('Invalid login credentials')) {
-                errorMessage = 'البريد الإلكتروني أو كلمة المرور غير صحيحة.';
+                errorMessage = t('batch4.txt_ombqmx_7123');
             }
-            toast.error('فشل الدخول', errorMessage);
+            toast.error(t('batch4.txt_mk7jwf_7123'), errorMessage);
         } finally {
             setIsLoading(false);
         }
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4 relative overflow-hidden" dir="rtl">
-            {/* خلفية خاصة بالوكلاء (لون Voga Orange) */}
-            <div className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] rounded-full blur-[120px] opacity-30 bg-orange-200"></div>
+        <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4 relative overflow-hidden" dir="rtl">{t('batch4.txt_d58dpd_7122')}<div className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] rounded-full blur-[120px] opacity-30 bg-orange-200"></div>
+            <FloatingLanguageSwitcher />
             <div className="absolute bottom-[-10%] left-[-5%] w-[500px] h-[500px] rounded-full blur-[120px] opacity-20 bg-[#dd5b30]"></div>
 
             <div className="w-full max-w-md relative z-10">
@@ -62,16 +64,14 @@ export const AgentPortalPage: React.FC<AgentPortalPageProps> = ({ onForgot }) =>
                         </div>
                     </div>
 
-                    <h2 className="text-3xl font-extrabold text-center mb-2 text-gray-800">
-                        بوابة الوكلاء
-                    </h2>
+                    <h2 className="text-3xl font-extrabold text-center mb-2 text-gray-800">{t('batch4.txt_j61b3t_7122')}</h2>
                     <p className="text-center text-gray-400 mb-10 font-bold text-xs uppercase tracking-widest">
                         Voga Agents Portal
                     </p>
 
                     <form onSubmit={handleSubmit} className="space-y-6">
                         <div className="space-y-2">
-                            <label className="block text-xs font-black text-gray-500 mr-1">البريد الإلكتروني</label>
+                            <label className="block text-xs font-black text-gray-500 mr-1">{t('batch4.txt_yw5n71_7122')}</label>
                             <div className="relative">
                                 <input
                                     type="email"
@@ -87,11 +87,9 @@ export const AgentPortalPage: React.FC<AgentPortalPageProps> = ({ onForgot }) =>
 
                         <div className="space-y-2">
                             <div className="flex justify-between items-center">
-                                <label className="text-xs font-black text-gray-500 mr-1">كلمة المرور</label>
+                                <label className="text-xs font-black text-gray-500 mr-1">{t('batch4.txt_jga3ey_7122')}</label>
                                 {onForgot && (
-                                    <button type="button" onClick={onForgot} className="text-[10px] font-bold text-voga-secondary hover:underline">
-                                        نسيت كلمة المرور؟
-                                    </button>
+                                    <button type="button" onClick={onForgot} className="text-[10px] font-bold text-voga-secondary hover:underline">{t('batch4.txt_p8wkbm_7122')}</button>
                                 )}
                             </div>
                             <div className="relative">
@@ -113,15 +111,12 @@ export const AgentPortalPage: React.FC<AgentPortalPageProps> = ({ onForgot }) =>
                             type="submit"
                             disabled={isLoading}
                             className="w-full text-lg h-14 rounded-2xl shadow-xl font-black active:scale-95 transition-all bg-voga-primary hover:bg-voga-secondary text-white"
-                        >
-                            {isLoading ? 'جاري التحقق...' : 'تسجيل الدخول'}
-                        </Button>
+                        >{t('batch4.txt_ztrgmz_7122')}</Button>
                     </form>
 
                     <div className="mt-10 pt-6 border-t border-gray-100 flex flex-col md:flex-row justify-between items-center text-sm text-gray-600 gap-2 opacity-70 hover:opacity-100 transition-opacity">
                         <div className="flex items-center gap-2 font-bold text-voga-primary">
-                            <LifeBuoy size={16} /> الدعم الفني
-                        </div>
+                            <LifeBuoy size={16} />{t('batch4.txt_1fclbc_7122')}</div>
                         <div className="flex-1 text-center">
                             <a href="mailto:tech@high-star.iq" className="hover:text-voga-primary transition-colors font-mono font-bold text-xs">tech@high-star.iq</a>
                         </div>

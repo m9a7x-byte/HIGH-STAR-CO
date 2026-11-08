@@ -1,6 +1,9 @@
+import i18n from 'i18next';
+const t = i18n.t.bind(i18n);
 import React, { useState, useEffect } from 'react';
 import { Mail, CheckCircle, AlertCircle, Loader2, Sparkles, ArrowRight, RefreshCw } from 'lucide-react';
 import { Card, Button } from '../components/ui';
+import { FloatingLanguageSwitcher } from '../components/shared/FloatingLanguageSwitcher';
 import { supabase } from '../lib/supabase';
 
 interface ConfirmEmailChangePageProps {
@@ -50,6 +53,7 @@ export const ConfirmEmailChangePage: React.FC<ConfirmEmailChangePageProps> = ({ 
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-[#0e3c63] to-slate-900 p-4" dir="rtl">
+            <FloatingLanguageSwitcher />
             {/* Background Effects */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
                 <div className="absolute top-1/4 right-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse" />
@@ -91,14 +95,14 @@ export const ConfirmEmailChangePage: React.FC<ConfirmEmailChangePageProps> = ({ 
                                     {oldEmail && (
                                         <>
                                             <div className="text-center">
-                                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">البريد القديم</p>
+                                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">{t('batch4.k857')}</p>
                                                 <p className="text-gray-500 font-bold text-sm line-through">{oldEmail}</p>
                                             </div>
                                             <ArrowRight size={20} className="text-emerald-500" />
                                         </>
                                     )}
                                     <div className="text-center">
-                                        <p className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider mb-1">البريد الجديد</p>
+                                        <p className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider mb-1">{t('batch4.k858')}</p>
                                         <p className="text-emerald-700 font-black">{newEmail}</p>
                                     </div>
                                 </div>
@@ -106,7 +110,7 @@ export const ConfirmEmailChangePage: React.FC<ConfirmEmailChangePageProps> = ({ 
 
                             <div className="flex items-center justify-center gap-2 text-emerald-500 animate-pulse">
                                 <Sparkles size={20} />
-                                <span className="text-sm font-bold">جاري توجيهك...</span>
+                                <span className="text-sm font-bold">{t('batch4.k859')}</span>
                             </div>
                         </div>
                     )}
@@ -130,7 +134,7 @@ export const ConfirmEmailChangePage: React.FC<ConfirmEmailChangePageProps> = ({ 
                     {status === 'loading' && (
                         <div className="flex flex-col items-center gap-4">
                             <Mail size={48} className="text-blue-300 animate-bounce" />
-                            <p className="text-xs text-gray-400 font-bold">جاري التحقق من الرابط...</p>
+                            <p className="text-xs text-gray-400 font-bold">{t('batch4.k860')}</p>
                         </div>
                     )}
                 </Card>

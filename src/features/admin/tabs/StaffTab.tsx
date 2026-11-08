@@ -1,3 +1,5 @@
+import i18n from 'i18next';
+const t = i18n.t.bind(i18n);
 import React, { useState, useMemo, useEffect } from 'react';
 import { Plus, Edit, UserCheck, Mail, Search, Filter, ArrowRight, Activity, Clock, ShieldCheck, Globe, History, Shield, Lock, CheckCircle2, AlertCircle, Trash2, Key, Settings2, Fingerprint, CalendarDays, MousePointer2, ListOrdered, FileText, Tags, Users, BarChart3, Factory, Settings, ExternalLink, X, Save, UserPlus, Info, ShieldAlert, ShieldX, RotateCcw, AlertOctagon, ArrowRightLeft, Hash, Monitor, Cpu, Phone, User as UserIcon, Camera, Crown, Eye } from 'lucide-react';
 import { Badge, Button, Card, DateRangePicker, Input, Select, UserAvatar } from '../../../components/ui';
@@ -162,7 +164,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
     const handleInitiateDeleteStaff = (e: React.MouseEvent, emp: User) => {
         e.stopPropagation();
         if (String(emp.id) === String(currentUser?.id)) {
-            toast.error('حماية النظام', 'لا يمكنك حذف حسابك الشخصي وأنت قيد الاستخدام.');
+            toast.error(t('batch4.k520'), t('batch4.k521'));
             return;
         }
         setStaffDeleteConfirm(emp);
@@ -171,14 +173,14 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
     const executeDeleteStaff = async () => {
         if (staffDeleteConfirm) {
             if (String(staffDeleteConfirm.id) === String(currentUser?.id)) {
-                toast.error('حماية النظام', 'لا يمكنك حذف حسابك الشخصي.');
+                toast.error(t('batch4.k520'), t('batch4.k522'));
                 setStaffDeleteConfirm(null);
                 return;
             }
             setIsDeleting(true);
             try {
                 await db.deleteAgent(currentUser!.id, String(staffDeleteConfirm.id));
-                toast.success('تم إزالة الموظف من النظام');
+                toast.success(t('batch4.k523'));
                 setStaffDeleteConfirm(null);
                 onSelectEmployee(null);
                 setEditingEmployee(null);
@@ -193,7 +195,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
     const executeSuspendStaff = async () => {
         if (staffSuspendConfirm) {
             if (String(staffSuspendConfirm.id) === String(currentUser?.id)) {
-                toast.error('حماية النظام', 'لا يمكنك تجميد حسابك الشخصي.');
+                toast.error(t('batch4.k520'), t('batch4.k524'));
                 setStaffSuspendConfirm(null);
                 return;
             }
@@ -207,7 +209,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                 const updated = employees.find((e: any) => e.id === staffSuspendConfirm.id);
                 if (updated) onSelectEmployee({ ...updated, status: 'suspended', is_deleted: true } as any);
 
-                toast.success('تم تجميد الحساب ✓');
+                toast.success(t('batch4.k525'));
                 setStaffSuspendConfirm(null);
             } catch (err: any) {
                 toast.error('خطأ', err.message);
@@ -235,7 +237,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
             // Refresh employees list
             await db.fetchUsers();
 
-            toast.success('تم رفع الصورة بنجاح ✓');
+            toast.success(t('batch4.k526'));
         } catch (error: any) {
             console.error('Avatar update failed:', error);
             toast.error('فشل حفظ الصورة', error.message);
@@ -261,7 +263,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
             };
             await db.updateEmployee(currentUser!.id, updates);
             setHasGeneralChanges(false); // Reset after save
-            toast.success('تم حفظ المعلومات العامة ✓');
+            toast.success(t('batch4.k527'));
         } catch (err: any) {
             toast.error('خطأ', err.message || 'فشل في حفظ البيانات');
         }
@@ -316,11 +318,11 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
             // Password Change (only if unlocked and fields filled)
             if (isEditingPassword) {
                 if (newPassword.length < 6) {
-                    toast.error('خطأ', 'كلمة المرور يجب أن تكون 6 خانات على الأقل');
+                    toast.error(t('batch4.k528'), t('batch4.k529'));
                     return;
                 }
                 if (newPassword !== confirmNewPassword) {
-                    toast.error('خطأ', 'كلمة المرور غير متطابقة');
+                    toast.error(t('batch4.k528'), t('batch4.k530'));
                     return;
                 }
                 credentialUpdates.password = newPassword;
@@ -328,7 +330,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
             }
 
             if (Object.keys(credentialUpdates).length === 0) {
-                toast.info('لم يتم تغيير أي شيء', 'افتح القفل لتعديل البريد أو كلمة المرور');
+                toast.info(t('batch4.k531'), t('batch4.k532'));
                 return;
             }
 
@@ -405,11 +407,11 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                 const confirm = data.confirmPassword as string;
 
                 if (!password || password.length < 6) {
-                    toast.error('خطأ', 'كلمة المرور يجب أن تكون 6 خانات على الأقل');
+                    toast.error(t('batch4.k528'), t('batch4.k529'));
                     return;
                 }
                 if (password !== confirm) {
-                    toast.error('خطأ', 'كلمة المرور غير متطابقة');
+                    toast.error(t('batch4.k528'), t('batch4.k530'));
                     return;
                 }
                 payload.password = password;
@@ -418,7 +420,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
             await db.registerEmployee(currentUser!.id, payload);
 
             if (payload.invite) toast.success(`تمت إضافة الموظف وإرسال دعوة إلى ${payload.email}`);
-            else toast.success('تمت إضافة الموظف وتعيين كلمة المرور بنجاح');
+            else toast.success(t('batch4.k533'));
 
             setShowEmployeeModal(false);
             setEditingEmployee(null);
@@ -489,7 +491,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
             const num = Number(val);
             return (
                 <span className="flex items-center gap-1">
-                    <span className="opacity-60 text-[8px] font-black bg-gray-200/50 px-1 rounded">رصيد</span>
+                    <span className="opacity-60 text-[8px] font-black bg-gray-200/50 px-1 rounded">{t('batch4.k235')}</span>
                     <span dir="ltr">${num.toLocaleString()}</span>
                 </span>
             );
@@ -504,14 +506,14 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                     <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-4 rounded-[2rem] shadow-sm border border-gray-100">
                         <h3 className="font-black text-xl text-gray-800 flex items-center gap-3 px-2 whitespace-nowrap shrink-0">
                             <UserCheck size={24} className="text-[#0e3c63]" />
-                            طاقم العمل
+                            {t('batch4.staff_team')}
                         </h3>
 
                         <div className="flex flex-col md:flex-row items-center gap-3 w-full md:w-auto">
                             <div className="relative md:w-80">
                                 <input
                                     className="w-full h-[54px] pl-4 pr-11 bg-gray-50 border border-gray-200 rounded-2xl focus:border-[#0e3c63] outline-none text-sm font-bold shadow-inner"
-                                    placeholder="بحث..."
+                                    placeholder={t('batch4.k190')}
                                     value={search}
                                     onChange={e => { setSearch(e.target.value); setPage(0); }}
                                 />
@@ -519,14 +521,14 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                             </div>
 
                             <div className="flex h-[54px] bg-gray-50 p-1 rounded-2xl border border-gray-200 shadow-inner">
-                                <button onClick={() => { setRoleFilter('ALL'); setPage(0); }} className={`px-3 h-full rounded-xl text-xs font-black transition-all ${roleFilter === 'ALL' ? 'bg-white text-[#0e3c63] shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>الكل</button>
-                                {isSuperAdmin && <button onClick={() => { setRoleFilter(UserRole.SUPER_ADMIN); setPage(0); }} className={`px-3 h-full rounded-xl text-xs font-black transition-all ${roleFilter === UserRole.SUPER_ADMIN ? 'bg-amber-50 text-amber-600 shadow-sm' : 'text-gray-400'}`}>خارق</button>}
-                                <button onClick={() => { setRoleFilter(UserRole.ADMIN); setPage(0); }} className={`px-3 h-full rounded-xl text-xs font-black transition-all ${roleFilter === UserRole.ADMIN ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-400'}`}>مدير</button>
-                                <button onClick={() => { setRoleFilter(UserRole.SUPERVISOR); setPage(0); }} className={`px-3 h-full rounded-xl text-xs font-black transition-all ${roleFilter === UserRole.SUPERVISOR ? 'bg-emerald-50 text-emerald-600 shadow-sm' : 'text-gray-400'}`}>مشرف</button>
-                                <button onClick={() => { setRoleFilter(UserRole.VIEWER); setPage(0); }} className={`px-3 h-full rounded-xl text-xs font-black transition-all ${roleFilter === UserRole.VIEWER ? 'bg-gray-100 text-gray-600 shadow-sm' : 'text-gray-400'}`}>مشاهد</button>
+                                <button onClick={() => { setRoleFilter('ALL'); setPage(0); }} className={`px-3 h-full rounded-xl text-xs font-black transition-all ${roleFilter === 'ALL' ? 'bg-white text-[#0e3c63] shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>{t('batch4.k239')}</button>
+                                {isSuperAdmin && <button onClick={() => { setRoleFilter(UserRole.SUPER_ADMIN); setPage(0); }} className={`px-3 h-full rounded-xl text-xs font-black transition-all ${roleFilter === UserRole.SUPER_ADMIN ? 'bg-amber-50 text-amber-600 shadow-sm' : 'text-gray-400'}`}>{t('batch4.k534')}</button>}
+                                <button onClick={() => { setRoleFilter(UserRole.ADMIN); setPage(0); }} className={`px-3 h-full rounded-xl text-xs font-black transition-all ${roleFilter === UserRole.ADMIN ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-400'}`}>{t('batch4.k535')}</button>
+                                <button onClick={() => { setRoleFilter(UserRole.SUPERVISOR); setPage(0); }} className={`px-3 h-full rounded-xl text-xs font-black transition-all ${roleFilter === UserRole.SUPERVISOR ? 'bg-emerald-50 text-emerald-600 shadow-sm' : 'text-gray-400'}`}>{t('batch4.k536')}</button>
+                                <button onClick={() => { setRoleFilter(UserRole.VIEWER); setPage(0); }} className={`px-3 h-full rounded-xl text-xs font-black transition-all ${roleFilter === UserRole.VIEWER ? 'bg-gray-100 text-gray-600 shadow-sm' : 'text-gray-400'}`}>{t('batch4.k537')}</button>
                             </div>
 
-                            {isSuperAdmin && <Button onClick={handleOpenAdd} className="h-[54px] text-sm rounded-2xl px-6 shadow-xl shadow-blue-900/10"><Plus size={18} /> إضافة موظف</Button>}
+                            {isSuperAdmin && <Button onClick={handleOpenAdd} className="h-[54px] text-sm rounded-2xl px-6 shadow-xl shadow-blue-900/10"><Plus size={18} />{t('batch4.k538')}</Button>}
                         </div>
                     </div>
 
@@ -541,7 +543,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                     className="bg-white rounded-[2.5rem] border border-gray-100 p-8 flex flex-col items-center text-center hover:border-blue-300 transition-all shadow-sm hover:shadow-2xl relative group cursor-pointer"
                                 >
                                     {custom && (
-                                        <div className="absolute top-6 left-6" title="صلاحيات مخصصة">
+                                        <div className="absolute top-6 left-6" title={t('batch4.k539')}>
                                             <div className="p-2 bg-amber-100 text-amber-600 rounded-xl border border-amber-200 animate-pulse">
                                                 <Settings2 size={14} />
                                             </div>
@@ -553,7 +555,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                             <button
                                                 onClick={(ev) => { ev.stopPropagation(); handleOpenEdit(e); }}
                                                 className="p-2.5 bg-gray-50 text-gray-400 hover:text-blue-600 rounded-xl transition-all hover:bg-white hover:shadow-md"
-                                                title="تعديل البيانات"
+                                                title={t('batch4.k195')}
                                             >
                                                 <Edit size={18} />
                                             </button>
@@ -563,7 +565,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                     <div className={`relative mb-6 ${e.status === 'suspended' ? 'grayscale opacity-75' : ''}`}>
                                         {e.status === 'suspended' && (
                                             <div className="absolute inset-0 z-10 flex items-center justify-center">
-                                                <span className="bg-red-600 text-white text-[10px] font-black px-2 py-0.5 rounded-md shadow-md rotate-[-12deg]">مجمد</span>
+                                                <span className="bg-red-600 text-white text-[10px] font-black px-2 py-0.5 rounded-md shadow-md rotate-[-12deg]">{t('batch4.k540')}</span>
                                             </div>
                                         )}
                                         {e.imageUrl ? (
@@ -611,7 +613,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                     <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white/70 backdrop-blur-md p-4 rounded-[2rem] border border-white shadow-xl">
                         <button onClick={() => onSelectEmployee(null)} className="flex items-center gap-3 text-gray-500 hover:text-[#0e3c63] font-black transition-all group px-3">
                             <div className="p-2 bg-white rounded-2xl shadow-sm border border-gray-100 group-hover:bg-[#0e3c63] group-hover:text-white transition-all transform group-hover:translate-x-1"><ArrowRight size={20} /></div>
-                            رجوع للقائمة
+                            {t('batch4.back_to_list')}
                         </button>
 
                         {isSuperAdmin && (
@@ -625,7 +627,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                                 // Update local state to reflect change
                                                 const updated = employees.find((e: any) => e.id === selectedEmployee.id);
                                                 if (updated) onSelectEmployee({ ...updated, status: 'active', is_deleted: false } as any);
-                                                toast.success('تم فك تجميد الحساب بنجاح ✓');
+                                                toast.success(t('batch4.k541'));
                                             } catch (err: any) {
                                                 toast.error('خطأ', err.message);
                                             }
@@ -633,13 +635,13 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                         variant="secondary"
                                         className="py-3 px-6 text-sm bg-emerald-50 border-emerald-200 text-emerald-700 shadow-md font-black hover:bg-emerald-100"
                                     >
-                                        <RotateCcw size={18} /> فك التجميد
+                                        <RotateCcw size={18} /> {t('batch4.unfreeze_account')}
                                     </Button>
                                 ) : (
                                     <Button
                                         onClick={async () => {
                                             if (String(selectedEmployee.id) === String(currentUser?.id)) {
-                                                toast.error('حماية النظام', 'لا يمكنك تجميد حسابك الشخصي.');
+                                                toast.error(t('batch4.k520'), t('batch4.k524'));
                                                 return;
                                             }
                                             setStaffSuspendConfirm(selectedEmployee);
@@ -647,16 +649,16 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                         variant="secondary"
                                         className="py-3 px-6 text-sm bg-red-50 border-red-200 text-red-600 shadow-md font-black hover:bg-red-100"
                                     >
-                                        <ShieldX size={18} /> تجميد الحساب
+                                        <ShieldX size={18} /> {t('batch4.k583')}
                                     </Button>
                                 )}
                                 <Button onClick={() => handleOpenEdit(selectedEmployee)} variant="secondary" className="py-3 px-6 text-sm bg-white border-gray-200 shadow-md font-black">
-                                    <Edit size={18} /> تخصيص الصلاحيات
+                                    <Edit size={18} /> {t('batch4.assign_permissions')}
                                 </Button>
                                 <Button
                                     onClick={() => {
                                         if (String(selectedEmployee.id) === String(currentUser?.id)) {
-                                            toast.error('حماية النظام', 'لا يمكنك حذف حسابك الشخصي.');
+                                            toast.error(t('batch4.k520'), t('batch4.k522'));
                                             return;
                                         }
                                         setStaffDeleteConfirm(selectedEmployee);
@@ -664,7 +666,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                     variant="danger"
                                     className="py-3 px-6 text-sm shadow-md font-black"
                                 >
-                                    <Trash2 size={18} /> حذف نهائي
+                                    <Trash2 size={18} /> {t('batch4.permanent_delete')}
                                 </Button>
                             </div>
                         )}
@@ -705,7 +707,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                             {UserRoleLabels[selectedEmployee.role as UserRole] || selectedEmployee.role}
                                         </Badge>
                                         {isPermissionsCustom(selectedEmployee) && (
-                                            <Badge color="orange" className="py-1.5 px-4 text-xs font-black">مخصص</Badge>
+                                            <Badge color="orange" className="py-1.5 px-4 text-xs font-black">{t('batch4.k542')}</Badge>
                                         )}
                                     </div>
                                 </div>
@@ -714,14 +716,14 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                             <div className="space-y-4">
                                 <div className="flex items-center gap-2 px-2">
                                     <Fingerprint size={18} className="text-[#0e3c63]" />
-                                    <h4 className="text-[11px] font-black text-gray-800 uppercase tracking-[0.2em]">بصمة الوصول الرقمي</h4>
+                                    <h4 className="text-[11px] font-black text-gray-800 uppercase tracking-[0.2em]">{t('batch4.k259')}</h4>
                                 </div>
 
                                 <div className="grid grid-cols-1 gap-3">
                                     <div className="bg-[#0e3c63] rounded-3xl p-5 text-white shadow-xl relative overflow-hidden group">
                                         <div className="absolute top-0 right-0 w-24 h-24 bg-white/5 rounded-bl-full -mr-12 -mt-12 transition-transform group-hover:scale-110"></div>
                                         <div className="relative z-10">
-                                            <span className="text-[9px] font-black text-blue-300 uppercase tracking-widest block mb-1">رمز هوية النظام</span>
+                                            <span className="text-[9px] font-black text-blue-300 uppercase tracking-widest block mb-1">{t('batch4.k543')}</span>
                                             <div className="flex items-center justify-between">
                                                 <div className="flex items-center gap-3">
                                                     <span className="text-2xl font-black font-mono tracking-tighter">USR-{String(selectedEmployee.id).split('-')[0].toUpperCase()}</span>
@@ -729,8 +731,8 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                                 <div className="p-2 bg-white/10 rounded-xl"><Shield size={18} className="text-blue-200" /></div>
                                             </div>
                                             <div className="mt-4 pt-4 border-t border-white/10 flex justify-between items-center">
-                                                <span className="text-[10px] font-mono opacity-60">نظام التحقق النشط</span>
-                                                <span className="text-[8px] font-black text-blue-400 uppercase tracking-widest">VOGA SECURITY ACCESS</span>
+                                                <span className="text-[10px] font-mono opacity-60">{t('batch4.k261')}</span>
+                                                <span className="text-[8px] font-black text-blue-400 uppercase tracking-widest">{t('batch4.voga_security_access')}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -738,7 +740,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                     <div className="grid grid-cols-2 gap-3">
                                         <div className="bg-white p-4 rounded-[1.5rem] border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center gap-2 hover:border-blue-100 transition-all">
                                             <div className="flex items-center gap-2 text-blue-500">
-                                                <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">عنوان الشبكة (IP)</span>
+                                                <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">{t('batch4.k263')}</span>
                                                 <Globe size={16} />
                                             </div>
                                             <span className="text-sm font-black text-gray-800 font-mono tracking-tight dir-ltr">
@@ -747,14 +749,14 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                         </div>
                                         <div className="bg-white p-4 rounded-[1.5rem] border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center gap-2 hover:border-blue-100 transition-all">
                                             <div className="flex items-center gap-2 text-indigo-500">
-                                                <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">جهاز الدخول</span>
+                                                <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">{t('batch4.k262')}</span>
                                                 <Monitor size={16} />
                                             </div>
                                             <div className="flex flex-col items-center">
                                                 {(() => {
                                                     try {
                                                         const raw = selectedEmployee.presence?.device;
-                                                        if (!raw) return <span className="text-sm font-black text-gray-400">غير متوفر</span>;
+                                                        if (!raw) return <span className="text-sm font-black text-gray-400">{t('batch4.k544')}</span>;
 
                                                         if (raw.startsWith('{')) {
                                                             const d = JSON.parse(raw);
@@ -772,7 +774,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                         </div>
                                         <div className="bg-white p-4 rounded-[1.5rem] border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center gap-2 hover:border-blue-100 transition-all">
                                             <div className="flex items-center gap-2 text-amber-500">
-                                                <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">آخر مزامنة</span>
+                                                <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">{t('batch4.k265')}</span>
                                                 <Clock size={16} />
                                             </div>
                                             <span className="text-[10px] font-bold text-gray-700 leading-tight dir-ltr">
@@ -787,7 +789,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                         </div>
                                         <div className="bg-white p-4 rounded-[1.5rem] border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center gap-2 hover:border-blue-100 transition-all">
                                             <div className="flex items-center gap-2 text-emerald-500">
-                                                <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">سجل العمليات</span>
+                                                <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">{t('batch4.k264')}</span>
                                                 <Activity size={16} />
                                             </div>
                                             <div className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-xs font-black">{employeeLogs.length}</div>
@@ -798,7 +800,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
 
                             <div className="bg-blue-50/50 p-5 rounded-2xl border border-blue-100/50 text-[11px] text-blue-800 font-bold leading-relaxed flex gap-4">
                                 <AlertCircle size={20} className="shrink-0 text-blue-400" />
-                                <p>يتم تسجيل كافة العمليات التي يقوم بها هذا الموظف تلقائياً لضمان أعلى معايير الشفافية والرقابة داخل النظام.</p>
+                                <p>{t('batch4.k545')}</p>
                             </div>
                         </div>
 
@@ -810,8 +812,8 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                             <ShieldCheck size={32} />
                                         </div>
                                         <div>
-                                            <h3 className="font-black text-2xl text-gray-800">خريطة الصلاحيات المصنفة</h3>
-                                            <p className="text-sm text-gray-400 font-bold mt-1">توزيع الصلاحيات النشطة حسب الأقسام الوظيفية</p>
+                                            <h3 className="font-black text-2xl text-gray-800">{t('batch4.k546')}</h3>
+                                            <p className="text-sm text-gray-400 font-bold mt-1">{t('batch4.k547')}</p>
                                         </div>
                                     </div>
                                 </div>
@@ -850,8 +852,8 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                             <ShieldCheck size={20} />
                                         </div>
                                         <div>
-                                            <p className="text-xs font-black text-gray-800">صلاحية نشطة</p>
-                                            <p className="text-[10px] text-gray-500 font-bold">يُسمح للموظف بالوصول والتنفيذ</p>
+                                            <p className="text-xs font-black text-gray-800">{t('batch4.k548')}</p>
+                                            <p className="text-[10px] text-gray-500 font-bold">{t('batch4.k549')}</p>
                                         </div>
                                     </div>
                                     <div className="w-px h-8 bg-gray-200 hidden md:block"></div>
@@ -860,8 +862,8 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                             <Lock size={20} />
                                         </div>
                                         <div>
-                                            <p className="text-xs font-black text-gray-800">صلاحية محجوبة</p>
-                                            <p className="text-[10px] text-gray-500 font-bold">لا يملك الموظف حق الوصول حالياً</p>
+                                            <p className="text-xs font-black text-gray-800">{t('batch4.k550')}</p>
+                                            <p className="text-[10px] text-gray-500 font-bold">{t('batch4.k551')}</p>
                                         </div>
                                     </div>
                                 </div>
@@ -876,13 +878,13 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                             <History size={28} />
                                         </div>
                                         <div>
-                                            <h3 className="font-black text-2xl text-gray-800">سجل نشاط الموظف</h3>
-                                            <p className="text-sm text-gray-500 font-bold">تتبع زمني لكافة الحركات مع إمكانية الفلترة</p>
+                                            <h3 className="font-black text-2xl text-gray-800">{t('batch4.k552')}</h3>
+                                            <p className="text-sm text-gray-500 font-bold">{t('batch4.k553')}</p>
                                         </div>
                                     </div>
 
                                     <div className="flex flex-col md:flex-row items-center gap-3 bg-white p-2 rounded-[1.5rem] border border-gray-200 shadow-sm">
-                                        <span className="text-xs font-black text-gray-400 px-3 uppercase tracking-wider">فلترة السجل:</span>
+                                        <span className="text-xs font-black text-gray-400 px-3 uppercase tracking-wider">{t('batch4.k554')}</span>
                                         <DateRangePicker
                                             from={logFromDate}
                                             to={logToDate}
@@ -893,7 +895,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                             <button
                                                 onClick={() => { setLogFromDate(''); setLogToDate(''); }}
                                                 className="p-3 text-red-500 hover:bg-red-50 rounded-xl transition-colors"
-                                                title="تصفير التاريخ"
+                                                title={t('batch4.k555')}
                                             >
                                                 <RotateCcw size={20} />
                                             </button>
@@ -905,11 +907,11 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                     <table className="w-full text-right text-sm border-collapse">
                                         <thead className="bg-white text-gray-500 font-black uppercase text-[10px] tracking-[0.2em] border-b border-gray-100">
                                             <tr>
-                                                <th className="p-6 pr-10 w-1/5">الوقت والتاريخ</th>
-                                                <th className="p-6 w-1/6 text-center">القسم</th>
-                                                <th className="p-6 w-1/5 text-center">نوع الإجراء</th>
-                                                <th className="p-6">التفاصيل والبيان</th>
-                                                <th className="p-6 w-64">التغييرات (قبل / بعد)</th>
+                                                <th className="p-6 pr-10 w-1/5">{t('batch4.k245')}</th>
+                                                <th className="p-6 w-1/6 text-center">{t('batch4.k247')}</th>
+                                                <th className="p-6 w-1/5 text-center">{t('batch4.k556')}</th>
+                                                <th className="p-6">{t('batch4.k557')}</th>
+                                                <th className="p-6 w-64">{t('batch4.k558')}</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-50 bg-white">
@@ -945,7 +947,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                                             {log.previousValue || log.newValue ? (
                                                                 <>
                                                                     <div className="flex-1 bg-red-50 text-red-700 px-3 py-2 rounded-xl border border-red-100 text-[10px] font-bold shadow-sm flex flex-col min-w-[80px]">
-                                                                        <span className="text-[8px] text-red-400 mb-1 font-black">قبل التعديل</span>
+                                                                        <span className="text-[8px] text-red-400 mb-1 font-black">{t('batch4.k559')}</span>
                                                                         <div className="truncate line-through opacity-70">
                                                                             {formatLogValue(log.previousValue) || '-'}
                                                                         </div>
@@ -956,7 +958,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                                                     </div>
 
                                                                     <div className="flex-1 bg-emerald-50 text-emerald-800 px-3 py-2 rounded-xl border border-red-100 text-[11px] font-black shadow-sm flex flex-col min-w-[80px]">
-                                                                        <span className="text-[8px] text-emerald-400 mb-1 font-black">بعد التعديل</span>
+                                                                        <span className="text-[8px] text-emerald-400 mb-1 font-black">{t('batch4.k560')}</span>
                                                                         <div className="truncate">
                                                                             {formatLogValue(log.newValue) || '-'}
                                                                         </div>
@@ -974,7 +976,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                                     <td colSpan={5} className="p-32 text-center text-gray-400 font-black italic">
                                                         <div className="flex flex-col items-center gap-4 opacity-30">
                                                             <History size={64} />
-                                                            <p className="text-xl">لا توجد سجلات مطابقة لهذا الموظف في الفترة المحددة</p>
+                                                            <p className="text-xl">{t('batch4.k561')}</p>
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -999,8 +1001,8 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                             <div className="flex items-center gap-4">
                                 <div className="p-3 bg-white/10 rounded-2xl"><UserPlus size={24} className="text-blue-200" /></div>
                                 <div>
-                                    <h3 className="font-black text-xl">{editingEmployee ? `تعديل بيانات الموظف (USR-00${editingEmployee.id})` : 'إضافة موظف جديد'}</h3>
-                                    <p className="text-blue-200 text-[10px] font-bold opacity-70 uppercase tracking-widest">Staff Privileges Management</p>
+                                    <h3 className="font-black text-xl">{editingEmployee ? `${t('batch4.edit_employee_title')} (USR-00${editingEmployee.id})` : t('batch4.add_new_employee')}</h3>
+                                    <p className="text-blue-200 text-[10px] font-bold opacity-70 uppercase tracking-widest">{t('batch4.staff_privileges_management')}</p>
                                 </div>
                             </div>
                             <button onClick={() => { setShowEmployeeModal(false); setEditingEmployee(null); }} className="bg-white/10 hover:bg-red-500 p-2.5 rounded-xl transition-all shadow-inner"><X size={20} /></button>
@@ -1015,7 +1017,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                 className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-black transition-all ${modalTab === 'general' ? 'bg-white text-[#0e3c63] shadow-md' : 'text-gray-400 hover:bg-white/50'}`}
                             >
                                 <UserIcon size={16} />
-                                المعلومات العامة
+                                {t('batch4.general_information')}
                             </button>
                             <button
                                 type="button"
@@ -1023,7 +1025,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                 className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-black transition-all ${modalTab === 'permissions' ? 'bg-white text-[#0e3c63] shadow-md' : 'text-gray-400 hover:bg-white/50'}`}
                             >
                                 <ShieldCheck size={16} />
-                                الصلاحيات
+                                {t('batch4.permissions_tab')}
                             </button>
                             <button
                                 type="button"
@@ -1031,21 +1033,21 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                 className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-black transition-all ${modalTab === 'security' ? 'bg-white text-[#0e3c63] shadow-md' : 'text-gray-400 hover:bg-white/50'}`}
                             >
                                 <Lock size={16} />
-                                الأمان
+                                {t('batch4.security_tab')}
                             </button>
                         </div>
 
                         <form onSubmit={handleSaveEmployee} noValidate className="flex-1 overflow-y-auto custom-scrollbar p-8 bg-gray-50/30">
                             {/* TAB 1: General Info */}
                             <div className={`space-y-6 ${modalTab === 'general' ? 'block' : 'hidden'}`}>
-                                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2 mb-4 px-1"><UserIcon size={14} className="text-[#0e3c63]" /> المعلومات الأساسية</h4>
+                                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2 mb-4 px-1"><UserIcon size={14} className="text-[#0e3c63]" />{t('batch4.k562')}</h4>
 
                                 {/* Avatar Upload - Using targetUserId for employee's folder */}
                                 <div className="flex justify-center mb-6">
                                     <AvatarUploader
                                         currentAvatarUrl={editingEmployee?.imageUrl || ''}
                                         currentAvatarPath={(editingEmployee as any)?.avatar_path}
-                                        userName={editingEmployee?.fullName || 'موظف جديد'}
+                                        userName={editingEmployee?.fullName || t('batch4.new_employee') || 'موظف جديد'}
                                         targetUserId={editingEmployee?.id}
                                         onUploadSuccess={handleAvatarUpload}
                                     />
@@ -1055,10 +1057,10 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                     <div className={`relative ${fieldErrors.fullName ? 'animate-shake' : ''}`}>
                                         <Input
                                             required
-                                            label="الاسم الكامل"
+                                            label={t('batch4.k563')}
                                             name="fullName"
                                             defaultValue={editingEmployee?.fullName}
-                                            placeholder="اسم الموظف الثلاثي..."
+                                            placeholder={t('batch4.k564')}
                                             onChange={() => { setHasGeneralChanges(true); setFieldErrors(prev => ({ ...prev, fullName: false })); }}
                                             className={fieldErrors.fullName ? '!border-rose-400 !bg-rose-50/50 text-rose-900 focus:!ring-rose-200 !shadow-[0_0_0_4px_rgba(251,113,133,0.1)]' : ''}
                                         />
@@ -1066,7 +1068,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                     </div>
                                     <div className={`relative ${fieldErrors.phone ? 'animate-shake' : ''}`}>
                                         <PhoneInput
-                                            label="رقم الهاتف"
+                                            label={t('batch4.k283')}
                                             name="phone"
                                             value={phone}
                                             onChange={(val) => { setPhone(val); setHasGeneralChanges(true); setFieldErrors(prev => ({ ...prev, phone: false })); }}
@@ -1090,7 +1092,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                                 }`}
                                         >
                                             <Save size={18} />
-                                            حفظ المعلومات العامة
+                                            {t('batch4.save_general_info')}
                                         </button>
                                     </div>
                                 )}
@@ -1099,14 +1101,14 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
 
                             {/* TAB 2: Permissions */}
                             <div className={`space-y-6 ${modalTab === 'permissions' ? 'block' : 'hidden'}`}>
-                                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2 mb-4 px-1"><ShieldCheck size={14} className="text-[#0e3c63]" /> الرتبة والصلاحيات</h4>
+                                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2 mb-4 px-1"><ShieldCheck size={14} className="text-[#0e3c63]" />{t('batch4.k565')}</h4>
 
                                 {/* Role Selection - Modern Button Style */}
                                 <div className="mb-6">
                                     <label className="block text-xs font-black text-gray-500 mb-3 flex items-center gap-2 justify-between">
                                         <div className="flex items-center gap-2">
                                             <Crown size={14} className="text-amber-500" />
-                                            الدور الوظيفي (Role)
+                                            {t('batch4.role_label')}
                                             {hasExtraPermissions && <span className="text-amber-500">+</span>}
                                         </div>
                                         {hasExtraPermissions && (
@@ -1116,7 +1118,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                                 className="text-[10px] bg-amber-100 text-amber-600 px-2 py-1 rounded-lg hover:bg-amber-200 transition-all flex items-center gap-1"
                                             >
                                                 <RotateCcw size={12} />
-                                                إعادة تعيين
+                                                {t('batch4.reset')}
                                             </button>
                                         )}
                                     </label>
@@ -1132,7 +1134,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                                     }`}
                                             >
                                                 <Crown size={20} className="mx-auto mb-2" />
-                                                <span className="text-xs font-black block">الأدمن الخارق</span>
+                                                <span className="text-xs font-black block">{t('batch4.k566')}</span>
                                             </button>
                                         )}
                                         <button
@@ -1144,7 +1146,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                                 }`}
                                         >
                                             <Shield size={20} className="mx-auto mb-2" />
-                                            <span className="text-xs font-black block">مدير عام</span>
+                                            <span className="text-xs font-black block">{t('batch4.k567')}</span>
                                         </button>
                                         <button
                                             type="button"
@@ -1155,7 +1157,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                                 }`}
                                         >
                                             <Users size={20} className="mx-auto mb-2" />
-                                            <span className="text-xs font-black block">مشرف</span>
+                                            <span className="text-xs font-black block">{t('batch4.k536')}</span>
                                         </button>
                                         <button
                                             type="button"
@@ -1166,14 +1168,14 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                                 }`}
                                         >
                                             <Eye size={20} className="mx-auto mb-2" />
-                                            <span className="text-xs font-black block">مشاهد</span>
+                                            <span className="text-xs font-black block">{t('batch4.k537')}</span>
                                         </button>
                                     </div>
                                 </div>
 
                                 {/* Permission Matrix */}
                                 <div className="space-y-6">
-                                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2 mb-4 px-1"><ShieldAlert size={14} className="text-amber-600" /> مصفوفة الصلاحيات المخصصة</h4>
+                                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2 mb-4 px-1"><ShieldAlert size={14} className="text-amber-600" />{t('batch4.k568')}</h4>
 
                                     <div className="grid grid-cols-1 gap-8">
                                         {PERMISSION_GROUPS.map((group, gIdx) => (
@@ -1226,12 +1228,12 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                             {isSavingPermissions ? (
                                                 <>
                                                     <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                                    جاري الحفظ...
+                                                    {t('batch4.saving')}
                                                 </>
                                             ) : (
                                                 <>
                                                     <Save size={18} />
-                                                    حفظ الصلاحيات
+                                                    {t('batch4.save_permissions')}
                                                 </>
                                             )}
                                         </button>
@@ -1242,16 +1244,16 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
 
                             {/* TAB 3: Security */}
                             <div className={`space-y-6 ${modalTab === 'security' ? 'block' : 'hidden'}`}>
-                                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2 mb-4 px-1"><Lock size={14} className="text-[#0e3c63]" /> إعدادات الأمان</h4>
+                                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2 mb-4 px-1"><Lock size={14} className="text-[#0e3c63]" />{t('batch4.k569')}</h4>
 
                                 {/* Email Field - Lock/Unlock Pattern */}
                                 <div className="bg-gray-50/50 p-6 rounded-2xl border border-gray-100">
                                     <div className="flex items-start justify-between mb-4">
                                         <div>
                                             <h4 className="font-bold text-gray-800 text-sm flex items-center gap-2">
-                                                <Mail size={16} className="text-gray-400" /> البريد الإلكتروني
+                                                <Mail size={16} className="text-gray-400" /> {t('batch4.email_label')}
                                             </h4>
-                                            <p className="text-[10px] text-gray-400 mt-1 font-bold">يستخدم لتسجيل الدخول واستعادة الحساب</p>
+                                            <p className="text-[10px] text-gray-400 mt-1 font-bold">{t('batch4.k570')}</p>
                                         </div>
                                         {editingEmployee && (
                                             <button
@@ -1264,7 +1266,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                                 }}
                                                 className={`rounded-xl px-4 py-2 font-bold text-xs border-2 flex items-center gap-2 transition-all ${isEditingEmail ? 'bg-red-50 text-red-600 border-red-100' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
                                             >
-                                                {isEditingEmail ? <><X size={14} /> إلغاء</> : <><Edit size={14} /> تغيير</>}
+                                                {isEditingEmail ? <><X size={14} />{t('batch4.k156')}</> : <><Edit size={14} />{t('batch4.k138')}</>}
                                             </button>
                                         )}
                                     </div>
@@ -1290,7 +1292,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                     </div>
                                     {editingEmployee && isEditingEmail && (
                                         <p className="text-[10px] text-amber-600 mt-2 font-bold flex items-center gap-1">
-                                            <AlertCircle size={12} /> سيحتاج الموظف تأكيد البريد الجديد
+                                            <AlertCircle size={12} /> {t('batch4.email_confirm_notice')}
                                         </p>
                                     )}
                                 </div>
@@ -1301,7 +1303,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                         <div className="space-y-4">
                                             <h5 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2 px-1">
                                                 <Key size={14} className="text-[#0e3c63]" />
-                                                إعدادات الدخول
+                                                {t('batch4.login_settings')}
                                             </h5>
 
                                             <div className="flex bg-white p-1.5 rounded-2xl border border-gray-200 shadow-sm relative overflow-hidden">
@@ -1311,7 +1313,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                                     className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-black transition-all relative z-10 ${authMethod === 'manual' ? 'bg-[#0e3c63] text-white shadow-md' : 'text-gray-400 hover:bg-gray-50'}`}
                                                 >
                                                     <Key size={16} />
-                                                    تعيين كلمة المرور
+                                                    {t('batch4.set_password')}
                                                 </button>
                                                 <div className="w-px bg-gray-100 my-2 mx-1"></div>
                                                 <button
@@ -1320,7 +1322,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                                     className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-black transition-all relative z-10 ${authMethod === 'invite' ? 'bg-[#0e3c63] text-white shadow-md' : 'text-gray-400 hover:bg-gray-50'}`}
                                                 >
                                                     <Mail size={16} />
-                                                    إرسال دعوة
+                                                    {t('batch4.send_invite')}
                                                 </button>
                                             </div>
                                             <input type="hidden" name="authMethod" value={authMethod} />
@@ -1332,7 +1334,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                                     <Input
                                                         type="password"
                                                         name="password"
-                                                        label="كلمة المرور"
+                                                        label={t('batch4.k571')}
                                                         placeholder="••••••••"
                                                         disabled={authMethod === 'invite'}
                                                         onChange={() => setFieldErrors(prev => ({ ...prev, password: false }))}
@@ -1340,7 +1342,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                                     />
                                                     {fieldErrors.password && <div className="absolute left-3 top-[38px] text-rose-500 animate-pulse"><AlertCircle size={18} /></div>}
                                                 </div>
-                                                <Input type="password" name="confirmPassword" label="تأكيد كلمة المرور" placeholder="••••••••" disabled={authMethod === 'invite'} />
+                                                <Input type="password" name="confirmPassword" label={t('batch4.k572')} placeholder="••••••••" disabled={authMethod === 'invite'} />
                                             </div>
                                         </div>
 
@@ -1354,9 +1356,9 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                         <div className="flex items-start justify-between mb-4">
                                             <div>
                                                 <h4 className="font-bold text-gray-800 text-sm flex items-center gap-2">
-                                                    <Key size={16} className="text-gray-400" /> كلمة المرور
+                                                    <Key size={16} className="text-gray-400" /> {t('batch4.password_label')}
                                                 </h4>
-                                                <p className="text-[10px] text-gray-400 mt-1 font-bold">تعيين كلمة مرور جديدة للموظف</p>
+                                                <p className="text-[10px] text-gray-400 mt-1 font-bold">{t('batch4.k573')}</p>
                                             </div>
                                             <button
                                                 type="button"
@@ -1369,7 +1371,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                                 }}
                                                 className={`rounded-xl px-4 py-2 font-bold text-xs border-2 flex items-center gap-2 transition-all ${isEditingPassword ? 'bg-red-50 text-red-600 border-red-100' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
                                             >
-                                                {isEditingPassword ? <><X size={14} /> إلغاء</> : <><Edit size={14} /> تغيير</>}
+                                                {isEditingPassword ? <><X size={14} />{t('batch4.k156')}</> : <><Edit size={14} />{t('batch4.k138')}</>}
                                             </button>
                                         </div>
 
@@ -1379,24 +1381,24 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                                     type="password"
                                                     value={newPassword}
                                                     onChange={(e) => setNewPassword(e.target.value)}
-                                                    placeholder="كلمة المرور الجديدة"
+                                                    placeholder={t('batch4.k574')}
                                                     className="w-full h-14 rounded-2xl px-5 font-bold outline-none transition-all bg-white border-2 border-amber-400 text-gray-800 shadow-lg"
                                                 />
                                                 <input
                                                     type="password"
                                                     value={confirmNewPassword}
                                                     onChange={(e) => setConfirmNewPassword(e.target.value)}
-                                                    placeholder="تأكيد كلمة المرور"
+                                                    placeholder={t('batch4.k572')}
                                                     className="w-full h-14 rounded-2xl px-5 font-bold outline-none transition-all bg-white border-2 border-amber-400 text-gray-800 shadow-lg"
                                                 />
                                                 <p className="text-[10px] text-amber-600 font-bold flex items-center gap-1">
-                                                    <AlertCircle size={12} /> سيتم تحديث كلمة المرور عند الحفظ
+                                                    <AlertCircle size={12} /> {t('batch4.password_update_notice')}
                                                 </p>
                                             </div>
                                         ) : (
                                             <div className="text-center py-4 text-gray-400">
                                                 <Lock size={32} className="mx-auto mb-2 opacity-30" />
-                                                <p className="text-xs font-bold">اضغط "تغيير" لتعيين كلمة مرور جديدة</p>
+                                                <p className="text-xs font-bold">{t('batch4.k575')}</p>
                                             </div>
                                         )}
                                     </div>
@@ -1411,7 +1413,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                             className="w-full flex items-center justify-center gap-2 py-4 px-6 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-black text-sm transition-all shadow-lg hover:shadow-xl active:scale-[0.98]"
                                         >
                                             <Save size={18} />
-                                            حفظ إعدادات الأمان
+                                            {t('batch4.save_security_settings')}
                                         </button>
                                     </div>
                                 )}
@@ -1439,11 +1441,11 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                         <div className={`flex items-center justify-center gap-2 transition-all duration-500 absolute w-full ${validationButtonFlip || isCreating ? '-translate-y-12 opacity-0' : 'translate-y-0 opacity-100'}`}>
                                             {authMethod === 'invite' ? (
                                                 <>
-                                                    <Mail size={20} className="ml-2" /> إرسال الدعوة وإضافة الموظف
+                                                    <Mail size={20} className="ml-2" /> {t('batch4.send_invite_add_employee')}
                                                 </>
                                             ) : (
                                                 <>
-                                                    <UserPlus size={20} className="ml-2" /> إضافة موظف جديد
+                                                    <UserPlus size={20} className="ml-2" /> {t('batch4.add_new_employee_btn')}
                                                 </>
                                             )}
                                         </div>
@@ -1455,11 +1457,11 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                         {/* Loading Spinner */}
                                         <div className={`flex items-center justify-center gap-2 transition-all duration-500 absolute w-full ${isCreating ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0'}`}>
                                             <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                            <span>جاري الإضافة...</span>
+                                            <span>{t('batch4.k576')}</span>
                                         </div>
                                     </Button>
                                 )}
-                                <Button type="button" onClick={() => { setShowEmployeeModal(false); setEditingEmployee(null); }} variant="secondary" className={`${editingEmployee ? 'flex-1' : 'px-10'} h-14 rounded-2xl font-bold`}>إغلاق</Button>
+                                <Button type="button" onClick={() => { setShowEmployeeModal(false); setEditingEmployee(null); }} variant="secondary" className={`${editingEmployee ? 'flex-1' : 'px-10'} h-14 rounded-2xl font-bold`}>{t('batch4.k577')}</Button>
                             </div>
                         </div>
                     </div>
@@ -1477,8 +1479,8 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                     <div className="w-20 h-20 bg-white/20 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-xl backdrop-blur-md border border-white/20">
                                         <AlertOctagon size={42} className="text-white animate-pulse" />
                                     </div>
-                                    <h3 className="text-2xl font-black mb-2">إلغاء وصول موظف</h3>
-                                    <p className="text-red-100 text-sm font-bold opacity-80">أنت على وشك حذف حساب موظف من النظام</p>
+                                    <h3 className="text-2xl font-black mb-2">{t('batch4.k578')}</h3>
+                                    <p className="text-red-100 text-sm font-bold opacity-80">{t('batch4.k579')}</p>
                                 </div>
                             </div>
                             <div className="p-8 space-y-8">
@@ -1487,7 +1489,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                         {staffDeleteConfirm.fullName.charAt(0)}
                                     </div>
                                     <div>
-                                        <span className="text-[10px] font-black text-gray-400 uppercase block mb-1">الاسم الكامل:</span>
+                                        <span className="text-[10px] font-black text-gray-400 uppercase block mb-1">{t('batch4.k321')}</span>
                                         <span className="font-black text-gray-800 text-lg">{staffDeleteConfirm.fullName}</span>
                                         <span className="text-[10px] font-mono font-bold text-gray-400 block mt-1">System ID: USR-00{staffDeleteConfirm.id}</span>
                                     </div>
@@ -1495,9 +1497,9 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
 
                                 {/* Info about smart deletion */}
                                 <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 text-center">
-                                    <p className="text-blue-700 font-black text-sm mb-1">ℹ️ حذف ذكي للحساب</p>
-                                    <p className="text-blue-600 text-xs font-bold">سيُحذف تسجيل الدخول ويُحرر الإيميل والرقم</p>
-                                    <p className="text-blue-500 text-[10px] font-bold mt-1">✓ البيانات والطلبات والسجلات ستبقى للتتبع</p>
+                                    <p className="text-blue-700 font-black text-sm mb-1">{t('batch4.k580')}</p>
+                                    <p className="text-blue-600 text-xs font-bold">{t('batch4.k581')}</p>
+                                    <p className="text-blue-500 text-[10px] font-bold mt-1">{t('batch4.k582')}</p>
                                 </div>
 
                                 <div className="space-y-3">
@@ -1547,8 +1549,8 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                     <div className="w-20 h-20 bg-white/20 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-xl backdrop-blur-md border border-white/20">
                                         <ShieldAlert size={42} className="text-white animate-pulse" />
                                     </div>
-                                    <h3 className="text-2xl font-black mb-2">تجميد الحساب</h3>
-                                    <p className="text-amber-100 text-sm font-bold opacity-80">هل أنت متأكد من رغبتك في تجميد هذا الموظف؟</p>
+                                    <h3 className="text-2xl font-black mb-2">{t('batch4.k583')}</h3>
+                                    <p className="text-amber-100 text-sm font-bold opacity-80">{t('batch4.k584')}</p>
                                 </div>
                             </div>
                             <div className="p-8 space-y-8">
@@ -1557,16 +1559,16 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                         {staffSuspendConfirm.fullName.charAt(0)}
                                     </div>
                                     <div>
-                                        <span className="text-[10px] font-black text-gray-400 uppercase block mb-1">الاسم الكامل:</span>
+                                        <span className="text-[10px] font-black text-gray-400 uppercase block mb-1">{t('batch4.k321')}</span>
                                         <span className="font-black text-gray-800 text-lg">{staffSuspendConfirm.fullName}</span>
                                         <span className="text-[10px] font-mono font-bold text-gray-400 block mt-1">System ID: USR-00{staffSuspendConfirm.id}</span>
                                     </div>
                                 </div>
 
                                 <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-center">
-                                    <p className="text-amber-700 font-black text-sm mb-1">ℹ️ ماذا يعني التجميد؟</p>
-                                    <p className="text-amber-600 text-xs font-bold">لن يتمكن الموظف من تسجيل الدخول للنظام</p>
-                                    <p className="text-amber-500 text-[10px] font-bold mt-1">✓ يمكن إعادة تفعيل الحساب في أي وقت</p>
+                                    <p className="text-amber-700 font-black text-sm mb-1">{t('batch4.k585')}</p>
+                                    <p className="text-amber-600 text-xs font-bold">{t('batch4.k586')}</p>
+                                    <p className="text-amber-500 text-[10px] font-bold mt-1">{t('batch4.k587')}</p>
                                 </div>
 
                                 <div className="space-y-3">
@@ -1581,11 +1583,11 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                         {isDeleting ? (
                                             <>
                                                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                                جاري التجميد...
+                                                {t('batch4.freezing_account')}
                                             </>
                                         ) : (
                                             <>
-                                                <ShieldX size={20} /> تأكيد تجميد الحساب
+                                                <ShieldX size={20} /> {t('batch4.confirm_freeze_account')}
                                             </>
                                         )}
                                     </Button>
@@ -1596,7 +1598,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                         className={`w-full h-14 rounded-2xl font-black text-sm transition-all border border-gray-200 ${isDeleting ? 'bg-gray-100 text-gray-300 cursor-not-allowed' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'
                                             }`}
                                     >
-                                        إلغاء الأمر
+                                        {t('batch4.k287')}
                                     </button>
                                 </div>
                             </div>

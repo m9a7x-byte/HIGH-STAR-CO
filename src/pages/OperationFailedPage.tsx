@@ -1,6 +1,9 @@
+import i18n from 'i18next';
+const t = i18n.t.bind(i18n);
 import React from 'react';
 import { XCircle, ArrowRight, AlertTriangle } from 'lucide-react';
 import { Card, Button } from '../components/ui';
+import { FloatingLanguageSwitcher } from '../components/shared/FloatingLanguageSwitcher';
 
 interface OperationFailedPageProps {
     title: string;
@@ -11,6 +14,7 @@ interface OperationFailedPageProps {
 export const OperationFailedPage: React.FC<OperationFailedPageProps> = ({ title, message, onContinue }) => {
     return (
         <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4" dir="rtl">
+            <FloatingLanguageSwitcher />
             <div className="w-full max-w-md">
                 <Card className="p-10 shadow-2xl border-t-4 border-red-500 animate-fade-in relative overflow-hidden">
                     {/* Background decoration */}
@@ -27,14 +31,13 @@ export const OperationFailedPage: React.FC<OperationFailedPageProps> = ({ title,
                     <div className="space-y-4 relative z-10">
                         <div className="bg-red-50 p-4 rounded-2xl border border-red-100 flex items-center gap-3">
                             <AlertTriangle size={24} className="text-red-500 shrink-0" />
-                            <span className="text-xs font-bold text-red-800">صلاحية الرابط انتهت أو أنه غير صالح. يرجى إعادة المحاولة مرة أخرى.</span>
+                            <span className="text-xs font-bold text-red-800">{t('batch4.txt_o8ucru_7126')}</span>
                         </div>
 
                         <Button
                             onClick={onContinue}
                             className="w-full h-16 bg-[#0e3c63] text-white hover:bg-[#1a4d7a] font-black rounded-2xl shadow-xl transition-all flex items-center justify-center gap-2 group"
-                        >
-                            العودة للصفحة الرئيسية <ArrowRight size={20} className="group-hover:-translate-x-1 transition-transform" />
+                        >{t('batch4.txt_02nfvf_7126')}<ArrowRight size={20} className="group-hover:-translate-x-1 transition-transform" />
                         </Button>
                     </div>
                 </Card>

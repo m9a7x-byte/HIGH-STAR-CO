@@ -1,5 +1,6 @@
 
 import React, { createContext, useContext, useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { db } from '../lib/db';
 
 export type ToastType = 'success' | 'error' | 'info' | 'warning';
@@ -32,17 +33,45 @@ export const useToast = () => {
 
 export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const { t } = useTranslation();
 
   const removeToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
   const addToast = useCallback(({ type, title, message, duration = 4000, force = false }: Omit<Toast, 'id'> & { force?: boolean }) => {
-    // Check Global Settings first, but allow forcing
-    if (!db.vehicleConfig.enableToasts && !force) return;
+    // Check Global Settings first, but allow forcing. Default to true if undefined.
+    const isEnabled = db.vehicleConfig?.enableToasts !== false;
+    if (!isEnabled && !force) return;
+
+    let trTitle = title;
+    let trMsg = message;
+
+    if (title === 'تحديث حالة الطلب') {
+        trTitle = t('notifications.status_update_title', 'تحديث حالة الطلب');
+    } else if (title === 'قيد التحضير') {
+        trTitle = t('notifications.in_production', 'قيد التحضير');
+    } else if (title === 'تم التجهيز') {
+        trTitle = t('notifications.completed', 'تم التجهيز');
+    }
+
+    if (message) {
+        const statusMatch = message.match(/تم تغيير حالة طلبك #(\d+) إلى: (.+)/);
+        if (statusMatch) {
+            const statusArabic = statusMatch[2].trim();
+            let trStatus = statusArabic;
+            if (statusArabic === 'قيد الانتظار') trStatus = t('status.working', statusArabic) || t('batch4.k287', statusArabic);
+            else if (statusArabic === 'في التصنيع') trStatus = t('status.working', statusArabic);
+            else if (statusArabic === 'اكتمل') trStatus = t('status.completed', statusArabic);
+            else if (statusArabic === 'مرفوض') trStatus = t('status.rejected', statusArabic);
+            else trStatus = t(statusArabic, statusArabic);
+            
+            trMsg = t('notifications.status_change_msg', { orderId: statusMatch[1], status: trStatus, defaultValue: message });
+        }
+    }
 
     const id = Math.random().toString(36).substr(2, 9);
-    const newToast = { id, type, title, message, duration };
+    const newToast = { id, type, title: trTitle, message: trMsg, duration };
 
     setToasts((prev) => [...prev, newToast]);
 
@@ -51,7 +80,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         removeToast(id);
       }, duration);
     }
-  }, [removeToast]);
+  }, [removeToast, t]);
 
   const success = (title: string, message?: string, options?: { force?: boolean }) => addToast({ type: 'success', title, message, ...options });
   const error = (title: string, message?: string, options?: { force?: boolean }) => addToast({ type: 'error', title, message, ...options });

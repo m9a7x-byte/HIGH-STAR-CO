@@ -1,3 +1,6 @@
+import { useTranslation } from 'react-i18next';
+import i18n from 'i18next';
+
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Save, Box, Weight, PlusCircle, MinusCircle, FileText, DollarSign, Globe, MapPin, Edit3, Calculator, Tag, Info, AlertTriangle, CheckCircle2 } from 'lucide-react';
@@ -19,6 +22,7 @@ interface InventoryModalProps {
 }
 
 export const InventoryModal = ({ isOpen, onClose, onSuccess, initialMaterial, transaction }: InventoryModalProps) => {
+    const { t } = useTranslation();
     const { user } = useAuth();
     const toast = useToast();
 
@@ -28,8 +32,8 @@ export const InventoryModal = ({ isOpen, onClose, onSuccess, initialMaterial, tr
     const [materialType, setMaterialType] = useState<MaterialType>('SILICON_HOT');
     const [quantity, setQuantity] = useState('');
     const [amount, setAmount] = useState('');
-    const [source, setSource] = useState('🇮🇶 العراق');
-    const [region, setRegion] = useState('دربنديخان');
+    const [source, setSource] = useState(`🇮🇶 ${t('factory_modals.iraq')}`);
+    const [region, setRegion] = useState(t('factory_modals.derbendikhan'));
     const [notes, setNotes] = useState('');
 
     // جلب الرصيد الحالي للمادة المختارة
@@ -60,7 +64,7 @@ export const InventoryModal = ({ isOpen, onClose, onSuccess, initialMaterial, tr
             setMaterialType(transaction.materialType || 'SILICON_HOT');
             setQuantity(transaction.quantity?.toString() || '');
             setAmount(transaction.amount?.toString() || '');
-            setSource(transaction.source || '🇮🇶 العراق');
+            setSource(transaction.source || `🇮🇶 ${t('factory_modals.iraq')}`);
             setSubTypeFromTx(transaction.subType);
             setNotes(transaction.notes || '');
         } else if (initialMaterial) {
@@ -69,7 +73,7 @@ export const InventoryModal = ({ isOpen, onClose, onSuccess, initialMaterial, tr
     }, [transaction, initialMaterial, isOpen]);
 
     const setSubTypeFromTx = (sub: string | undefined) => {
-        if (sub === 'دربنديخان' || sub === 'اربيل') setRegion(sub);
+        if (sub === t('factory_modals.derbendikhan') || sub === t('factory_modals.erbil')) setRegion(sub);
     };
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -79,7 +83,7 @@ export const InventoryModal = ({ isOpen, onClose, onSuccess, initialMaterial, tr
         // نظام التحقق من المخزون عند الصرف
         if (txType === 'OUT') {
             if (currentStockLevel <= 0) {
-                toast.error('لا يمكن الصرف!', `المخزون من ${materialLabels[materialType]} حالياً 0. لا توجد مواد أولية للصرف.`);
+                toast.error('لا يمكن الصرف!', `المخزون من ${materialLabels[materialType] ? t(materialLabels[materialType]) : materialType} حالياً 0. لا توجد مواد أولية للصرف.`);
                 return;
             }
             if (inputQty > currentStockLevel) {
@@ -114,10 +118,10 @@ export const InventoryModal = ({ isOpen, onClose, onSuccess, initialMaterial, tr
 
             if (isEdit && transaction) {
                 db.updateFactoryTransaction(user!.id, transaction.id, payload);
-                toast.success('تم تحديث بيانات حركة المخزن');
+                toast.success(t('batch4.k623'));
             } else {
                 db.addFactoryTransaction(user!.id, payload);
-                toast.success('تم تسجيل حركة المخزون بنجاح');
+                toast.success(t('batch4.k624'));
             }
             onSuccess();
         } catch (err: any) { toast.error(err.message || 'حدث خطأ أثناء الحفظ'); }
@@ -155,24 +159,24 @@ export const InventoryModal = ({ isOpen, onClose, onSuccess, initialMaterial, tr
                                     <Box size={20} />
                                 </div>
                                 <div>
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">الرصيد المتاح حالياً</p>
+                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{t('batch4.k625')}</p>
                                     <h4 className={`font-black text-lg ${currentStockLevel > 0 ? 'text-blue-800' : 'text-red-700'}`}>{currentStockLevel.toLocaleString()} وحدة</h4>
                                 </div>
                             </div>
                             {currentStockLevel <= 0 ? (
-                                <Badge color="red" className="animate-pulse">نفذت الكمية</Badge>
+                                <Badge color="red" className="animate-pulse">{t('batch4.k626')}</Badge>
                             ) : (
-                                <Badge color="blue">جاهز للصرف</Badge>
+                                <Badge color="blue">{t('batch4.k627')}</Badge>
                             )}
                         </div>
                     )}
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <ModernSingleDatePicker label="تاريخ الحركة" value={date} onChange={setDate} />
+                        <ModernSingleDatePicker label={t('batch4.k474')} value={date} onChange={setDate} />
                         <ModalModernSelect
-                            label="نوع المادة"
+                            label={t('batch4.k628')}
                             value={materialType}
-                            options={materials.map(m => ({ value: m, label: materialLabels[m] }))}
+                            options={materials.map(m => ({ value: m, label: materialLabels[m] ? t(materialLabels[m]) : m ? t(materialLabels[m]) : m ? t(materialLabels[m]) : m ? t(materialLabels[m]) : m }))}
                             onChange={setMaterialType}
                             icon={Box}
                         />
@@ -180,7 +184,7 @@ export const InventoryModal = ({ isOpen, onClose, onSuccess, initialMaterial, tr
 
                     <div className={`grid grid-cols-1 ${txType === 'IN' ? 'md:grid-cols-2' : 'md:grid-cols-1'} gap-6`}>
                         <div className="space-y-2">
-                            <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mr-1">الكمية ({materialLabels[materialType]})</label>
+                            <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mr-1">الكمية ({materialLabels[materialType] ? t(materialLabels[materialType]) : materialType})</label>
                             <div className="relative">
                                 <input
                                     type="number"
@@ -195,14 +199,14 @@ export const InventoryModal = ({ isOpen, onClose, onSuccess, initialMaterial, tr
                             </div>
                             {isStockLow && (
                                 <p className="text-[10px] text-red-600 font-bold flex items-center gap-1 mt-1">
-                                    <AlertTriangle size={12} /> لا يمكنك تجاوز المتوفر ({currentStockLevel})
+                                    <AlertTriangle size={12} /> {t('factory_modals.inv_qty_limit')} ({currentStockLevel})
                                 </p>
                             )}
                         </div>
 
                         {txType === 'IN' && (
                             <div className="space-y-2 animate-fade-in">
-                                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mr-1">كلفة الشراء الكلية ($)</label>
+                                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mr-1">{t('batch4.k629')}</label>
                                 <div className="relative">
                                     <input type="number" value={amount} onChange={e => setAmount(e.target.value)} className="w-full h-[60px] bg-white border-2 border-gray-100 rounded-2xl px-5 font-black text-gray-800 focus:border-[#0e3c63] outline-none shadow-sm" placeholder="0" required />
                                     <DollarSign size={18} className="absolute left-5 top-1/2 -translate-y-1/2 text-emerald-500" />
@@ -215,19 +219,19 @@ export const InventoryModal = ({ isOpen, onClose, onSuccess, initialMaterial, tr
                         <div className="bg-orange-50/50 rounded-[2rem] border-2 border-dashed border-orange-100 p-6 animate-fade-in space-y-4">
                             <div className="flex items-center gap-2 mb-2">
                                 <Calculator size={18} className="text-orange-600" />
-                                <h5 className="text-xs font-black text-orange-800 uppercase tracking-widest">خوارزمية تسعير الصرف التلقائي</h5>
+                                <h5 className="text-xs font-black text-orange-800 uppercase tracking-widest">{t('batch4.k630')}</h5>
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="bg-white p-4 rounded-2xl shadow-sm border border-orange-50 flex flex-col items-center">
-                                    <span className="text-[10px] font-black text-gray-400 mb-1 uppercase">كلفة الوحدة (معدل)</span>
+                                    <span className="text-[10px] font-black text-gray-400 mb-1 uppercase">{t('batch4.k631')}</span>
                                     <div className="flex items-center gap-1">
                                         <span className="text-lg font-black text-gray-800 font-mono">${unitPriceAnalysis.avgUnitPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                                         <Tag size={12} className="text-gray-300" />
                                     </div>
                                 </div>
                                 <div className="bg-white p-4 rounded-2xl shadow-sm border border-orange-50 flex flex-col items-center">
-                                    <span className="text-[10px] font-black text-gray-400 mb-1 uppercase">إجمالي تكلفة الصرف</span>
+                                    <span className="text-[10px] font-black text-gray-400 mb-1 uppercase">{t('batch4.k632')}</span>
                                     <div className="flex items-center gap-1">
                                         <span className="text-lg font-black text-orange-600 font-mono">${unitPriceAnalysis.totalEstimatedCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
                                         <DollarSign size={14} className="text-orange-300" />
@@ -237,21 +241,21 @@ export const InventoryModal = ({ isOpen, onClose, onSuccess, initialMaterial, tr
 
                             <div className="flex items-start gap-2 bg-white/50 p-3 rounded-xl">
                                 <Info size={14} className="text-orange-400 mt-0.5 shrink-0" />
-                                <p className="text-[10px] text-orange-700 font-bold leading-relaxed">يتم حساب هذه القيم تلقائياً بناءً على تاريخ مشتريات (الوارد) لهذه المادة.</p>
+                                <p className="text-[10px] text-orange-700 font-bold leading-relaxed">{t('batch4.k633')}</p>
                             </div>
                         </div>
                     )}
 
                     {txType === 'IN' && (
                         <div className="space-y-6 animate-fade-in">
-                            <ModalModernSelect label="المصدر / المنشأ" value={source} options={[{ value: '🇮🇶 العراق', label: '🇮🇶 العراق' }, { value: '🇹🇷 تركيا', label: '🇹🇷 تركيا' }, { value: '🇮🇷 ايران', label: '🇮🇷 ايران' }]} onChange={setSource} icon={Globe} />
-                            {materialType === 'SAND_ADHESIVE' && <ModalModernSelect label="المنطقة" value={region} options={[{ value: 'دربنديخان', label: 'دربنديخان' }, { value: 'اربيل', label: 'اربيل' }]} onChange={setRegion} icon={MapPin} />}
+                            <ModalModernSelect label={t('batch4.k634')} value={source} options={[{ value: `🇮🇶 ${t('factory_modals.iraq')}`, label: t('batch4.k635') }, { value: `🇹🇷 ${t('factory_modals.turkey')}`, label: t('batch4.k636') }, { value: `🇮🇷 ${t('factory_modals.iran')}`, label: t('batch4.k637') }]} onChange={setSource} icon={Globe} />
+                            {materialType === 'SAND_ADHESIVE' && <ModalModernSelect label={t('batch4.k638')} value={region} options={[{ value: t('factory_modals.derbendikhan'), label: t('batch4.k639') }, { value: t('factory_modals.erbil'), label: t('batch4.k640') }]} onChange={setRegion} icon={MapPin} />}
                         </div>
                     )}
 
                     <div className="space-y-2">
-                        <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mr-1">ملاحظات {txType === 'OUT' ? 'الإنتاج' : 'الشراء'}</label>
-                        <textarea value={notes} onChange={e => setNotes(e.target.value)} className="w-full p-5 bg-white border-2 border-gray-100 rounded-2xl font-bold text-gray-700 focus:border-[#0e3c63] outline-none min-h-[100px]" placeholder={txType === 'OUT' ? "اذكر الوجبة أو خط الإنتاج..." : "تفاصيل الشحنة..."} />
+                        <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mr-1">{txType === 'OUT' ? t('factory_modals.inv_notes_prod') : t('factory_modals.inv_notes_purch')}</label>
+                        <textarea value={notes} onChange={e => setNotes(e.target.value)} className="w-full p-5 bg-white border-2 border-gray-100 rounded-2xl font-bold text-gray-700 focus:border-[#0e3c63] outline-none min-h-[100px]" placeholder={txType === 'OUT' ? t('factory_modals.inv_ph_prod') : t('factory_modals.inv_ph_purch')} />
                     </div>
                 </div>
 
@@ -261,9 +265,9 @@ export const InventoryModal = ({ isOpen, onClose, onSuccess, initialMaterial, tr
                         disabled={isStockLow}
                         className={`flex-1 h-16 ${txType === 'IN' ? 'bg-[#0e3c63]' : (isStockLow ? 'bg-gray-400 cursor-not-allowed' : 'bg-orange-600')} text-white text-lg font-black rounded-2xl shadow-xl transition-all active:scale-95 flex items-center justify-center gap-2`}
                     >
-                        {isEdit ? <Edit3 size={20} /> : <Save size={20} />} {isEdit ? 'حفظ التعديلات' : (txType === 'IN' ? 'تسجيل وارد جديد' : 'تسجيل صرف للإنتاج')}
+                        {isEdit ? <Edit3 size={20} /> : <Save size={20} />} {isEdit ? t('factory_modals.inv_btn_save') : (txType === 'IN' ? t('factory_modals.inv_btn_in') : t('factory_modals.inv_btn_out'))}
                     </Button>
-                    <Button type="button" onClick={onClose} variant="secondary" className="px-10 h-16 rounded-2xl font-bold">إلغاء</Button>
+                    <Button type="button" onClick={onClose} variant="secondary" className="px-10 h-16 rounded-2xl font-bold">{t('batch4.k156')}</Button>
                 </div>
             </form>
         </div>

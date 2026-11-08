@@ -9,56 +9,23 @@ interface AdminActionResponse {
 
 export const invokeAdminAction = async (action: string, payload: any): Promise<AdminActionResponse> => {
     try {
-        // 1. Get Session Token Manually
-        const { data: { session } } = await supabase.auth.getSession();
-        const token = session?.access_token;
+        console.log(`Invoking Edge Function: admin-actions (${action})`);
 
-        if (!token) {
-            console.error('Invoke Error: No active session');
-            return { error: 'No active session. Please login again.' };
-        }
-
-        // 2. Prepare URL & Keys
-        const projectUrl = import.meta.env.VITE_SUPABASE_URL;
-        const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-        const functionUrl = `${projectUrl}/functions/v1/admin-actions`;
-
-        if (!projectUrl || !anonKey) {
-            console.error('Invoke Error: Missing Env Vars');
-            return { error: 'Configuration Error: Missing API Keys' };
-        }
-
-        // 3. Native Fetch
-        console.log(`Invoking Edge Function: ${action}`, { url: functionUrl });
-
-        const response = await fetch(functionUrl, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'apikey': anonKey,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ action, payload })
+        const { data, error } = await supabase.functions.invoke('admin-actions', {
+            body: { action, payload }
         });
 
-        // 4. Handle Response
-        const text = await response.text();
-        let data;
-        try {
-            data = JSON.parse(text);
-        } catch (e) {
-            console.error('JSON Parse Error:', text);
-            return { error: `Server returned non-JSON: ${text.substring(0, 50)}` };
+        if (error) {
+            console.error(`Edge Function Invoke Error:`, error);
+            // Handle specific HttpError from Supabase client
+            if (error instanceof Error && error.message.includes('401')) {
+                return { error: 'Authentication failed. Please login again. (401)' };
+            }
+            return { error: error.message || 'Function invocation failed' };
         }
 
-        if (!response.ok) {
-            // Http Error (4xx, 5xx)
-            console.error(`Edge Function HTTP Error ${response.status}:`, data);
-            return { error: data.error || `HTTP Error ${response.status}` };
-        }
-
-        // 5. Logic Error (200 OK but success: false)
-        if (data.error || data.success === false) {
+        // Logic Error (200 OK but success: false)
+        if (data?.error || data?.success === false) {
             console.error(`Edge Function Logic Error:`, data);
             return { error: data.error || 'Unknown operation error' };
         }

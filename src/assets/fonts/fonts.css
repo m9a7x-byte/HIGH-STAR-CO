@@ -1,3 +1,6 @@
+/* ===========================
+   Cairo Font (Arabic - Default)
+   =========================== */
 @font-face {
     font-family: 'Cairo';
     font-style: normal;
@@ -60,4 +63,77 @@
     font-weight: 900;
     font-display: swap;
     src: url('./Cairo/Cairo-900.ttf') format('truetype');
+}
+
+/* ===========================
+   Vazirmatn Font (Kurdish / Turkmen) 
+   Best Arabic-script font with full
+   Kurdish character support (ڤ ێ ۆ ڵ ڕ)
+   =========================== */
+@font-face {
+    font-family: 'Vazirmatn';
+    font-style: normal;
+    font-weight: 300;
+    font-display: swap;
+    src: url('./Vazirmatn/Vazirmatn-Light.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'Vazirmatn';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('./Vazirmatn/Vazirmatn-Regular.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'Vazirmatn';
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url('./Vazirmatn/Vazirmatn-Medium.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'Vazirmatn';
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url('./Vazirmatn/Vazirmatn-SemiBold.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'Vazirmatn';
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url('./Vazirmatn/Vazirmatn-Bold.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'Vazirmatn';
+    font-style: normal;
+    font-weight: 800;
+    font-display: swap;
+    src: url('./Vazirmatn/Vazirmatn-ExtraBold.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'Vazirmatn';
+    font-style: normal;
+    font-weight: 900;
+    font-display: swap;
+    src: url('./Vazirmatn/Vazirmatn-Black.woff2') format('woff2');
+}
+
+/* ===========================
+   Inter Font (English / Turkish)
+   Variable font for Latin scripts
+   =========================== */
+@font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url('./Inter/InterVariable.woff2') format('woff2');
 }

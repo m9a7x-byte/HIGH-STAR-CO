@@ -1,3 +1,5 @@
+import i18n from 'i18next';
+const t = i18n.t.bind(i18n);
 import React, { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import Cropper from 'react-easy-crop';
@@ -49,7 +51,7 @@ export const AvatarCropModal: React.FC<AvatarCropModalProps> = ({ imageSrc, onCa
         <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 p-4 animate-fade-in backdrop-blur-sm isolate">
             <Card className="w-full max-w-lg bg-white overflow-hidden flex flex-col h-[80vh] md:h-[600px] shadow-2xl relative">
                 <div className="p-4 border-b flex justify-between items-center bg-gray-50">
-                    <h3 className="font-bold text-gray-800">تعديل الصورة الشخصية</h3>
+                    <h3 className="font-bold text-gray-800">{t('batch4.k105')}</h3>
                     <button onClick={onCancel} className="text-gray-400 hover:text-gray-600">
                         <X size={24} />
                     </button>
@@ -71,7 +73,7 @@ export const AvatarCropModal: React.FC<AvatarCropModalProps> = ({ imageSrc, onCa
 
                 <div className="p-6 bg-white space-y-4">
                     <div className="flex items-center gap-4">
-                        <span className="text-xs font-bold text-gray-500">تصغير/تكبير</span>
+                        <span className="text-xs font-bold text-gray-500">{t('batch4.k106')}</span>
                         <input
                             type="range"
                             value={zoom}
@@ -92,7 +94,7 @@ export const AvatarCropModal: React.FC<AvatarCropModalProps> = ({ imageSrc, onCa
                             disabled={isProcessing}
                             className="flex-1 bg-[#0e3c63] hover:bg-[#1a4d7a] text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2"
                         >
-                            {isProcessing ? 'جاري المعالجة...' : <><Check size={20} /> اعتماد الصورة</>}
+                            {isProcessing ? 'جاري المعالجة...' : <><Check size={20} />{t('batch4.k107')}</>}
                         </Button>
                         <Button
                             onClick={onCancel}

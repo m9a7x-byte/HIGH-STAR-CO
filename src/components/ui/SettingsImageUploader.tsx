@@ -1,3 +1,5 @@
+import i18n from 'i18next';
+const t = i18n.t.bind(i18n);
 
 import React, { useState, useRef, useCallback } from 'react';
 import Cropper from 'react-easy-crop';
@@ -162,7 +164,7 @@ export const SettingsImageUploader: React.FC<SettingsImageUploaderProps> = ({
                                 onClick={handleDelete}
                                 disabled={isUploading}
                                 className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                title="حذف الصورة"
+                                title={t('batch4.k137')}
                             >
                                 <Trash2 size={14} />
                             </button>
@@ -171,7 +173,7 @@ export const SettingsImageUploader: React.FC<SettingsImageUploaderProps> = ({
                                 className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-xs font-bold"
                             >
                                 <Upload size={14} />
-                                <span>تغيير</span>
+                                <span>{t('batch4.k138')}</span>
                             </button>
                         </div>
                     )}
@@ -197,7 +199,7 @@ export const SettingsImageUploader: React.FC<SettingsImageUploaderProps> = ({
                     ) : (
                         <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400 gap-2">
                             <ImageIcon size={32} className="opacity-20" />
-                            <span className="text-xs font-bold opacity-50">اضغط لرفع صورة</span>
+                            <span className="text-xs font-bold opacity-50">{t('batch4.k139')}</span>
                         </div>
                     )}
                 </div>
@@ -247,7 +249,7 @@ export const SettingsImageUploader: React.FC<SettingsImageUploaderProps> = ({
 
                             {/* Aspect Ratio Selector */}
                             <div className="space-y-2">
-                                <label className="text-xs font-black text-gray-500 block">أبعاد القص</label>
+                                <label className="text-xs font-black text-gray-500 block">{t('batch4.k140')}</label>
                                 <div className="flex flex-wrap bg-gray-100 p-1 rounded-xl gap-1">
                                     <button
                                         onClick={() => setAspect(naturalAspect)}
@@ -284,7 +286,7 @@ export const SettingsImageUploader: React.FC<SettingsImageUploaderProps> = ({
 
                             <div className="space-y-2">
                                 <div className="flex justify-between text-xs font-black text-gray-500">
-                                    <span>التقريب (Zoom)</span>
+                                    <span>{t('batch4.k141')}</span>
                                     <span>{zoom.toFixed(1)}x</span>
                                 </div>
                                 <input
@@ -314,12 +316,12 @@ export const SettingsImageUploader: React.FC<SettingsImageUploaderProps> = ({
                                     {isUploading ? (
                                         <>
                                             <RefreshCw size={18} className="animate-spin text-blue-200" />
-                                            <span>جاري المعالجة...</span>
+                                            <span>{t('batch4.k142')}</span>
                                         </>
                                     ) : (
                                         <>
                                             <Check size={18} />
-                                            <span>قص وحفظ الصورة</span>
+                                            <span>{t('batch4.k143')}</span>
                                         </>
                                     )}
                                 </button>

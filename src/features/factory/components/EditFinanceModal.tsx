@@ -1,3 +1,6 @@
+import { useTranslation } from 'react-i18next';
+import i18n from 'i18next';
+
 import React, { useState, useMemo } from 'react';
 import { X, Trash2, Save, AlertCircle, DollarSign, Clock, FileText, Banknote, User, History, ArrowLeftRight, Star, Lock } from 'lucide-react';
 import { formatDate, formatTime } from '../../../lib/dateUtils';
@@ -9,6 +12,7 @@ import { useAuth } from '../../../context/AuthContext';
 import { ModalHeader, materialLabels } from './SharedFactoryComponents';
 
 export const EditFinanceModal = ({ isOpen, transaction, onClose, onSuccess }: any) => {
+    const { t } = useTranslation();
     const { user: currentUser } = useAuth();
     const toast = useToast();
     const [newPaidAmount, setNewPaidAmount] = useState('');
@@ -22,8 +26,8 @@ export const EditFinanceModal = ({ isOpen, transaction, onClose, onSuccess }: an
         if (isSubmitting || isPaid) return;
 
         const addedValue = Number(newPaidAmount);
-        if (isNaN(addedValue) || addedValue <= 0) { toast.error('يرجى إدخل مبلغ صحيح'); return; }
-        if (addedValue > remaining) { toast.error('المبلغ يتجاوز المتبقي من القائمة'); return; }
+        if (isNaN(addedValue) || addedValue <= 0) { toast.error(t('batch4.k588')); return; }
+        if (addedValue > remaining) { toast.error(t('batch4.k589')); return; }
 
         setIsSubmitting(true);
         try {
@@ -62,7 +66,7 @@ export const EditFinanceModal = ({ isOpen, transaction, onClose, onSuccess }: an
                     }
                 }
 
-                toast.success('تم تسجيل الدفعة في السجل المالي بنجاح');
+                toast.success(t('batch4.k590'));
                 setNewPaidAmount('');
                 onSuccess();
             }
@@ -91,29 +95,29 @@ export const EditFinanceModal = ({ isOpen, transaction, onClose, onSuccess }: an
                             <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm space-y-4">
                                 <div className="flex justify-between items-start">
                                     <div>
-                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">بيانات القائمة</span>
+                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">{t('batch4.k591')}</span>
                                         <h4 className="font-black text-gray-800 flex items-center gap-2">
                                             <Banknote size={18} className="text-[#0e3c63]" />
                                             {transaction.supplierName || 'معاملة عامة'}
                                         </h4>
-                                        <p className="text-[11px] font-bold text-gray-400 mt-1">{materialLabels[transaction.materialType!] || 'مواد أولية'} • {formatDate(transaction.date)}</p>
+                                        <p className="text-[11px] font-bold text-gray-400 mt-1">{materialLabels[transaction.materialType!] ? t(materialLabels[transaction.materialType!]) : t('factory_shared.mat_sand')} • {formatDate(transaction.date)}</p>
                                     </div>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4 pt-4 border-t border-dashed border-gray-100">
                                     <div>
-                                        <p className="text-[9px] font-black text-gray-400 uppercase mb-1">إجمالي القيمة</p>
+                                        <p className="text-[9px] font-black text-gray-400 uppercase mb-1">{t('batch4.k592')}</p>
                                         <p className="font-mono font-black text-xl text-gray-700">${transaction.amount.toLocaleString()}</p>
                                     </div>
                                     <div>
-                                        <p className="text-[9px] font-black text-emerald-500 uppercase mb-1">الواصل الكلي</p>
+                                        <p className="text-[9px] font-black text-emerald-500 uppercase mb-1">{t('batch4.k593')}</p>
                                         <p className="font-mono font-black text-xl text-emerald-600">${(transaction.paidAmount || 0).toLocaleString()}</p>
                                     </div>
                                 </div>
 
                                 {!isPaid && (
                                     <div className="p-4 bg-red-50 rounded-2xl border border-red-100 flex justify-between items-center">
-                                        <span className="text-xs font-black text-red-700">المتبقي (دين):</span>
+                                        <span className="text-xs font-black text-red-700">{t('batch4.k594')}</span>
                                         <span className="font-mono font-black text-red-600 text-xl">${remaining.toLocaleString()}</span>
                                     </div>
                                 )}
@@ -122,7 +126,7 @@ export const EditFinanceModal = ({ isOpen, transaction, onClose, onSuccess }: an
                             {!isPaid ? (
                                 <form onSubmit={handleUpdate} className="space-y-4 animate-fade-in bg-white p-6 rounded-[2rem] border border-blue-100 shadow-md">
                                     <div className="space-y-2">
-                                        <label className="block text-xs font-black text-blue-600 uppercase tracking-widest mr-1">المبلغ المدفوع الآن ($)</label>
+                                        <label className="block text-xs font-black text-blue-600 uppercase tracking-widest mr-1">{t('batch4.k595')}</label>
                                         <div className="relative">
                                             <input
                                                 type="number"
@@ -153,8 +157,8 @@ export const EditFinanceModal = ({ isOpen, transaction, onClose, onSuccess }: an
                             ) : (
                                 <div className="bg-gray-100 p-8 rounded-[2rem] border-2 border-dashed border-gray-200 text-center space-y-3">
                                     <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto text-gray-400 shadow-sm"><Lock size={28} /></div>
-                                    <h5 className="font-black text-gray-500">القائمة مسددة بالكامل</h5>
-                                    <p className="text-[10px] text-gray-400 font-bold">لا يمكن إضافة دفعات مالية جديدة.</p>
+                                    <h5 className="font-black text-gray-500">{t('batch4.k596')}</h5>
+                                    <p className="text-[10px] text-gray-400 font-bold">{t('batch4.k597')}</p>
                                 </div>
                             )}
                         </div>
@@ -162,21 +166,21 @@ export const EditFinanceModal = ({ isOpen, transaction, onClose, onSuccess }: an
                         <div className="lg:col-span-7 space-y-4">
                             <div className="flex items-center gap-3 px-2">
                                 <div className="p-2 bg-[#0e3c63] text-white rounded-lg shadow-md"><History size={18} /></div>
-                                <h4 className="font-black text-gray-800 text-sm uppercase tracking-widest">سجل الدفعات التاريخي للقائمة</h4>
+                                <h4 className="font-black text-gray-800 text-sm uppercase tracking-widest">{t('batch4.k598')}</h4>
                             </div>
 
                             <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden min-h-[300px]">
                                 {!transaction.paymentHistory || transaction.paymentHistory.length === 0 ? (
                                     <div className="p-20 text-center text-gray-400 italic font-bold flex flex-col items-center gap-4 opacity-30">
                                         <ArrowLeftRight size={48} />
-                                        <p>لا توجد دفعات مالية مسجلة بعد</p>
+                                        <p>{t('batch4.k599')}</p>
                                     </div>
                                 ) : (
                                     <div className="divide-y divide-gray-50">
                                         <div className="grid grid-cols-4 bg-gray-50/50 p-4 text-[10px] font-black text-gray-400 uppercase tracking-wider text-right">
-                                            <div className="pr-4">المبلغ</div>
-                                            <div>الوقت والتاريخ</div>
-                                            <div className="col-span-2">المسجل (بواسطة)</div>
+                                            <div className="pr-4">{t('batch4.k600')}</div>
+                                            <div>{t('batch4.k245')}</div>
+                                            <div className="col-span-2">{t('batch4.k601')}</div>
                                         </div>
                                         {transaction.paymentHistory.slice().reverse().map((log: FactoryPaymentLog, idx: number) => {
                                             const staffUser = db.users.find(u => u.fullName === log.addedBy);

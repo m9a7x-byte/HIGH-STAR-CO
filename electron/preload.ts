@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     close: () => ipcRenderer.invoke('window-close'),
     // Auto Update Methods
     onUpdateStatus: (callback: any) => ipcRenderer.on('update-status', (_event: any, value: any) => callback(value)),
+    checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
     downloadUpdate: () => ipcRenderer.invoke('download-update'),
     quitAndInstall: () => ipcRenderer.invoke('quit-and-install'),
     getVersion: () => ipcRenderer.invoke('get-app-version')

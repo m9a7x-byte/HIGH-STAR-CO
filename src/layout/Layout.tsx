@@ -1,9 +1,12 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { LogOut, Package, Settings, LayoutDashboard, ListOrdered, FileText, Banknote, Tags, Users, BarChart3, Menu, X, User, Edit, Lock, Camera, Mail, History, UserCheck, Calculator, Activity, Factory, ChevronLeft, Info, Globe, Wallet } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { LogOut, Package, Settings, LayoutDashboard, ListOrdered, FileText, Banknote, Tags, Users, BarChart3, Menu, X, User, Edit, Lock, Camera, Mail, History, UserCheck, Calculator, Activity, Factory, ChevronLeft, Info, Globe, Wallet, FileStack } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
 import { UserAvatar } from '../components/ui';
+import { NotificationBell } from '../components/shared/NotificationBell';
+import { LanguageSwitcher } from '../components/shared/LanguageSwitcher';
 import { UserRole, UserRoleLabels } from '../types';
 import { Badge, Button, Input } from '../components/ui';
 import { db } from '../lib/db';
@@ -19,12 +22,13 @@ import { usePresence } from '../hooks/usePresence';
 
 export const Layout = ({ children, activeTab, setActiveTab }: LayoutProps) => {
   const { user, logout, updateUser } = useAuth();
+  const { t } = useTranslation();
   // Enable Realtime Presence Tracking (Disabled for Agents, they handle it internally)
   usePresence(activeTab || 'overview', user?.role !== UserRole.AGENT);
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [userIP, setUserIP] = useState<string>('جارِ الجلب...');
+  const [userIP, setUserIP] = useState<string>(t('layout.fetching_ip'));
   const profileRef = useRef<HTMLDivElement>(null);
 
   const unseenOrdersCount = db.orders.filter(o => !o.seenByAdmin).length;
@@ -65,28 +69,36 @@ export const Layout = ({ children, activeTab, setActiveTab }: LayoutProps) => {
     return () => clearInterval(refreshInterval);
   }, []);
 
-  // Permission Checks
-  const userPerms = user?.permissions || [];
+  useEffect(() => {
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  // Permission Checks (use live data from db.users for instant updates)
+  const liveUser = db.users.find(u => u.id === user?.id);
+  const userPerms = (liveUser || user)?.permissions || [];
   const has = (p: string) => userPerms.includes(p as any);
 
   const primaryTabs = [
-    { id: 'overview', label: 'الرئيسية', icon: LayoutDashboard, show: true },
-    { id: 'production', label: 'الإنتاج', icon: ListOrdered, show: has('VIEW_PRODUCTION') },
-    { id: 'orders', label: 'الطلبات', icon: FileText, count: unseenOrdersCount, show: has('VIEW_ORDERS') },
-    { id: 'catalog', label: 'الكتالوج', icon: Tags, show: has('VIEW_CATALOG') },
-    { id: 'agents', label: 'الوكلاء', icon: Users, show: has('VIEW_AGENTS') },
-  ].filter(t => t.show);
+    { id: 'overview', label: t('tabs.overview'), icon: LayoutDashboard, show: true },
+    { id: 'production', label: t('tabs.production'), icon: ListOrdered, show: has('VIEW_PRODUCTION') },
+    { id: 'orders', label: t('tabs.orders'), icon: FileText, count: unseenOrdersCount, show: has('VIEW_ORDERS') },
+    { id: 'catalog', label: t('tabs.catalog'), icon: Tags, show: has('VIEW_CATALOG') },
+    { id: 'agents', label: t('tabs.agents'), icon: Users, show: has('VIEW_AGENTS') },
+  ].filter(tab => tab.show);
 
   const secondaryTabs = [
-    { id: 'sales', label: 'المبيعات', icon: Banknote, show: has('VIEW_SALES') },
-    { id: 'reports', label: 'التقارير', icon: BarChart3, show: has('VIEW_REPORTS') },
-    { id: 'staff', label: 'الموظفين', icon: UserCheck, show: has('MANAGE_STAFF') },
-    { id: 'activity_log', label: 'سجل الأحداث', icon: History, show: has('VIEW_LOGS') },
-    { id: 'presence', label: 'المتواجدين', icon: Activity, show: has('VIEW_PRESENCE') },
-    { id: 'factory', label: 'المصنع', icon: Factory, show: has('ACCESS_FACTORY') },
-    { id: 'safe', label: 'الصندوق', icon: Wallet, show: user?.role === UserRole.ADMIN || has('VIEW_SALES') }, // تبويب الصندوق الجديد
-    { id: 'settings', label: 'الإعدادات', icon: Settings, show: has('VIEW_SETTINGS') },
-  ].filter(t => t.show);
+    { id: 'invoice_merge', label: 'دمج فواتير', icon: FileStack, show: has('VIEW_ORDERS') },
+    { id: 'sales', label: t('tabs.sales'), icon: Banknote, show: has('VIEW_SALES') },
+    { id: 'reports', label: t('tabs.reports'), icon: BarChart3, show: has('VIEW_REPORTS') },
+    { id: 'staff', label: t('tabs.staff'), icon: UserCheck, show: has('MANAGE_STAFF') },
+    { id: 'activity_log', label: t('tabs.activity_log'), icon: History, show: has('VIEW_LOGS') },
+    { id: 'presence', label: t('tabs.presence'), icon: Activity, show: has('VIEW_PRESENCE') },
+    { id: 'factory', label: t('tabs.factory'), icon: Factory, show: has('ACCESS_FACTORY') },
+    { id: 'safe', label: t('tabs.safe'), icon: Wallet, show: has('VIEW_SAFE') },
+    { id: 'settings', label: t('tabs.settings'), icon: Settings, show: has('VIEW_SETTINGS') },
+  ].filter(tab => tab.show);
 
   const isStaff = user?.role !== UserRole.AGENT;
 
@@ -102,8 +114,7 @@ export const Layout = ({ children, activeTab, setActiveTab }: LayoutProps) => {
                 <Package className="text-white w-5 h-5" />
               </div>
               <div className="text-right">
-                <h1 className="font-bold text-lg leading-none group-hover:text-sky-200 transition-colors">معمل فوكا</h1>
-                <span className="text-[9px] text-sky-200/60 font-mono font-black uppercase tracking-[0.1em]">VOGA ERP</span>
+                <h1 className="voga-brand-logo font-bold leading-none group-hover:text-sky-200 transition-colors"><span className="text-2xl">V</span><span className="text-lg">OGA</span></h1>
               </div>
             </button>
 
@@ -146,6 +157,9 @@ export const Layout = ({ children, activeTab, setActiveTab }: LayoutProps) => {
 
             {/* Profile Trigger */}
             <div className="flex items-center gap-2">
+              <LanguageSwitcher />
+              <NotificationBell />
+              
               <div className="relative" ref={profileRef}>
                 <button onClick={() => setIsProfileOpen(!isProfileOpen)} className="flex items-center gap-2 group/avatar relative">
                   <UserAvatar
@@ -179,12 +193,12 @@ export const Layout = ({ children, activeTab, setActiveTab }: LayoutProps) => {
                     <div className="p-3 space-y-1 bg-white">
                       {!user?.agentDetails?.isFrozen && (
                         <button onClick={() => { setActiveTab?.('profile'); setIsProfileOpen(false); }} className="w-full flex items-center justify-between px-4 py-3.5 text-xs font-black text-gray-700 hover:bg-gray-50 rounded-2xl transition-all group">
-                          <div className="flex items-center gap-3"><div className="bg-sky-50 p-2 rounded-xl text-[#0e3c63] group-hover:scale-110 transition-transform"><Edit size={16} /></div>تعديل الحساب</div>
+                          <div className="flex items-center gap-3"><div className="bg-sky-50 p-2 rounded-xl text-[#0e3c63] group-hover:scale-110 transition-transform"><Edit size={16} /></div>{t('common.edit_account')}</div>
                           <ChevronLeft size={14} className="opacity-20" />
                         </button>
                       )}
                       <button onClick={logout} className="w-full flex items-center justify-between px-4 py-3.5 text-xs font-black text-red-600 hover:bg-red-50 rounded-2xl transition-all group">
-                        <div className="flex items-center gap-3"><div className="bg-red-100 p-2 rounded-xl text-red-500 group-hover:scale-110 transition-transform"><LogOut size={16} /></div>تسجيل الخروج</div>
+                        <div className="flex items-center gap-3"><div className="bg-red-100 p-2 rounded-xl text-red-500 group-hover:scale-110 transition-transform"><LogOut size={16} /></div>{t('common.logout')}</div>
                         <ChevronLeft size={14} className="opacity-20" />
                       </button>
                     </div>
@@ -212,7 +226,7 @@ export const Layout = ({ children, activeTab, setActiveTab }: LayoutProps) => {
           <div className="fixed inset-0 top-16 bg-[#05111b] backdrop-blur-3xl z-[100] md:hidden animate-fade-in flex flex-col">
             <div className="flex-1 overflow-y-auto p-6 space-y-8">
               <div>
-                <h3 className="text-sky-300/30 text-[10px] font-black uppercase tracking-[0.4em] mb-4 mr-1">الأقسام الأساسية</h3>
+                <h3 className="text-sky-300/30 text-[10px] font-black uppercase tracking-[0.4em] mb-4 mr-1">{t('layout.main_sections')}</h3>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {primaryTabs.map((tab, idx) => (
                     <button
@@ -230,7 +244,7 @@ export const Layout = ({ children, activeTab, setActiveTab }: LayoutProps) => {
                 </div>
               </div>
               <div>
-                <h3 className="text-sky-300/30 text-[10px] font-black uppercase tracking-[0.4em] mb-4 mr-1">الإدارة والتقارير</h3>
+                <h3 className="text-sky-300/30 text-[10px] font-black uppercase tracking-[0.4em] mb-4 mr-1">{t('layout.management_reports')}</h3>
                 <div className="grid grid-cols-1 gap-2">
                   {secondaryTabs.map(tab => (
                     <button
@@ -251,7 +265,7 @@ export const Layout = ({ children, activeTab, setActiveTab }: LayoutProps) => {
             <div className="p-6 border-t border-white/5 bg-black/40 flex justify-between items-center">
               <button onClick={logout} className="flex items-center gap-3 text-red-400 font-black text-sm active:scale-95 transition-transform">
                 <div className="w-10 h-10 rounded-2xl bg-red-500/10 flex items-center justify-center border border-red-500/20"><LogOut size={20} /></div>
-                خروج
+                {t('common.exit')}
               </button>
               <div className="flex items-center gap-2 text-sky-400/60 bg-sky-400/5 px-4 py-2 rounded-2xl border border-sky-400/10">
                 <Globe size={14} /><span className="text-sm font-mono font-bold tracking-widest">{userIP}</span>

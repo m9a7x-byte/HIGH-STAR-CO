@@ -1,3 +1,5 @@
+import i18n from 'i18next';
+const t = i18n.t.bind(i18n);
 
 import React, { useState } from 'react';
 import { LifeBuoy, Phone, Mail, ArrowRight, Eye, EyeOff } from 'lucide-react';
@@ -7,6 +9,7 @@ import { Card, Button } from '../components/ui';
 import { useToast } from '../context/ToastContext';
 import { db } from '../lib/db';
 import { UserRole } from '../types';
+import { FloatingLanguageSwitcher } from '../components/shared/FloatingLanguageSwitcher';
 
 interface StaffLoginPageProps {
     onBack?: () => void;
@@ -35,7 +38,7 @@ export const StaffLoginPage: React.FC<StaffLoginPageProps> = ({ onBack, onForgot
 
             // 2. التحقق الأمني: هل المستخدم موظف/ادمن؟ (ليس وكيلاً)
             if (tempUser.role === UserRole.AGENT) {
-                throw new Error('هذا حساب وكيل، يرجى استخدام بوابة الوكلاء.');
+                throw new Error(t('login.agent_account_error'));
             }
 
             // 3. إتمام الدخول
@@ -44,11 +47,11 @@ export const StaffLoginPage: React.FC<StaffLoginPageProps> = ({ onBack, onForgot
             // Translate common Supabase errors to Arabic
             let errorMessage = err.message;
             if (err.message?.includes('banned')) {
-                errorMessage = 'هذا الحساب مجمد. تواصل مع الإدارة لفك التجميد.';
+                errorMessage = t('login.account_frozen');
             } else if (err.message?.includes('Invalid login credentials')) {
-                errorMessage = 'البريد الإلكتروني أو كلمة المرور غير صحيحة.';
+                errorMessage = t('login.wrong_credentials');
             }
-            toast.error('فشل الدخول', errorMessage);
+            toast.error(t('login.login_failed'), errorMessage);
         } finally {
             setIsLoading(false);
         }
@@ -56,6 +59,7 @@ export const StaffLoginPage: React.FC<StaffLoginPageProps> = ({ onBack, onForgot
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4 relative overflow-hidden" dir="rtl">
+            <FloatingLanguageSwitcher />
             {/* خلفية خاصة بالإدارة (لون Voga Orange) */}
             <div className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] rounded-full blur-[120px] opacity-30 bg-orange-200"></div>
             <div className="absolute bottom-[-10%] left-[-5%] w-[500px] h-[500px] rounded-full blur-[120px] opacity-20 bg-[#dd5b30]"></div>
@@ -64,7 +68,7 @@ export const StaffLoginPage: React.FC<StaffLoginPageProps> = ({ onBack, onForgot
                 {onBack && (
                     <button onClick={onBack} className="mb-6 flex items-center gap-2 text-gray-500 font-bold hover:text-gray-800 transition-colors group">
                         <div className="p-2 bg-white rounded-xl shadow-sm group-hover:shadow-md transition-all"><ArrowRight size={18} /></div>
-                        العودة للرئيسية
+                        {t('login.back_to_home')}
                     </button>
                 )}
 
@@ -76,7 +80,7 @@ export const StaffLoginPage: React.FC<StaffLoginPageProps> = ({ onBack, onForgot
                     </div>
 
                     <h2 className="text-3xl font-extrabold text-center mb-2 text-gray-800">
-                        دخول الإدارة
+                        {t('login.staff_login')}
                     </h2>
                     <p className="text-center text-gray-400 mb-10 font-bold text-xs uppercase tracking-widest">
                         Staff & Admin Portal
@@ -84,7 +88,7 @@ export const StaffLoginPage: React.FC<StaffLoginPageProps> = ({ onBack, onForgot
 
                     <form onSubmit={handleSubmit} className="space-y-6">
                         <div className="space-y-2">
-                            <label className="block text-xs font-black text-gray-500 mr-1">البريد الإلكتروني</label>
+                            <label className="block text-xs font-black text-gray-500 mr-1">{t('batch4.k856')}</label>
                             <div className="relative">
                                 <input
                                     type="email"
@@ -100,10 +104,10 @@ export const StaffLoginPage: React.FC<StaffLoginPageProps> = ({ onBack, onForgot
 
                         <div className="space-y-2">
                             <div className="flex justify-between items-center">
-                                <label className="text-xs font-black text-gray-500 mr-1">كلمة المرور</label>
+                                <label className="text-xs font-black text-gray-500 mr-1">{t('batch4.k571')}</label>
                                 {onForgot && (
                                     <button type="button" onClick={onForgot} className="text-[10px] font-bold text-voga-secondary hover:underline">
-                                        نسيت كلمة المرور؟
+                                        {t('login.forgot_password')}
                                     </button>
                                 )}
                             </div>
@@ -127,13 +131,13 @@ export const StaffLoginPage: React.FC<StaffLoginPageProps> = ({ onBack, onForgot
                             disabled={isLoading}
                             className="w-full text-lg h-14 rounded-2xl shadow-xl font-black active:scale-95 transition-all bg-voga-primary hover:bg-voga-secondary text-white"
                         >
-                            {isLoading ? 'جاري التحقق...' : 'تسجيل الدخول'}
+                            {isLoading ? t('login.verifying') : t('login.sign_in')}
                         </Button>
                     </form>
 
                     <div className="mt-10 pt-6 border-t border-gray-100 flex flex-col md:flex-row justify-between items-center text-sm text-gray-600 gap-2 opacity-70 hover:opacity-100 transition-opacity">
                         <div className="flex items-center gap-2 font-bold text-voga-primary">
-                            <LifeBuoy size={16} /> الدعم الفني
+                            <LifeBuoy size={16} /> {t('login.tech_support')}
                         </div>
                         <div className="flex-1 text-center">
                             <a href="mailto:tech@high-star.iq" className="hover:text-voga-primary transition-colors font-mono font-bold text-xs">tech@high-star.iq</a>

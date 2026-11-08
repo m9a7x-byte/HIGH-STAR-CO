@@ -1,3 +1,5 @@
+import i18n from 'i18next';
+const t = i18n.t.bind(i18n);
 
 import React, { useState, useRef } from 'react';
 import { Camera, RefreshCw, Upload, X } from 'lucide-react';
@@ -51,7 +53,7 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({
         } catch (error: any) {
             console.error('Error uploading avatar:', error.message);
             // Ideally use toast here if available, or just console error
-            alert('فشل رفع الصورة: ' + error.message);
+            alert(t('batch4.txt_sc1pl2_6957') + error.message);
         } finally {
             setIsUploading(false);
         }
@@ -89,7 +91,7 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({
                 type="button"
                 onClick={triggerUpload}
                 className="absolute bottom-0 right-0 bg-[#0e3c63] text-white p-2 rounded-xl shadow-lg hover:bg-blue-700 transition-all border-2 border-white z-30"
-                title="تغيير الصورة"
+                title={t('batch4.txt_7a8gbl_6957')}
             >
                 <div className="relative">
                     <Upload size={16} />

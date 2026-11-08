@@ -89,12 +89,12 @@ const ToastItem: React.FC<{ toast: Toast }> = ({ toast }) => {
 
 export const ToastContainer = () => {
   const { toasts } = useToast();
-  const [position, setPosition] = useState<ToastPosition>(db.vehicleConfig.toastPosition);
+  const [position, setPosition] = useState<ToastPosition>(db.vehicleConfig?.toastPosition || 'bottom-left');
 
   // Subscribe to DB changes to update position live
   useEffect(() => {
       const handleUpdate = () => {
-          setPosition(db.vehicleConfig.toastPosition);
+          setPosition(db.vehicleConfig?.toastPosition || 'bottom-left');
       };
       const unsubscribe = db.subscribe(handleUpdate);
       return () => unsubscribe();

@@ -1,3 +1,6 @@
+import i18n from 'i18next';
+const t = i18n.t.bind(i18n);
+import { useTranslation } from 'react-i18next';
 
 import React, { useState } from 'react';
 import { Order, User, ProductionStatusLabels, ProductionStatus } from '../../../types';
@@ -32,6 +35,7 @@ interface QueueTabProps {
 }
 
 export const QueueTab: React.FC<QueueTabProps> = ({ productionQueue, user }) => {
+  const { t } = useTranslation();
     const [queuePage, setQueuePage] = useState(1);
     const ITEMS_PER_PAGE = 10;
     const sortedQueue = [...productionQueue].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
@@ -44,8 +48,8 @@ export const QueueTab: React.FC<QueueTabProps> = ({ productionQueue, user }) => 
                     <ListOrdered size={32} />
                 </div>
                 <div>
-                    <h3 className="font-bold text-2xl text-gray-800">جدول الإنتاج المباشر</h3>
-                    <p className="text-gray-500 mt-1">تابع دورك في قائمة الانتظار. الأولوية للأسبق دخولاً للقائمة.</p>
+                    <h3 className="font-bold text-2xl text-gray-800">{t('agent.production_queue')}</h3>
+                    <p className="text-gray-500 mt-1">{t('agent.queue_subtitle')}</p>
                 </div>
             </div>
 
@@ -54,11 +58,11 @@ export const QueueTab: React.FC<QueueTabProps> = ({ productionQueue, user }) => 
                     <thead className="bg-[#0e3c63] text-white font-bold text-sm">
                         <tr>
                             <th className="p-5">#</th>
-                            <th className="p-5">الطلب</th>
-                            <th className="p-5">الاسم</th>
-                            <th className="p-5">تاريخ الطلب</th>
-                            <th className="p-5 bg-[#4a90e2]">تاريخ الدخول للإنتاج (الدور)</th>
-                            <th className="p-5">الحالة</th>
+                            <th className="p-5">{t('agent.order_col')}</th>
+                            <th className="p-5">{t('agent.name_col')}</th>
+                            <th className="p-5">{t('agent.order_date_col')}</th>
+                            <th className="p-5 bg-[#4a90e2]">{t('agent.production_date_col')}</th>
+                            <th className="p-5">{t('agent.status_col')}</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 text-sm">
@@ -75,7 +79,7 @@ export const QueueTab: React.FC<QueueTabProps> = ({ productionQueue, user }) => 
                                 </td>
                                 <td className="p-5">
                                     {o.agentId === user!.id ? (
-                                        <span className="font-bold text-[#0e3c63] flex items-center gap-2"><div className="w-2 h-2 bg-[#0e3c63] rounded-full"></div> أنت</span>
+                                        <span className="font-bold text-[#0e3c63] flex items-center gap-2"><div className="w-2 h-2 bg-[#0e3c63] rounded-full"></div>{t('agent.you')}</span>
                                     ) : <span className="font-bold text-gray-700">{o.agentName}</span>}
                                 </td>
                                 <td className="p-5 font-mono text-gray-500">{formatDate(o.createdAt)}</td>
@@ -95,7 +99,7 @@ export const QueueTab: React.FC<QueueTabProps> = ({ productionQueue, user }) => 
                         ))}
                     </tbody>
                 </table>
-                {productionQueue.length === 0 && <p className="text-center text-gray-400 p-12 font-bold">القائمة فارغة حالياً، كن أول من يطلب!</p>}
+                {productionQueue.length === 0 && <p className="text-center text-gray-400 p-12 font-bold">{t('agent.empty_queue')}</p>}
             </div>
         </Card>
     );

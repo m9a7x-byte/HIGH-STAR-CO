@@ -1,5 +1,5 @@
-
 import { PermissionKey } from '../lib/permissions';
+import i18n from '../i18n';
 
 export interface Profile {
   id: string;
@@ -17,6 +17,21 @@ export interface Profile {
   agent_details?: AgentDetails;
 }
 
+export interface AppNotification {
+  id: string;
+  userId: string;
+  title: string;
+  message: string;
+  type: 'success' | 'info' | 'warning' | 'error';
+  isRead: boolean;
+  relatedEntityId?: string;
+  relatedEntityType?: string;
+  actionUrl?: string;
+  actionLabel?: string;
+  imageUrl?: string;
+  createdAt: string;
+}
+
 export enum UserRole {
   SUPER_ADMIN = 'SUPER_ADMIN',
   ADMIN = 'ADMIN',
@@ -25,13 +40,23 @@ export enum UserRole {
   AGENT = 'AGENT',
 }
 
-export const UserRoleLabels: Record<UserRole, string> = {
-  [UserRole.SUPER_ADMIN]: 'الأدمن الخارق',
-  [UserRole.ADMIN]: 'مدير عام',
-  [UserRole.SUPERVISOR]: 'مشرف',
-  [UserRole.VIEWER]: 'مشاهد',
-  [UserRole.AGENT]: 'وكيل',
+export const getUserRoleLabel = (role: UserRole): string => {
+  const map: Record<UserRole, string> = {
+    [UserRole.SUPER_ADMIN]: i18n.t('roles.super_admin'),
+    [UserRole.ADMIN]: i18n.t('roles.admin'),
+    [UserRole.SUPERVISOR]: i18n.t('roles.supervisor'),
+    [UserRole.VIEWER]: i18n.t('roles.viewer'),
+    [UserRole.AGENT]: i18n.t('roles.agent'),
+  };
+  return map[role] || role;
 };
+
+// Backward compatibility - dynamic getter
+export const UserRoleLabels = new Proxy({} as Record<UserRole, string>, {
+  get: (_target, prop: string) => {
+    return getUserRoleLabel(prop as UserRole);
+  }
+});
 
 export enum AgentType {
   NORMAL = 'عادي',
@@ -45,12 +70,21 @@ export enum PaymentStatus {
   CANCELLED = 'CANCELLED',
 }
 
-export const PaymentStatusLabels: Record<PaymentStatus, string> = {
-  [PaymentStatus.PENDING]: 'معلق (أجل)',
-  [PaymentStatus.PARTIALLY_PAID]: 'مدفوع جزئياً',
-  [PaymentStatus.PAID]: 'مدفوع',
-  [PaymentStatus.CANCELLED]: 'ملغي',
+export const getPaymentStatusLabel = (status: PaymentStatus): string => {
+  const map: Record<PaymentStatus, string> = {
+    [PaymentStatus.PENDING]: i18n.t('payment_status.pending'),
+    [PaymentStatus.PARTIALLY_PAID]: i18n.t('payment_status.partially_paid'),
+    [PaymentStatus.PAID]: i18n.t('payment_status.paid'),
+    [PaymentStatus.CANCELLED]: i18n.t('payment_status.cancelled'),
+  };
+  return map[status] || status;
 };
+
+export const PaymentStatusLabels = new Proxy({} as Record<PaymentStatus, string>, {
+  get: (_target, prop: string) => {
+    return getPaymentStatusLabel(prop as PaymentStatus);
+  }
+});
 
 
 export enum ProductionStatus {
@@ -61,18 +95,27 @@ export enum ProductionStatus {
   COMPLETED = 'COMPLETED',
 }
 
-export const ProductionStatusLabels: Record<ProductionStatus, string> = {
-  [ProductionStatus.PENDING_PAYMENT]: 'بانتظار الدفع',
-  [ProductionStatus.PENDING_TRANSFER]: 'بانتظار ترحيل',
-  [ProductionStatus.WAITING]: 'قيد الانتظار',
-  [ProductionStatus.IN_PROGRESS]: 'جاري التحضير',
-  [ProductionStatus.COMPLETED]: 'تم التجهيز',
+export const getProductionStatusLabel = (status: ProductionStatus): string => {
+  const map: Record<ProductionStatus, string> = {
+    [ProductionStatus.PENDING_PAYMENT]: i18n.t('production_status.pending_payment'),
+    [ProductionStatus.PENDING_TRANSFER]: i18n.t('production_status.pending_transfer'),
+    [ProductionStatus.WAITING]: i18n.t('production_status.waiting'),
+    [ProductionStatus.IN_PROGRESS]: i18n.t('production_status.in_progress'),
+    [ProductionStatus.COMPLETED]: i18n.t('production_status.completed'),
+  };
+  return map[status] || status;
 };
+
+export const ProductionStatusLabels = new Proxy({} as Record<ProductionStatus, string>, {
+  get: (_target, prop: string) => {
+    return getProductionStatusLabel(prop as ProductionStatus);
+  }
+});
 
 export interface Category {
   id: number | string;
   name: string;
-  type: 'STYROFOAM' | 'ADHESIVE';
+  type: 'STYROFOAM' | 'ADHESIVE' | 'PAINT';
 }
 
 export type ToastPosition = 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
@@ -87,9 +130,14 @@ export interface VehicleConfig {
   enableToasts: boolean;
   toastPosition: ToastPosition;
   enablePrint: boolean;
+  enableLanguageSwitcher: boolean;
   printHeaderUrl: string;
   printFooterUrl: string;
   geminiApiKey?: string;
+  orderConstraintMode: 'OPEN' | 'LOCKED';
+  maxKiaVehicles: number;
+  maxCanterVehicles: number;
+  maxTrailerVehicles: number;
 }
 
 export interface AgentPermissions {
@@ -105,6 +153,7 @@ export interface AgentDetails {
   type: AgentType;
   phone?: string; // Added phone number
   internalNotes?: string;
+  priceIncreasePercent?: number;
   currentBalance: number;
   isFrozen: boolean;
   freezeMessage: string;
@@ -118,6 +167,8 @@ export interface WalletTransaction {
   type: 'DEPOSIT' | 'PAYMENT' | 'ADJUSTMENT';
   description: string;
   createdAt: string;
+  locked?: boolean;
+  linkedOrderId?: number | string | null;
 }
 
 export interface AdminActionResponse {
@@ -156,11 +207,18 @@ export interface User {
   last_ip?: string | null;
   device_info?: string | null; // Stores JSON string of detailed info
   last_active_at?: string | null;
+  status?: 'active' | 'suspended';
+  deleted_at?: string | null;
 }
 
 export interface Product {
   id: number | string;
   code: string;
+  name?: string;
+  paintType?: string;
+  description?: string;
+  imageNote?: string;
+  technicalSheetUrl?: string;
   category: string;
   dimensions: string;
   imageUrl: string;
@@ -177,6 +235,8 @@ export interface OrderItem {
   id: number | string;
   productId: number | string;
   productCode: string;
+  productName?: string;
+  productPaintType?: string;
   productDimensions: string;
   quantityMeters: number;
   quantityCartons: number;
@@ -185,6 +245,7 @@ export interface OrderItem {
   totalPrice: number;
   isSpecialRequest?: boolean;
   specialRequestNote?: string;
+  priceAdjustmentNote?: string;
 }
 
 export interface OrderPaymentLog {
@@ -218,6 +279,7 @@ export interface Order {
   paidAt?: string | null;
   movedToProductionAt?: string | null;
   estimatedDays?: number;
+  agentEditUnlocked?: boolean;
 
   hasSpecialRequest?: boolean;
   isManual?: boolean;
@@ -250,7 +312,10 @@ export type FactoryCategory =
   | 'CUSTOMS'
   | 'SUPPLIER'
   | 'SAFE_WITHDRAWAL'
-  | 'SAFE_DEPOSIT';
+  | 'SAFE_DEPOSIT'
+  | 'SUPPLIER_PAYMENT'
+  | 'SUPPLIER_DEPOSIT'
+  | 'SUPPLIER_WITHDRAWAL';
 
 export type MaterialType =
   | 'SILICON_HOT'
@@ -264,7 +329,11 @@ export type MaterialType =
   | 'SILOSH_ADHESIVE'
   | 'SHASTA_ADHESIVE'
   | 'CARTON_FOAM'
-  | 'CHEMICAL';
+  | 'BAGS_1051'
+  | 'BAGS_1052'
+  | 'BAGS_1053'
+  | 'BAGS_1054'
+  | 'BAGS_1059';
 
 export interface Supplier {
   id: number | string;
@@ -275,11 +344,26 @@ export interface Supplier {
   createdAt: string;
 }
 
+export type SupplierTransactionType = 'DEBT' | 'PAYMENT' | 'DEPOSIT' | 'WITHDRAWAL';
+
+export interface SupplierTransaction {
+  id: number | string;
+  supplierId: number | string;
+  type: SupplierTransactionType;
+  amount: number;
+  description: string;
+  linkedTxId?: number | string;
+  locked?: boolean;
+  createdAt: string;
+  createdBy: string;
+}
+
 export interface FactoryPaymentLog {
   id: number;
   amount: number;
   date: string;
   addedBy: string;
+  notes?: string;
 }
 
 export interface FactoryTransaction {

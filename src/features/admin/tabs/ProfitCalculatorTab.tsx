@@ -1,3 +1,5 @@
+import i18n from 'i18next';
+const t = i18n.t.bind(i18n);
 
 import React, { useState, useMemo } from 'react';
 import { Calculator, DollarSign, Plus, Trash2, TrendingUp, TrendingDown, ArrowLeft, RefreshCw, MinusCircle, Wallet } from 'lucide-react';
@@ -82,8 +84,8 @@ export const ProfitCalculatorTab = ({ orders, isDateInRange }: any) => {
                         <Calculator size={24} />
                     </div>
                     <div>
-                        <h2 className="text-2xl font-bold text-gray-800">حاسبة الأرباح</h2>
-                        <p className="text-gray-500 text-sm">أداة حساب تكاليف وصافي أرباح الفترة المحددة</p>
+                        <h2 className="text-2xl font-bold text-gray-800">{t('batch4.k410')}</h2>
+                        <p className="text-gray-500 text-sm">{t('batch4.k411')}</p>
                     </div>
                 </div>
                 <Button onClick={handleReset} variant="ghost" className="text-red-500 hover:bg-red-50">
@@ -104,7 +106,7 @@ export const ProfitCalculatorTab = ({ orders, isDateInRange }: any) => {
                         </h3>
                         <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex flex-col md:flex-row items-center gap-4">
                             <div className="flex-1 w-full">
-                                <label className="block text-xs font-bold text-blue-800 mb-1">من تاريخ</label>
+                                <label className="block text-xs font-bold text-blue-800 mb-1">{t('batch4.k133')}</label>
                                 <input 
                                     type="date" 
                                     className="w-full p-2 rounded-lg border border-blue-200 text-sm focus:outline-none focus:border-blue-500"
@@ -114,7 +116,7 @@ export const ProfitCalculatorTab = ({ orders, isDateInRange }: any) => {
                             </div>
                             <ArrowLeft size={20} className="text-blue-300 hidden md:block mt-5"/>
                             <div className="flex-1 w-full">
-                                <label className="block text-xs font-bold text-blue-800 mb-1">إلى تاريخ</label>
+                                <label className="block text-xs font-bold text-blue-800 mb-1">{t('batch4.k134')}</label>
                                 <input 
                                     type="date" 
                                     className="w-full p-2 rounded-lg border border-blue-200 text-sm focus:outline-none focus:border-blue-500"
@@ -125,7 +127,7 @@ export const ProfitCalculatorTab = ({ orders, isDateInRange }: any) => {
                         </div>
                         {calculatedRevenue > 0 && (
                             <div className="mt-4 text-center">
-                                <p className="text-sm text-gray-500 font-bold">إجمالي إيرادات الفترة المحددة</p>
+                                <p className="text-sm text-gray-500 font-bold">{t('batch4.k412')}</p>
                                 <p className="text-3xl font-black text-[#0e3c63] font-mono mt-1">${calculatedRevenue.toLocaleString()}</p>
                             </div>
                         )}
@@ -141,7 +143,7 @@ export const ProfitCalculatorTab = ({ orders, isDateInRange }: any) => {
                         <form onSubmit={handleAddExpense} className="flex gap-2 mb-6">
                             <input 
                                 className="flex-[2] p-3 border-2 border-gray-200 rounded-xl focus:border-[#0e3c63] outline-none text-sm font-bold placeholder-gray-400"
-                                placeholder="اسم البند (مثلاً: رواتب، كهرباء)"
+                                placeholder={t('batch4.k413')}
                                 value={newExpenseName}
                                 onChange={e => setNewExpenseName(e.target.value)}
                             />
@@ -149,7 +151,7 @@ export const ProfitCalculatorTab = ({ orders, isDateInRange }: any) => {
                                 <input 
                                     type="text"
                                     className="w-full p-3 border-2 border-gray-200 rounded-xl focus:border-[#0e3c63] outline-none text-sm font-bold text-center placeholder-gray-400 font-mono"
-                                    placeholder="الكلفة"
+                                    placeholder={t('batch4.k414')}
                                     value={newExpenseAmount}
                                     onChange={handleAmountChange}
                                 />
@@ -162,14 +164,14 @@ export const ProfitCalculatorTab = ({ orders, isDateInRange }: any) => {
                             <table className="w-full text-right">
                                 <thead className="bg-gray-50 text-gray-500 font-bold text-xs border-b">
                                     <tr>
-                                        <th className="p-3">البند</th>
-                                        <th className="p-3 text-left pl-8">الكلفة</th>
+                                        <th className="p-3">{t('batch4.k415')}</th>
+                                        <th className="p-3 text-left pl-8">{t('batch4.k414')}</th>
                                         <th className="p-3 w-10"></th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100 bg-white">
                                     {expenses.length === 0 ? (
-                                        <tr><td colSpan={3} className="text-center p-6 text-gray-400 text-sm">لم يتم إضافة مصاريف بعد</td></tr>
+                                        <tr><td colSpan={3} className="text-center p-6 text-gray-400 text-sm">{t('batch4.k416')}</td></tr>
                                     ) : (
                                         expenses.map(exp => (
                                             <tr key={exp.id} className="group hover:bg-gray-50 transition-colors">
@@ -192,7 +194,7 @@ export const ProfitCalculatorTab = ({ orders, isDateInRange }: any) => {
                                 {expenses.length > 0 && (
                                     <tfoot className="bg-red-50 text-red-800 font-bold border-t border-red-100">
                                         <tr>
-                                            <td className="p-3">مجموع المصاريف</td>
+                                            <td className="p-3">{t('batch4.k417')}</td>
                                             <td className="p-3 text-left font-mono pl-8">-${totalExpenses.toLocaleString()}</td>
                                             <td></td>
                                         </tr>
@@ -221,7 +223,7 @@ export const ProfitCalculatorTab = ({ orders, isDateInRange }: any) => {
                             <div className="flex justify-between items-center pb-4 border-b border-white/10">
                                 <div className="flex items-center gap-2">
                                     <div className="bg-white/10 p-1.5 rounded-lg"><Plus size={14}/></div>
-                                    <span className="text-sm font-medium opacity-80">إجمالي المبيعات</span>
+                                    <span className="text-sm font-medium opacity-80">{t('batch4.k418')}</span>
                                 </div>
                                 <span className="font-mono font-bold text-xl">${calculatedRevenue.toLocaleString()}</span>
                             </div>
@@ -230,14 +232,14 @@ export const ProfitCalculatorTab = ({ orders, isDateInRange }: any) => {
                             <div className="flex justify-between items-center pb-4 border-b border-white/10">
                                 <div className="flex items-center gap-2">
                                     <div className="bg-red-500/20 text-red-200 p-1.5 rounded-lg"><MinusCircle size={14}/></div>
-                                    <span className="text-sm font-medium opacity-80 text-red-200">إجمالي المصاريف</span>
+                                    <span className="text-sm font-medium opacity-80 text-red-200">{t('batch4.k419')}</span>
                                 </div>
                                 <span className="font-mono font-bold text-xl text-red-200">-${totalExpenses.toLocaleString()}</span>
                             </div>
 
                             {/* Net Profit */}
                             <div className="pt-2">
-                                <p className="text-sm font-bold mb-2 opacity-70 uppercase tracking-wider">صافي الأرباح (Net Profit)</p>
+                                <p className="text-sm font-bold mb-2 opacity-70 uppercase tracking-wider">{t('batch4.k420')}</p>
                                 <div className={`text-5xl font-mono font-black tracking-tighter transition-all duration-500 ${netProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                                     ${netProfit.toLocaleString()}
                                 </div>
@@ -254,7 +256,7 @@ export const ProfitCalculatorTab = ({ orders, isDateInRange }: any) => {
 
                     {/* Mini Instruction Card */}
                     <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-4 text-yellow-800 text-sm">
-                        <p className="font-bold mb-1 flex items-center gap-2"><DollarSign size={16}/> ملاحظة هامة:</p>
+                        <p className="font-bold mb-1 flex items-center gap-2"><DollarSign size={16}/>{t('batch4.k421')}</p>
                         <p className="opacity-80 leading-relaxed">
                             هذه الحاسبة تعمل كأداة مسودة (Draft) ولا تقوم بحفظ البيانات في قاعدة البيانات. بمجرد تحديث الصفحة ستعود القيم للصفر.
                         </p>

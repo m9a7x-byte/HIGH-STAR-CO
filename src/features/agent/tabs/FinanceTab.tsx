@@ -1,3 +1,6 @@
+import i18n from 'i18next';
+const t = i18n.t.bind(i18n);
+import { useTranslation } from 'react-i18next';
 import React, { useState, useMemo, useEffect } from 'react';
 import { Wallet, TrendingUp, TrendingDown, FileText, Search, DollarSign, Eye } from 'lucide-react';
 import { Card } from '../../../components/ui';
@@ -14,6 +17,7 @@ interface FinanceTabProps {
 }
 
 export const FinanceTab: React.FC<FinanceTabProps> = ({ myTransactions, currentBalance, isDebt, onViewOrder }) => {
+  const { t } = useTranslation();
     const [financePage, setFinancePage] = useState(0);
     const [financeRowsPerPage, setFinanceRowsPerPage] = useState(10);
     const [financeSearch, setFinanceSearch] = useState('');
@@ -33,6 +37,21 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({ myTransactions, currentB
         );
     }, [myTransactions, financeSearch]);
 
+    
+    const translateDesc = (desc: string) => {
+        if (!desc) return '';
+        let res = desc;
+        res = res.replace('تسديد دفعة للطلب', t('agent.desc_deposit'));
+        res = res.replace('تسديد رصيد يدوي', t('agent.desc_pay_balance'));
+        res = res.replace('إضافة رصيد يدوي', t('agent.desc_add_balance'));
+        res = res.replace('استقطاع رصيد متبقي', t('agent.desc_manual_debt'));
+        res = res.replace('تسوية حساب سالب', t('agent.desc_manual_credit'));
+        res = res.replace('استقطاع', t('agent.desc_deduct'));
+        res = res.replace('شراء طلبية', t('agent.desc_purchase_order'));
+        res = res.replace('دفعة', t('agent.desc_payment'));
+        return res;
+    };
+
     const currentTransactions = useMemo(() => {
         return filteredTransactions.slice(financePage * financeRowsPerPage, (financePage + 1) * financeRowsPerPage);
     }, [filteredTransactions, financePage, financeRowsPerPage]);
@@ -47,8 +66,8 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({ myTransactions, currentB
                         <Wallet size={32} />
                     </div>
                     <div>
-                        <h2 className="text-2xl font-bold text-gray-800">كشف الحساب</h2>
-                        <p className="text-gray-500">سجل حركات الحساب، الديون، والتسديدات</p>
+                        <h2 className="text-2xl font-bold text-gray-800">{t('agent.account_statement')}</h2>
+                        <p className="text-gray-500">{t('agent.account_statement_sub')}</p>
                     </div>
                 </div>
 
@@ -61,19 +80,19 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({ myTransactions, currentB
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                            <p className="text-sm text-gray-500 mb-1 font-bold">إجمالي التسديدات</p>
+                            <p className="text-sm text-gray-500 mb-1 font-bold">{t('agent.total_payments')}</p>
                             <p className="text-xl font-mono font-bold text-green-600">
                                 ${myTransactions.filter(t => t.amount > 0).reduce((acc, curr) => acc + curr.amount, 0).toLocaleString()}
                             </p>
                         </div>
                         <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                            <p className="text-sm text-gray-500 mb-1 font-bold">إجمالي المشتريات (الديون)</p>
+                            <p className="text-sm text-gray-500 mb-1 font-bold">{t('agent.total_debts')}</p>
                             <p className="text-xl font-mono font-bold text-red-600">
                                 ${Math.abs(myTransactions.filter(t => t.amount < 0).reduce((acc, curr) => acc + curr.amount, 0)).toLocaleString()}
                             </p>
                         </div>
                         <div className={`p-4 rounded-2xl border ${!isDebt ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'}`}>
-                            <p className="text-sm text-gray-500 mb-1 font-bold">{isDebt ? 'المبلغ المطلوب (عليك)' : 'الرصيد المتبقي (لك)'}</p>
+                            <p className="text-sm text-gray-500 mb-1 font-bold">{!isDebt ? t('agent.balance_credit') : t('agent.balance_debt')}</p>
                             <p className={`text-xl font-mono font-bold ${!isDebt ? 'text-green-700' : 'text-red-700'}`}>
                                 ${Math.abs(currentBalance).toLocaleString()}
                             </p>
@@ -91,15 +110,15 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({ myTransactions, currentB
                             <FileText size={20} />
                         </div>
                         <div>
-                            <h3 className="font-bold text-gray-800">تفاصيل الحركات المالية</h3>
-                            <p className="text-xs text-gray-500">سجل مفصل بجميع العمليات</p>
+                            <h3 className="font-bold text-gray-800">{t('agent.financial_details')}</h3>
+                            <p className="text-xs text-gray-500">{t('agent.financial_details_sub')}</p>
                         </div>
                     </div>
 
                     <div className="relative w-full md:w-64">
                         <input
                             className="w-full pl-8 pr-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:border-[#0e3c63] outline-none transition-colors"
-                            placeholder="بحث في السجل..."
+                            placeholder={t('agent.search_statement')}
                             value={financeSearch}
                             onChange={(e) => { setFinanceSearch(e.target.value); setFinancePage(0); }}
                         />
@@ -112,11 +131,11 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({ myTransactions, currentB
                     <table className="w-full text-right text-sm">
                         <thead className="bg-white text-gray-500 font-bold border-b border-gray-100">
                             <tr>
-                                <th className="p-4 w-40">التاريخ</th>
-                                <th className="p-4 w-48">نوع الحركة</th>
-                                <th className="p-4">التفاصيل / البيان</th>
-                                <th className="p-4 text-left w-40">المبلغ</th>
-                                <th className="p-4 w-20 text-center">معاينة</th>
+                                <th className="p-4 w-40">{t('agent.date')}</th>
+                                <th className="p-4 w-48">{t('agent.col_type')}</th>
+                                <th className="p-4">{t('agent.col_details')}</th>
+                                <th className="p-4 text-left w-40">{t('agent.col_amount')}</th>
+                                <th className="p-4 w-20 text-center">{t('agent.col_preview')}</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50 bg-white">
@@ -130,31 +149,31 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({ myTransactions, currentB
                                         <td className="p-4"><div className="h-8 bg-gray-200 rounded w-8 mx-auto"></div></td>
                                     </tr>
                                 ))
-                            ) : currentTransactions.map(t => {
+                            ) : currentTransactions.map(txn => {
                                 // Check for Order ID in description for "View Order" button
-                                const match = t.description.match(/#(\d+)/);
+                                const match = txn.description.match(/#(\d+)/);
                                 const relatedOrderId = match ? parseInt(match[1]) : null;
                                 const canViewOrder = relatedOrderId && db.orders.some(o => o.id === relatedOrderId);
 
-                                let label: string = t.type;
+                                let label: string = txn.type;
                                 let typeStyle = '';
                                 let Icon = Wallet;
 
-                                if (t.amount >= 0) {
-                                    label = 'إيداع / تسديد';
+                                if (txn.amount >= 0) {
+                                    label = t('agent.deposit_payment');
                                     typeStyle = 'bg-green-50 text-green-700 border border-green-100';
                                     Icon = TrendingUp;
                                 } else {
-                                    label = 'شراء / دفع';
+                                    label = t('agent.purchase_payment');
                                     typeStyle = 'bg-red-50 text-red-700 border border-red-100';
                                     Icon = TrendingDown;
                                 }
 
                                 return (
-                                    <tr key={t.id} className="hover:bg-gray-50 transition-colors">
+                                    <tr key={txn.id} className="hover:bg-gray-50 transition-colors">
                                         <td className="p-4 font-mono text-gray-500 text-xs">
-                                            <div className="font-bold text-gray-700 mb-0.5">{formatDate(t.createdAt)}</div>
-                                            {formatTime(t.createdAt)}
+                                            <div className="font-bold text-gray-700 mb-0.5">{formatDate(txn.createdAt)}</div>
+                                            {formatTime(txn.createdAt)}
                                         </td>
                                         <td className="p-4">
                                             <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg w-fit whitespace-nowrap ${typeStyle}`}>
@@ -163,17 +182,17 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({ myTransactions, currentB
                                             </div>
                                         </td>
                                         <td className="p-4 text-gray-700 font-medium">
-                                            {t.description}
+                                            {translateDesc(txn.description)}
                                         </td>
-                                        <td className={`p-4 text-left font-mono font-bold text-base ${t.amount >= 0 ? 'text-green-600' : 'text-red-600'}`} dir="ltr">
-                                            {t.amount > 0 ? '+' : ''}{t.amount.toLocaleString()}
+                                        <td className={`p-4 text-left font-mono font-bold text-base ${txn.amount >= 0 ? 'text-green-600' : 'text-red-600'}`} dir="ltr">
+                                            {txn.amount > 0 ? '+' : ''}{txn.amount.toLocaleString()}
                                         </td>
                                         <td className="p-4 text-center">
                                             {canViewOrder && (
                                                 <button
                                                     onClick={() => onViewOrder(db.orders.find(o => o.id === relatedOrderId) || null as any)}
                                                     className="text-[#0e3c63] hover:bg-blue-50 p-2 rounded-lg transition-colors inline-flex items-center justify-center"
-                                                    title="معاينة الطلب"
+                                                    title={t('agent.view_order')}
                                                 >
                                                     <Eye size={18} />
                                                 </button>
@@ -187,7 +206,7 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({ myTransactions, currentB
                                     <td colSpan={5} className="text-center p-10 text-gray-400">
                                         <div className="flex flex-col items-center justify-center gap-2">
                                             <DollarSign size={32} className="opacity-20" />
-                                            <p>لا توجد حركات مالية مطابقة</p>
+                                            <p>{t('agent.no_financial_records')}</p>
                                         </div>
                                     </td>
                                 </tr>

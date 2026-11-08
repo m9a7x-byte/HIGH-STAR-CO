@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect } from 'react';
 import {
     Plus, Settings, Trash2, Box, Layers, X, Save,
@@ -10,6 +11,7 @@ import { useAuth } from '../../../context/AuthContext';
 import { useToast } from '../../../context/ToastContext';
 
 export const CategoriesSubTab = ({ categories, products, canEdit }: any) => {
+    const { t } = useTranslation();
     const { user: currentUser } = useAuth();
     const toast = useToast();
 
@@ -22,14 +24,14 @@ export const CategoriesSubTab = ({ categories, products, canEdit }: any) => {
         const form = e.currentTarget as HTMLFormElement;
         const fd = new FormData(form);
         const name = fd.get('name') as string;
-        const type = fd.get('type') as 'STYROFOAM' | 'ADHESIVE';
+        const type = fd.get('type') as 'STYROFOAM' | 'ADHESIVE' | 'PAINT';
 
         if (categoryModal.mode === 'add') {
             db.addCategory(currentUser!.id, name, type);
-            toast.success('تمت إضافة التصنيف بنجاح');
+            toast.success(t('batch4.k169'));
         } else {
             db.updateCategory(currentUser!.id, categoryModal.cat.id, name, type);
-            toast.success('تم تحديث بيانات التصنيف');
+            toast.success(t('catalog.category_updated', 'تم تحديث بيانات التصنيف'));
         }
         setCategoryModal({ isOpen: false, mode: 'add' });
     };
@@ -53,7 +55,7 @@ export const CategoriesSubTab = ({ categories, products, canEdit }: any) => {
 
     const copyProductCode = (code: string) => {
         navigator.clipboard.writeText(code);
-        toast.info('تم نسخ الكود', `الكود ${code} جاهز للبحث`);
+        toast.info(t('catalog.code_copied', 'تم نسخ الكود'), `${code} ${t('catalog.code_ready', 'جاهز للبحث')}`);
     };
 
     return (
@@ -61,7 +63,7 @@ export const CategoriesSubTab = ({ categories, products, canEdit }: any) => {
             <div className="flex justify-between items-center bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
                 <div>
                     <h3 className="font-black text-2xl text-gray-800">إدارة التصنيفات</h3>
-                    <p className="text-sm font-bold text-gray-400 mt-1">الأقسام التي تندرج تحتها المنتجات (فلين أو لاصق)</p>
+                    <p className="text-sm font-bold text-gray-400 mt-1">الأقسام التي تندرج تحتها المنتجات (فلين، مادة لاصقة، أصباغ)</p>
                 </div>
                 {canEdit && <Button onClick={() => setCategoryModal({ isOpen: true, mode: 'add' })} className="h-14 px-8 rounded-2xl bg-[#0e3c63] text-white font-black shadow-md"><Plus size={20} /> إضافة تصنيف جديد</Button>}
             </div>
@@ -73,8 +75,8 @@ export const CategoriesSubTab = ({ categories, products, canEdit }: any) => {
                             <span className="font-black text-lg text-gray-800 block mb-1">{cat.name}</span>
                             <div className="flex items-center gap-2">
                                 <span className="text-[10px] font-mono text-gray-300 font-bold">ID: {cat.id}</span>
-                                <Badge color={cat.type === 'STYROFOAM' ? 'blue' : 'orange'} className="text-[9px] px-3 font-black">
-                                    {cat.type === 'STYROFOAM' ? 'قسم الفلين' : 'قسم اللاصق'}
+                                <Badge color={cat.type === 'STYROFOAM' ? t('catalog.styrofoam_dept') : t('catalog.adhesive_dept')} className="text-[9px] px-3 font-black">
+                                    {cat.type === 'PAINT' ? 'قسم الأصباغ' : cat.type === 'STYROFOAM' ? t('catalog.styrofoam_dept', 'قسم الفلين') : t('catalog.adhesive_dept', 'قسم اللاصق')}
                                 </Badge>
                             </div>
                         </div>
@@ -96,8 +98,8 @@ export const CategoriesSubTab = ({ categories, products, canEdit }: any) => {
                             <div className="flex items-center gap-5">
                                 <div className="p-4 bg-white/10 rounded-2xl shadow-inner"><Box size={24} /></div>
                                 <div>
-                                    <h3 className="font-black text-xl">{categoryModal.mode === 'add' ? 'إضافة تصنيف جديد' : 'تعديل بيانات التصنيف'}</h3>
-                                    <p className="text-blue-200 text-[10px] font-bold opacity-70 uppercase tracking-widest">Category Structure Management</p>
+                                    <h3 className="font-black text-xl">{categoryModal.mode === 'add' ? t('catalog.add_new_category', 'إضافة تصنيف جديد') : t('catalog.edit_category', 'تعديل بيانات التصنيف')}</h3>
+                                    <p className="text-blue-200 text-[10px] font-bold opacity-70 uppercase tracking-widest">{t('catalog.category_mgmt', 'Category Structure Management')}</p>
                                 </div>
                             </div>
                             <button onClick={() => setCategoryModal({ isOpen: false, mode: 'add' })} className="bg-white/10 hover:bg-red-500 p-2.5 rounded-xl transition-all shadow-inner"><X size={20} /></button>
@@ -112,9 +114,9 @@ export const CategoriesSubTab = ({ categories, products, canEdit }: any) => {
 
                                 <div className="space-y-4">
                                     <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mr-1">نوع التصنيف (تبعية المواد)</label>
-                                    <div className="grid grid-cols-2 gap-4 bg-white p-2 rounded-2xl border border-gray-100 shadow-sm">
+                                    <div className="grid grid-cols-3 gap-4 bg-white p-2 rounded-2xl border border-gray-100 shadow-sm">
                                         <label className="cursor-pointer">
-                                            <input type="radio" name="type" value="STYROFOAM" defaultChecked={categoryModal.cat?.type !== 'ADHESIVE'} className="peer sr-only" />
+                                            <input type="radio" name="type" value="STYROFOAM" defaultChecked={!categoryModal.cat || categoryModal.cat.type === 'STYROFOAM'} className="peer sr-only" />
                                             <div className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-transparent transition-all peer-checked:bg-blue-50 peer-checked:border-[#0e3c63] peer-checked:text-[#0e3c63] hover:bg-gray-50 grayscale peer-checked:grayscale-0">
                                                 <Box size={24} />
                                                 <span className="text-xs font-black">منتجات فلين</span>
@@ -126,6 +128,10 @@ export const CategoriesSubTab = ({ categories, products, canEdit }: any) => {
                                                 <Layers size={24} />
                                                 <span className="text-xs font-black">مادة لاصقة</span>
                                             </div>
+                                        </label>
+                                        <label className="cursor-pointer">
+                                            <input type="radio" name="type" value="PAINT" defaultChecked={categoryModal.cat?.type === 'PAINT'} className="peer sr-only" />
+                                            <div className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-transparent peer-checked:bg-blue-50 peer-checked:border-[#0e3c63] hover:bg-gray-50"><Layers size={24} /><span className="text-xs font-black">أصباغ</span></div>
                                         </label>
                                     </div>
                                 </div>

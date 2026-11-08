@@ -1,7 +1,12 @@
+import i18n from 'i18next';
+const t = i18n.t.bind(i18n);
+import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect } from 'react';
 import { WifiOff, RefreshCw } from 'lucide-react';
 
 export const OfflineOverlay = () => {
+    const { t } = useTranslation();
+
     const [isOffline, setIsOffline] = useState(!navigator.onLine);
 
     useEffect(() => {
@@ -26,14 +31,12 @@ export const OfflineOverlay = () => {
                     <WifiOff size={48} className="text-red-500" />
                 </div>
 
-                <h2 className="text-3xl font-black text-gray-800 mb-3">لا يوجد اتصال بالإنترنت</h2>
-                <p className="text-gray-500 font-bold mb-8 leading-relaxed">
-                    يرجى التحقق من اتصالك بالشبكة. سيتم استئناف العمل تلقائياً عند عودة الاتصال.
-                </p>
+                <h2 className="text-3xl font-black text-gray-800 mb-3">{t('batch3.txt_a0jzuh_7054')}</h2>
+                <p className="text-gray-500 font-bold mb-8 leading-relaxed">{t('batch4.txt_hofwn5_6952')}</p>
 
                 <div className="flex items-center justify-center gap-3 p-4 bg-gray-50 rounded-2xl border border-gray-100">
                     <RefreshCw size={18} className="text-gray-400 animate-spin" />
-                    <span className="text-sm font-bold text-gray-500">جاري محاولة إعادة الاتصال...</span>
+                    <span className="text-sm font-bold text-gray-500">{t('batch4.txt_1o5hqd_6952')}</span>
                 </div>
             </div>
         </div>

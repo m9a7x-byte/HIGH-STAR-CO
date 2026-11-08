@@ -1,7 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { Lock, CheckCircle, AlertCircle } from 'lucide-react';
+import i18n from 'i18next';
+const t = i18n.t.bind(i18n);
+import React, { useState } from 'react';
+import { Lock, AlertCircle } from 'lucide-react';
 import { Card, Button } from '../components/ui';
 import { db } from '../lib/db';
+import { supabase } from '../lib/supabase';
+import { FloatingLanguageSwitcher } from '../components/shared/FloatingLanguageSwitcher';
 
 interface ResetPasswordPageProps {
     onSuccess: () => void;
@@ -18,12 +22,12 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ onSuccess 
         setError('');
 
         if (password.length < 6) {
-            setError('كلمة المرور يجب أن تكون 6 رموز على الأقل');
+            setError(t('batch4.txt_f3ede8_7127'));
             return;
         }
 
         if (password !== confirmPassword) {
-            setError('كلمتي المرور غير متطابقتين');
+            setError(t('batch4.txt_oul5s6_7127'));
             return;
         }
 
@@ -31,10 +35,10 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ onSuccess 
 
         try {
             await db.updatePassword(password);
-            // Success logic handled by parent or toast
+            await supabase.auth.signOut();
             onSuccess();
         } catch (err: any) {
-            setError(err.message || 'فشل تحديث كلمة المرور');
+            setError(err.message || t('batch4.txt_et87ko_7127'));
         } finally {
             setIsLoading(false);
         }
@@ -42,14 +46,15 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ onSuccess 
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4" dir="rtl">
+            <FloatingLanguageSwitcher />
             <div className="w-full max-w-md">
                 <Card className="p-8 shadow-xl border-t-4 border-[#0e3c63]">
                     <div className="text-center mb-8">
                         <div className="w-16 h-16 bg-blue-50 text-[#0e3c63] rounded-full flex items-center justify-center mx-auto mb-4">
                             <Lock size={32} />
                         </div>
-                        <h2 className="text-2xl font-black text-gray-800">تعيين كلمة المرور الجديدة</h2>
-                        <p className="text-gray-500 text-sm mt-2 font-bold">أدخل كلمة المرور الجديدة لحسابك</p>
+                        <h2 className="text-2xl font-black text-gray-800">{t('batch4.txt_v80tr3_7127')}</h2>
+                        <p className="text-gray-500 text-sm mt-2 font-bold">{t('batch4.txt_p02rq2_7127')}</p>
                     </div>
 
                     <form onSubmit={handleSubmit} className="space-y-6">
@@ -60,7 +65,7 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ onSuccess 
                         )}
 
                         <div className="space-y-2">
-                            <label className="block text-xs font-black text-gray-500 mr-1">كلمة المرور الجديدة</label>
+                            <label className="block text-xs font-black text-gray-500 mr-1">{t('batch4.txt_hydt1s_7127')}</label>
                             <input
                                 type="password"
                                 required
@@ -72,7 +77,7 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ onSuccess 
                         </div>
 
                         <div className="space-y-2">
-                            <label className="block text-xs font-black text-gray-500 mr-1">تأكيد كلمة المرور</label>
+                            <label className="block text-xs font-black text-gray-500 mr-1">{t('batch4.txt_gq7v82_7127')}</label>
                             <input
                                 type="password"
                                 required

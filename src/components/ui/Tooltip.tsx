@@ -60,6 +60,7 @@ export const Tooltip = ({ children, content, side = 'top' }: { children: React.R
                 className="inline-flex"
                 onMouseEnter={handleMouseEnter}
                 onMouseLeave={() => setIsVisible(false)}
+                onClick={() => setIsVisible(false)}
             >
                 {children}
             </div>

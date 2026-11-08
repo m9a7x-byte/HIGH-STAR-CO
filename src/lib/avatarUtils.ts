@@ -1,3 +1,5 @@
+import i18n from 'i18next';
+const t = i18n.t.bind(i18n);
 export const createImage = (url: string): Promise<HTMLImageElement> =>
     new Promise((resolve, reject) => {
         const image = new Image()
@@ -97,13 +99,13 @@ export const validateImageFile = (file: File): string | null => {
     // 1. Check Type
     const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
     if (!validTypes.includes(file.type)) {
-        return 'نوع الملف غير مدعوم. يرجى اختيار صورة (JPEG, PNG, WebP).';
+        return t('batch4.txt_fa29no_7042');
     }
 
     // 2. Check Size (max 5MB explicitly requested 2MB but 5 is safer for high res raw)
     // User asked for 2MB limit in requirement 3
     if (file.size > 2 * 1024 * 1024) {
-        return 'حجم الصورة كبير جداً. الحد الأقصى 2 ميجابايت.';
+        return t('batch4.txt_6u66p1_7042');
     }
 
     return null;

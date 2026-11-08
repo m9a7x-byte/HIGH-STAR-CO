@@ -73,7 +73,7 @@ export const ProductImportExportSubTab: React.FC<ProductImportExportSubTabProps>
     const [typeFilter, setTypeFilter] = useState<ProductFamily>('STYROFOAM');
     const fields = transferFields(typeFilter);
     const fieldLabels = transferLabels(typeFilter);
-    const familyLabel = typeFilter === 'ADHESIVE' ? 'المادة اللاصقة' : 'الفلين';
+    const familyLabel = typeFilter === 'PAINT' ? 'الأصباغ' : typeFilter === 'ADHESIVE' ? 'المادة اللاصقة' : 'الفلين';
     const [categoryFilter, setCategoryFilter] = useState('ALL');
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState<number | 'ALL'>(50);
@@ -86,7 +86,7 @@ export const ProductImportExportSubTab: React.FC<ProductImportExportSubTabProps>
 
     const rows = useMemo(() => products.map(product => buildProductRow(product, categories)), [products, categories]);
     const filteredRows = useMemo(() => rows.filter(row => {
-        const matchesSearch = [row.code, row.category, row.dimensions].join(' ').toLowerCase().includes(search.toLowerCase());
+        const matchesSearch = [row.code, row.name, row.paintType, row.category, row.dimensions].join(' ').toLowerCase().includes(search.toLowerCase());
         const matchesType = getCategoryType(categories, row.category) === typeFilter;
         const matchesCategory = categoryFilter === 'ALL' || row.category === categoryFilter;
         return matchesSearch && matchesType && matchesCategory;
@@ -190,9 +190,9 @@ export const ProductImportExportSubTab: React.FC<ProductImportExportSubTabProps>
         setLastImportSummary(null);
 
         try {
+            if (file.size > 10 * 1024 * 1024) throw new Error('حجم الملف أكبر من 10 ميغابايت');
             const text = await file.text();
             setImportStage('checking');
-            if (file.size > 10 * 1024 * 1024) throw new Error('حجم الملف أكبر من 10 ميغابايت');
             const importedRows = parseWorkbookRows(text, typeFilter);
             if (importedRows.length === 0) throw new Error('الملف فارغ أو لا يحتوي منتجات');
 
@@ -288,7 +288,7 @@ export const ProductImportExportSubTab: React.FC<ProductImportExportSubTabProps>
                     </div>
                     <div>
                         <h3 className="text-2xl font-black text-gray-800">تصدير واستيراد {familyLabel}</h3>
-                        <p className="text-xs font-bold text-gray-400 mt-1">اختَر الفلين أو المادة اللاصقة، ثم صدّر ملف القسم وعدّل أسعار المفرد فقط.</p>
+                        <p className="text-xs font-bold text-gray-400 mt-1">اختَر قسم المنتجات، ثم صدّر ملفه وعدّل أسعار المفرد فقط.</p>
                     </div>
                 </div>
                 <div className="flex flex-wrap gap-3">
@@ -300,6 +300,8 @@ export const ProductImportExportSubTab: React.FC<ProductImportExportSubTabProps>
                     </Button>
                     <input
                         ref={inputRef}
+                        name="product-import"
+                        aria-label="ملف استيراد المنتجات"
                         type="file"
                         className="hidden"
                         accept=".xls,.xml,.html,.csv,.tsv,text/xml,text/html,text/csv"
@@ -328,7 +330,7 @@ export const ProductImportExportSubTab: React.FC<ProductImportExportSubTabProps>
 
             <div className="bg-amber-50 border border-amber-100 text-amber-800 rounded-2xl px-5 py-4 flex items-start gap-3 font-bold text-sm leading-7">
                 <AlertTriangle size={20} className="shrink-0 mt-1" />
-                {typeFilter === 'ADHESIVE'
+                {typeFilter === 'PAINT' ? 'أدخل اسم المادة ونوع الصبغ والوزن وسعر السطلة للعادي وVIP. الأصباغ تباع بالسطلة مباشرة.' : typeFilter === 'ADHESIVE'
                     ? 'أدخل عدد الأكياس في الباليت وسعر الكيس للعادي وVIP فقط. سعر الباليت ينحسب تلقائياً من سعر الكيس × العدد.'
                     : 'أدخل عدد الأمتار في الكارتون وسعر المتر للعادي وVIP فقط. سعر الكارتون ينحسب تلقائياً من سعر المتر × العدد.'}
             </div>
@@ -337,6 +339,9 @@ export const ProductImportExportSubTab: React.FC<ProductImportExportSubTabProps>
                 <div className="p-5 border-b border-gray-100 grid grid-cols-1 lg:grid-cols-[1fr_auto_auto] gap-4 items-center">
                     <div className="relative">
                         <input
+                            type="search"
+                            name="product-search"
+                            aria-label="بحث المنتجات"
                             value={search}
                             onChange={event => setSearch(event.target.value)}
                             placeholder="بحث بالكود، التصنيف، الابعاد..."
@@ -349,6 +354,7 @@ export const ProductImportExportSubTab: React.FC<ProductImportExportSubTabProps>
                         {[
                             { value: 'STYROFOAM', label: 'فلين' },
                             { value: 'ADHESIVE', label: 'مادة لاصقة' },
+                            { value: 'PAINT', label: 'أصباغ' },
                         ].map(option => (
                             <button
                                 key={option.value}
@@ -363,6 +369,8 @@ export const ProductImportExportSubTab: React.FC<ProductImportExportSubTabProps>
                         ))}
                     </div>
                     <select
+                        name="product-category"
+                        aria-label="تصنيف المنتجات"
                         value={categoryFilter}
                         onChange={event => setCategoryFilter(event.target.value)}
                         className="h-13 bg-gray-50 border border-gray-100 rounded-2xl px-5 text-sm font-black text-gray-600 outline-none focus:border-[#0e3c63]"

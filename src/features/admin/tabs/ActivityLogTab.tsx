@@ -1,4 +1,4 @@
-
+import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Clock, Check, Layers, Search, History, ExternalLink, ChevronDown, Eye, User, FileText, ArrowLeftRight, ArrowRight, CornerDownLeft, Activity } from 'lucide-react';
 import { Badge, DateRangePicker, UserAvatar } from '../../../components/ui';
@@ -9,25 +9,7 @@ import { LogContext, User as UserType, UserRole } from '../../../types';
 import { formatDate, formatTime } from '../../../lib/dateUtils';
 
 // FIX: Added 'SAFE' to the context mapping to fix missing property
-const getArabicContext = (context: string): string => {
-    const map: Record<string, string> = {
-        ORDERS: 'الطلبات',
-        PRODUCTION: 'الإنتاج',
-        CATALOG: 'الكتالوج',
-        AGENTS: 'الوكلاء',
-        STAFF: 'الموظفين',
-        FINANCE: 'المالية',
-        SYSTEM: 'النظام',
-        AUTH: 'الأمان',
-        FACTORY: 'المصنع',
-        SAFE: 'الصندوق',
-        INVENTORY: 'المخزن',
-        EXPENSES: 'المصاريف',
-        SUPPLIERS: 'الموردين',
-        LOGISTICS: 'اللوجستيات'
-    };
-    return map[context] || context;
-};
+// Removed external getContextLabel to avoid reactive translation issues
 
 interface ActivityLogTabProps {
     employees: UserType[];
@@ -37,6 +19,52 @@ interface ActivityLogTabProps {
 }
 
 export const ActivityLogTab: React.FC<ActivityLogTabProps> = ({ employees, agents, onNavigateUser, onNavigateOrder }) => {
+    const { t } = useTranslation();
+
+    const getContextLabel = (context: string): string => {
+        const map: Record<string, string> = {
+            ORDERS: t('activity.orders'),
+            PRODUCTION: t('activity.production'),
+            CATALOG: t('activity.catalog'),
+            AGENTS: t('activity.agents'),
+            STAFF: t('activity.staff'),
+            FINANCE: t('activity.finance'),
+            SYSTEM: t('activity.system'),
+            AUTH: t('activity.auth'),
+            FACTORY: t('activity.factory'),
+            SAFE: t('activity.safe'),
+            INVENTORY: t('activity.inventory'),
+            EXPENSES: t('activity.expenses'),
+            SUPPLIERS: t('activity.suppliers'),
+            LOGISTICS: t('activity.logistics')
+        };
+        return map[context] || context;
+    };
+
+    // Translate DB-stored Arabic action strings to current language
+    const translateAction = (action: string): string => {
+        const actionMap: Record<string, string> = {
+            'تسجيل دخول': t('actions.login'),
+            'تسجيل خروج': t('actions.logout'),
+            'إنشاء طلب': t('actions.create_order'),
+            'تعديل طلب': t('actions.edit_order'),
+            'تحديث حالة': t('actions.update_status'),
+            'تعديل الإعدادات': t('actions.edit_settings'),
+            'تحديث بيانات دخول': t('actions.update_credentials'),
+            'تحديث بروفايل': t('actions.update_profile'),
+            'إضافة مورد': t('actions.add_supplier'),
+            'تعديل مورد': t('actions.edit_supplier'),
+            'حذف مورد': t('actions.delete_supplier'),
+            'إضافة حركة': t('actions.add_transaction'),
+            'تعديل حركة': t('actions.edit_transaction'),
+            'حذف حركة': t('actions.delete_transaction'),
+            'قفل حركة': t('actions.lock_transaction'),
+            'إضافة موظف': t('actions.add_staff'),
+            'تعديل وكيل': t('actions.edit_agent'),
+            'تعديل رصيد': t('actions.edit_balance'),
+        };
+        return actionMap[action] || action;
+    };
     const [logPage, setLogPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(10);
     const [isLoadingLogs, setIsLoadingLogs] = useState(false);
@@ -98,13 +126,13 @@ export const ActivityLogTab: React.FC<ActivityLogTabProps> = ({ employees, agent
     };
 
     const formatLogValue = (val: string | undefined) => {
-        if (!val || val === '-' || val === 'محذوف') return val;
+        if (!val || val === '-' || val === t('activity.deleted')) return val;
         const isNumeric = /^-?\d+(\.\d+)?$/.test(val);
         if (isNumeric) {
             const num = Number(val);
             return (
                 <span className="flex items-center gap-1">
-                    <span className="opacity-60 text-[8px] font-black bg-gray-200/50 px-1 rounded">رصيد</span>
+                    <span className="opacity-60 text-[8px] font-black bg-gray-200/50 px-1 rounded">{t('batch4.k235')}</span>
                     <span dir="ltr">${num.toLocaleString()}</span>
                 </span>
             );
@@ -116,48 +144,48 @@ export const ActivityLogTab: React.FC<ActivityLogTabProps> = ({ employees, agent
         <div className="space-y-6">
             <div className="flex flex-col gap-4">
                 <div className="px-2">
-                    <h2 className="text-2xl font-black text-gray-800">سجل الأحداث العام</h2>
-                    <p className="text-gray-500 text-sm font-bold">متابعة تفصيلية لجميع العمليات في النظام</p>
+                    <h2 className="text-2xl font-black text-gray-800">{t('batch4.k236')}</h2>
+                    <p className="text-gray-500 text-sm font-bold">{t('batch4.k237')}</p>
                 </div>
 
                 <div className="bg-white p-3 md:p-4 rounded-[1.5rem] md:rounded-[2.5rem] shadow-xl border border-gray-100 flex flex-col lg:flex-row items-end gap-3">
 
                     <div className="w-full lg:w-64 shrink-0">
-                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block mr-1">تصفية الفئة</label>
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block mr-1">{t('batch4.k238')}</label>
                         <div className="flex h-[54px] bg-gray-50 p-1.5 rounded-[1.2rem] border border-gray-200 shadow-inner">
-                            <button onClick={() => { setLogUserCategory('ALL'); setLogFilterUser('ALL'); setLogPage(0); }} className={`flex-1 h-full rounded-xl text-[11px] font-black transition-all ${logUserCategory === 'ALL' ? 'bg-white text-gray-800 shadow-md' : 'text-gray-400 hover:text-gray-600'}`}>الكل</button>
-                            <button onClick={() => { setLogUserCategory('STAFF'); setLogFilterUser('ALL'); setLogPage(0); }} className={`flex-1 h-full rounded-xl text-[11px] font-black transition-all ${logUserCategory === 'STAFF' ? 'bg-white text-blue-600 shadow-md' : 'text-gray-400 hover:text-gray-600'}`}>الموظفين</button>
-                            <button onClick={() => { setLogUserCategory('AGENT'); setLogFilterUser('ALL'); setLogPage(0); }} className={`flex-1 h-full rounded-xl text-[11px] font-black transition-all ${logUserCategory === 'AGENT' ? 'bg-white text-emerald-600 shadow-md' : 'text-gray-400 hover:text-gray-600'}`}>الوكلاء</button>
+                            <button onClick={() => { setLogUserCategory('ALL'); setLogFilterUser('ALL'); setLogPage(0); }} className={`flex-1 h-full rounded-xl text-[11px] font-black transition-all ${logUserCategory === 'ALL' ? 'bg-white text-gray-800 shadow-md' : 'text-gray-400 hover:text-gray-600'}`}>{t('batch4.k239')}</button>
+                            <button onClick={() => { setLogUserCategory('STAFF'); setLogFilterUser('ALL'); setLogPage(0); }} className={`flex-1 h-full rounded-xl text-[11px] font-black transition-all ${logUserCategory === 'STAFF' ? 'bg-white text-blue-600 shadow-md' : 'text-gray-400 hover:text-gray-600'}`}>{t('batch4.k240')}</button>
+                            <button onClick={() => { setLogUserCategory('AGENT'); setLogFilterUser('ALL'); setLogPage(0); }} className={`flex-1 h-full rounded-xl text-[11px] font-black transition-all ${logUserCategory === 'AGENT' ? 'bg-white text-emerald-600 shadow-md' : 'text-gray-400 hover:text-gray-600'}`}>{t('batch4.k241')}</button>
                         </div>
                     </div>
 
                     <div className="w-full lg:flex-1 min-w-[200px]">
-                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block mr-1">اختيار المستخدم</label>
-                        <UserSelector users={logUserCategory === 'ALL' ? [...employees, ...agents] : (logUserCategory === 'STAFF' ? employees : agents)} selectedUserId={logFilterUser} onChange={(id) => { setLogFilterUser(id); setLogPage(0); }} placeholder="البحث عن اسم..." />
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block mr-1">{t('batch4.k242')}</label>
+                        <UserSelector users={logUserCategory === 'ALL' ? [...employees, ...agents] : (logUserCategory === 'STAFF' ? employees : agents)} selectedUserId={logFilterUser} onChange={(id) => { setLogFilterUser(id); setLogPage(0); }} placeholder={t('batch4.k243')} />
                     </div>
 
                     <div className="w-full lg:w-96 relative" ref={contextRef}>
-                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block mr-1">القسم / السياق</label>
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block mr-1">{t('batch4.k244')}</label>
                         <button onClick={() => setIsContextOpen(!isContextOpen)} className={`w-full h-[54px] flex justify-between items-center bg-gray-50 border border-gray-200 rounded-[1.2rem] px-4 text-sm font-bold text-gray-700 transition-all ${isContextOpen ? 'border-[#0e3c63] bg-white ring-4 ring-blue-50' : 'hover:border-blue-300'}`}>
                             <span className="truncate flex items-center gap-2">
                                 <Layers size={16} className={isContextOpen ? 'text-[#0e3c63]' : 'text-gray-400'} />
-                                {logFilterContext === 'ALL' ? 'كل الأقسام' : getArabicContext(logFilterContext)}
+                                {logFilterContext === 'ALL' ? t('activity.all_sections') : getContextLabel(logFilterContext)}
                             </span>
                             <ChevronDown size={16} className={`text-gray-400 transition-transform ${isContextOpen ? 'rotate-180' : ''}`} />
                         </button>
 
                         {isContextOpen && (
                             <div className="absolute top-full mt-2 w-full bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden max-h-72 overflow-y-auto p-1.5 animate-fade-in origin-top">
-                                <button onClick={() => { setLogFilterContext('ALL'); setIsContextOpen(false); setLogPage(0); }} className={`w-full text-right px-4 py-3 rounded-xl text-sm font-black flex justify-between items-center ${logFilterContext === 'ALL' ? 'bg-blue-50 text-[#0e3c63]' : 'text-gray-600 hover:bg-gray-50'}`}>كل الأقسام {logFilterContext === 'ALL' && <Check size={16} />}</button>
+                                <button onClick={() => { setLogFilterContext('ALL'); setIsContextOpen(false); setLogPage(0); }} className={`w-full text-right px-4 py-3 rounded-xl text-sm font-black flex justify-between items-center ${logFilterContext === 'ALL' ? 'bg-blue-50 text-[#0e3c63]' : 'text-gray-600 hover:bg-gray-50'}`}>{t('activity.all_sections')} {logFilterContext === 'ALL' && <Check size={16} />}</button>
                                 {contextOptions.map(ctx => (
-                                    <button key={ctx} onClick={() => { setLogFilterContext(ctx); setIsContextOpen(false); setLogPage(0); }} className={`w-full text-right px-4 py-3 rounded-xl text-sm font-bold flex justify-between items-center ${logFilterContext === ctx ? 'bg-blue-50 text-[#0e3c63]' : 'text-gray-600 hover:bg-gray-50'}`}>{getArabicContext(ctx)} {logFilterContext === ctx && <Check size={16} />}</button>
+                                    <button key={ctx} onClick={() => { setLogFilterContext(ctx); setIsContextOpen(false); setLogPage(0); }} className={`w-full text-right px-4 py-3 rounded-xl text-sm font-bold flex justify-between items-center ${logFilterContext === ctx ? 'bg-blue-50 text-[#0e3c63]' : 'text-gray-600 hover:bg-gray-50'}`}>{getContextLabel(ctx)} {logFilterContext === ctx && <Check size={16} />}</button>
                                 ))}
                             </div>
                         )}
                     </div>
 
                     <div className="w-full lg:w-auto lg:mr-auto shrink-0">
-                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block mr-1 text-left lg:text-right">الفترة الزمنية</label>
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block mr-1 text-left lg:text-right">{t('batch4.k136')}</label>
                         <DateRangePicker from={logFromDate} to={logToDate} onChangeFrom={(d) => { setLogFromDate(d); setLogPage(0); }} onChangeTo={(d) => { setLogToDate(d); setLogPage(0); }} />
                     </div>
                 </div>
@@ -174,11 +202,11 @@ export const ActivityLogTab: React.FC<ActivityLogTabProps> = ({ employees, agent
                             <table className="w-full text-right text-sm border-separate border-spacing-0">
                                 <thead className="bg-gray-50/80 backdrop-blur text-gray-500 font-black uppercase text-[10px] tracking-widest sticky top-0 z-10">
                                     <tr>
-                                        <th className="p-6 pr-10 w-48 border-b border-gray-100">الوقت والتاريخ</th>
-                                        <th className="p-6 w-64 border-b border-gray-100">المستخدم</th>
-                                        <th className="p-6 w-28 text-center border-b border-gray-100">القسم</th>
-                                        <th className="p-6 border-b border-gray-100">ملخص الحدث</th>
-                                        <th className="p-6 w-[24rem] border-b border-gray-100">سجل التغييرات (قبل / بعد)</th>
+                                        <th className="p-6 pr-10 w-48 border-b border-gray-100">{t('batch4.k245')}</th>
+                                        <th className="p-6 w-64 border-b border-gray-100">{t('batch4.k246')}</th>
+                                        <th className="p-6 w-28 text-center border-b border-gray-100">{t('batch4.k247')}</th>
+                                        <th className="p-6 border-b border-gray-100">{t('batch4.k248')}</th>
+                                        <th className="p-6 w-[24rem] border-b border-gray-100">{t('batch4.k249')}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">
@@ -190,19 +218,19 @@ export const ActivityLogTab: React.FC<ActivityLogTabProps> = ({ employees, agent
                                         // Creating a cleaner Title/Subtitle from details
                                         // Helper for Role Translation
                                         const getRoleName = (role?: string) => {
-                                            if (!role) return 'مستخدم سابق';
+                                            if (!role) return t('activity.former_user');
                                             const map: Record<string, string> = {
-                                                'AGENT': 'وكيل',
-                                                'STAFF': 'موظف',
-                                                'ADMIN': 'مدير',
-                                                'SUPERADMIN': 'المدير العام',
-                                                'SUPER_ADMIN': 'الأدمن الخارق',
-                                                'MANAGER': 'مدير',
-                                                'SUPERVISOR': 'مشرف',
-                                                'ACCOUNTANT': 'محاسب',
-                                                'WAREHOUSE': 'أمين مخزن',
-                                                'system': 'النظام',
-                                                'System': 'النظام'
+                                                'AGENT': t('activity.role_agent'),
+                                                'STAFF': t('activity.role_staff'),
+                                                'ADMIN': t('activity.role_admin'),
+                                                'SUPERADMIN': t('activity.role_super_admin'),
+                                                'SUPER_ADMIN': t('activity.role_super_admin2'),
+                                                'MANAGER': t('activity.role_manager'),
+                                                'SUPERVISOR': t('activity.role_supervisor'),
+                                                'ACCOUNTANT': t('activity.role_accountant'),
+                                                'WAREHOUSE': t('activity.role_warehouse'),
+                                                'system': t('activity.system'),
+                                                'System': t('activity.system')
                                             };
                                             return map[role] || role;
                                         };
@@ -218,16 +246,16 @@ export const ActivityLogTab: React.FC<ActivityLogTabProps> = ({ employees, agent
 
                                         // Helper Translation Map
                                         const translateMap: Record<string, string> = {
-                                            'production': 'الإنتاج',
-                                            'payment': 'الدفع',
-                                            'WAITING': 'انتظار',
-                                            'IN_PROGRESS': 'قيد العمل',
-                                            'COMPLETED': 'مكتمل',
-                                            'PENDING_TRANSFER': 'انتظار النقل',
-                                            'PENDING_PAYMENT': 'انتظار الدفع',
-                                            'PAID': 'مدفوع',
-                                            'PARTIALLY_PAID': 'مدفوع جزئياً',
-                                            'PENDING': 'غير مدفوع'
+                                            'production': t('activity.production'),
+                                            'payment': t('activity.finance'),
+                                            'WAITING': t('activity.status_waiting'),
+                                            'IN_PROGRESS': t('activity.status_in_progress'),
+                                            'COMPLETED': t('activity.status_completed'),
+                                            'PENDING_TRANSFER': t('activity.status_pending_transfer'),
+                                            'PENDING_PAYMENT': t('activity.status_pending_payment'),
+                                            'PAID': t('activity.status_paid'),
+                                            'PARTIALLY_PAID': t('activity.status_partially_paid'),
+                                            'PENDING': t('activity.status_unpaid')
                                         };
 
                                         const translate = (txt: string) => translateMap[txt] || txt;
@@ -235,7 +263,7 @@ export const ActivityLogTab: React.FC<ActivityLogTabProps> = ({ employees, agent
                                         if (detailsHasAgent) {
                                             const parts = log.details.split('لصالح الوكيل:');
                                             title = parts[0].replace('تم ', '').trim();
-                                            subtitle = `لصالح: ${parts[1].trim()}`;
+                                            subtitle = `${t('activity.for_agent')} ${parts[1].trim()}`;
                                         }
                                         // Case: Update Status (Legacy String: "تحديث حالة X لطلب #Y إلى Z")
                                         else if (log.details.includes('تحديث حالة')) {
@@ -244,7 +272,7 @@ export const ActivityLogTab: React.FC<ActivityLogTabProps> = ({ employees, agent
                                                 const type = translate(match[1]);
                                                 const id = match[2];
                                                 const toVal = match[3] ? translate(match[3]) : '';
-                                                title = `تحديث حالة طلب #${id}`;
+                                                title = `${t('activity.update_order_status')} #${id}`;
                                                 subtitle = type; // Keep subtitle simple
 
                                                 // If real audit values are missing, use parsed ones
@@ -258,10 +286,10 @@ export const ActivityLogTab: React.FC<ActivityLogTabProps> = ({ employees, agent
                                         else if (log.details.includes('تعديل الطلب') || log.details.includes('تعديل طلب')) {
                                             const match = log.details.match(/تعديل .*#(\d+)(?: - الفرق: (.*))?/);
                                             if (match) {
-                                                title = `تعديل عناصر الطلب #${match[1]}`;
+                                                title = `${t('activity.edit_order_items')} #${match[1]}`;
                                                 if (match[2]) {
                                                     // We treat the "Difference" as a value to show in After col for context
-                                                    if (!parsedNew) parsedNew = `الفرق: ${match[2]}`;
+                                                    if (!parsedNew) parsedNew = `${t('activity.difference')} ${match[2]}`;
                                                 }
                                             }
                                         }
@@ -293,20 +321,20 @@ export const ActivityLogTab: React.FC<ActivityLogTabProps> = ({ employees, agent
                                                         disabled={!logUser}
                                                     >
                                                         <UserAvatar
-                                                            name={log.userName || 'النظام'}
+                                                            name={log.userName || t('activity.the_system')}
                                                             avatarPath={logUser?.avatar_path}
                                                             avatarUrl={logUser?.imageUrl}
                                                             size="md"
                                                             className={`mt-0.5 border-2 border-white shadow-sm transition-transform group-hover/user:scale-110 ${logUser?.role === UserRole.AGENT ? 'bg-emerald-50 text-emerald-600' : 'bg-[#0e3c63] text-white'}`}
                                                         />
                                                         <div className="flex flex-col items-start min-w-0 flex-1">
-                                                            <span className="font-black text-gray-800 group-hover/user:text-[#0e3c63] transition-colors truncate w-full text-right">{log.userName || 'النظام'}</span>
+                                                            <span className="font-black text-gray-800 group-hover/user:text-[#0e3c63] transition-colors truncate w-full text-right">{log.userName || t('activity.the_system')}</span>
                                                             <span className="text-[9px] font-bold text-gray-400 group-hover/user:text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-md mt-1">{getRoleName(logUser?.role || 'system')}</span>
                                                         </div>
                                                     </button>
                                                 </td>
                                                 <td className="p-6 text-center align-top pt-8">
-                                                    <Badge color="gray" className="bg-white border-2 border-gray-100 text-gray-500 font-black px-3 py-1.5 rounded-xl text-[10px] whitespace-nowrap shadow-sm group-hover:border-blue-200 transition-colors">{getArabicContext(log.context)}</Badge>
+                                                    <Badge color="gray" className="bg-white border-2 border-gray-100 text-gray-500 font-black px-3 py-1.5 rounded-xl text-[10px] whitespace-nowrap shadow-sm group-hover:border-blue-200 transition-colors">{getContextLabel(log.context)}</Badge>
                                                 </td>
                                                 <td className="p-6 align-top">
                                                     <div className="flex flex-col gap-1.5 min-w-[200px]">
@@ -319,7 +347,7 @@ export const ActivityLogTab: React.FC<ActivityLogTabProps> = ({ employees, agent
                                                         {subtitle && <span className="text-gray-400 text-xs font-bold">{subtitle}</span>}
 
                                                         <div className="flex items-center gap-1 mt-1">
-                                                            <span className="text-[10px] bg-gray-50 text-gray-400 px-2 py-0.5 rounded border border-gray-100">{log.action}</span>
+                                                            <span className="text-[10px] bg-gray-50 text-gray-400 px-2 py-0.5 rounded border border-gray-100">{translateAction(log.action)}</span>
                                                         </div>
                                                     </div>
                                                 </td>
@@ -329,7 +357,7 @@ export const ActivityLogTab: React.FC<ActivityLogTabProps> = ({ employees, agent
                                                             <div className="space-y-1">
                                                                 {parsedPrev && (
                                                                     <>
-                                                                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider block">سابقاً</span>
+                                                                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider block">{t('batch4.k250')}</span>
                                                                         <div className="bg-red-50/50 p-2.5 rounded-xl border border-red-100 text-xs font-mono font-bold text-red-800 min-h-[3rem] flex items-center">
                                                                             {formatLogValue(parsedPrev)}
                                                                         </div>
@@ -339,7 +367,7 @@ export const ActivityLogTab: React.FC<ActivityLogTabProps> = ({ employees, agent
                                                             <div className="space-y-1">
                                                                 {parsedNew && (
                                                                     <>
-                                                                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider block">حالياً / الناتج</span>
+                                                                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider block">{t('batch4.k251')}</span>
                                                                         <div className="bg-emerald-50/50 p-2.5 rounded-xl border border-emerald-100 text-xs font-mono font-bold text-emerald-800 min-h-[3rem] flex items-center">
                                                                             {formatLogValue(parsedNew)}
                                                                         </div>

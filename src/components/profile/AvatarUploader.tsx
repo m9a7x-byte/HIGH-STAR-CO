@@ -1,3 +1,5 @@
+import i18n from 'i18next';
+const t = i18n.t.bind(i18n);
 import React, { useState, useRef, useEffect } from 'react';
 import { Camera, RefreshCw } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -30,7 +32,7 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({ currentAvatarPat
     useEffect(() => {
         if (signedError) {
             console.error('Signed URL Error:', signedError);
-            // Optional: toast.error('خطأ في تحميل الصورة', signedError);
+            // Optional: toast.error(t('batch4.txt_tcf63z_6948'), signedError);
         }
     }, [signedError]);
 
@@ -48,7 +50,7 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({ currentAvatarPat
             const file = e.target.files[0];
             const error = validateImageFile(file);
             if (error) {
-                toast.error('ملف غير صالح', error);
+                toast.error(t('batch4.txt_ti48wr_6948'), error);
                 return;
             }
 
@@ -85,7 +87,7 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({ currentAvatarPat
             if (uploadError) {
                 if (uploadError.message.includes('Bucket not found')) {
                     // This might happen if migration script didn't run.
-                    throw new Error('مساحة التخزين (Bucket) غير موجودة. يرجى مراجعة المسؤول.');
+                    throw new Error(t('batch4.txt_ofj1rn_6948'));
                 }
                 throw uploadError;
             }
@@ -95,11 +97,11 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({ currentAvatarPat
             onUploadSuccess(filePath);
             setCacheBuster(Date.now()); // Force refresh
 
-            toast.success('تم التحديث', 'تم تغيير الصورة الشخصية بنجاح');
+            toast.success(t('batch4.txt_qci57l_6948'), t('batch4.txt_aa61rd_6948'));
 
         } catch (error: any) {
             console.error('Upload failed:', error);
-            toast.error('فشل الرفع', 'حدث خطأ أثناء رفع الصورة. حاول مرة أخرى.');
+            toast.error(t('batch4.txt_5gtxa2_6948'), t('batch4.txt_7c9zz2_6948'));
         } finally {
             setIsUploading(false);
         }

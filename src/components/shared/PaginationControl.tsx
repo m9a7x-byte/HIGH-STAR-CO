@@ -1,4 +1,4 @@
-
+import { useTranslation } from 'react-i18next';
 import React, { useState } from 'react';
 import { ChevronLeft, ChevronRight, MoreHorizontal, ChevronDown, Check } from 'lucide-react';
 
@@ -11,6 +11,7 @@ interface PaginationControlProps {
 }
 
 export const PaginationControl = ({ page, rowsPerPage, setPage, setRowsPerPage, totalItems }: PaginationControlProps) => {
+    const { t } = useTranslation();
     const [isOpen, setIsOpen] = useState(false);
     const totalPages = Math.ceil(totalItems / rowsPerPage);
 
@@ -41,13 +42,13 @@ export const PaginationControl = ({ page, rowsPerPage, setPage, setRowsPerPage, 
         <div className="p-5 border-t border-gray-100 flex flex-col sm:flex-row justify-between items-center gap-4 bg-gray-50/50 backdrop-blur-sm">
             <div className="flex items-center gap-4 text-xs font-black text-gray-400 uppercase tracking-widest">
                 <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-gray-200 shadow-sm">
-                    <span className="hidden sm:inline">عرض:</span>
+                    <span className="hidden sm:inline">{t('pagination.show')}</span>
                     <div className="relative">
                         <button
                             onClick={() => setIsOpen(!isOpen)}
                             className={`min-w-[120px] h-10 flex items-center justify-between px-4 bg-white border-2 rounded-xl transition-all duration-300 ${isOpen ? 'border-[#0e3c63] ring-4 ring-blue-50/50 shadow-lg' : 'border-gray-200 hover:border-blue-300'}`}
                         >
-                            <span className="text-[#0e3c63] font-black">{rowsPerPage} صفوف</span>
+                            <span className="text-[#0e3c63] font-black">{rowsPerPage} {t('pagination.rows')}</span>
                             <ChevronDown size={16} className={`text-gray-400 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
                         </button>
 
@@ -64,7 +65,7 @@ export const PaginationControl = ({ page, rowsPerPage, setPage, setRowsPerPage, 
                                                 : 'hover:bg-blue-50 text-gray-600 hover:text-[#0e3c63]'
                                                 }`}
                                         >
-                                            {val} صفوف
+                                            {val} {t('pagination.rows')}
                                             {rowsPerPage === val && <Check size={14} />}
                                         </button>
                                     ))}
@@ -74,7 +75,7 @@ export const PaginationControl = ({ page, rowsPerPage, setPage, setRowsPerPage, 
                     </div>
                 </div>
                 <span className="hidden md:inline">
-                    إجمالي النتائج: <span className="text-gray-700">{totalItems}</span>
+                    {t('pagination.total_results')} <span className="text-gray-700">{totalItems}</span>
                 </span>
             </div>
 

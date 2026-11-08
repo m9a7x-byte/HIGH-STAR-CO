@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { History, Search, Filter, Calendar, DollarSign, Wallet, TrendingDown, Clock, Box, Globe, ShieldCheck, RotateCcw, AlertCircle } from 'lucide-react';
 import { formatDate, formatTime } from '../../../lib/dateUtils';
 import { Card, Badge, DateRangePicker, Button } from '../../../components/ui';
@@ -12,6 +13,7 @@ interface SupplierHistoryTabProps {
 }
 
 export const SupplierHistoryTab = ({ refreshTrigger, onOpenModal }: SupplierHistoryTabProps) => {
+    const { t: translate } = useTranslation();
     const [fromDate, setFromDate] = useState('');
     const [toDate, setToDate] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
@@ -112,7 +114,7 @@ export const SupplierHistoryTab = ({ refreshTrigger, onOpenModal }: SupplierHist
                                     <td className="p-5 font-black text-[#0e3c63] text-base">{t.supplierName}</td>
                                     <td className="p-5 font-black text-gray-800 flex items-center gap-2">
                                         <Box size={14} className="text-blue-400" />
-                                        {materialLabels[t.materialType!] || t.materialType}
+                                        {t.materialType && materialLabels[t.materialType] ? translate(materialLabels[t.materialType]) : t.materialType || 'مواد أولية'}
                                     </td>
                                     <td className="p-5 text-center">
                                         <div className="inline-flex items-center gap-1.5 bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-100 text-[10px] font-black text-gray-600">

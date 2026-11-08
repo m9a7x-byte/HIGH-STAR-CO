@@ -1,6 +1,9 @@
+import i18n from 'i18next';
+const t = i18n.t.bind(i18n);
 import React, { useState, useEffect } from 'react';
 import { UserPlus, Lock, Eye, EyeOff, CheckCircle, AlertCircle, Loader2, Sparkles, Mail } from 'lucide-react';
 import { Card, Button } from '../components/ui';
+import { FloatingLanguageSwitcher } from '../components/shared/FloatingLanguageSwitcher';
 import { supabase } from '../lib/supabase';
 
 interface AcceptInvitePageProps {
@@ -71,9 +74,10 @@ export const AcceptInvitePage: React.FC<AcceptInvitePageProps> = ({ onSuccess, o
     if (verifying) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-[#0e3c63] to-slate-900 p-4" dir="rtl">
+            <FloatingLanguageSwitcher />
                 <div className="text-center text-white">
                     <Loader2 size={48} className="animate-spin mx-auto mb-4" />
-                    <p className="font-bold">جاري التحقق من الدعوة...</p>
+                    <p className="font-bold">{t('batch4.k852')}</p>
                 </div>
             </div>
         );
@@ -86,7 +90,7 @@ export const AcceptInvitePage: React.FC<AcceptInvitePageProps> = ({ onSuccess, o
                     <div className="w-20 h-20 bg-red-50 text-red-500 rounded-[1.5rem] flex items-center justify-center mx-auto mb-6">
                         <AlertCircle size={36} />
                     </div>
-                    <h2 className="text-2xl font-black text-gray-800 mb-2">رابط غير صالح</h2>
+                    <h2 className="text-2xl font-black text-gray-800 mb-2">{t('batch4.k853')}</h2>
                     <p className="text-gray-500 text-sm font-bold mb-6">{error}</p>
                     <Button
                         onClick={() => window.location.href = '/'}
@@ -115,8 +119,8 @@ export const AcceptInvitePage: React.FC<AcceptInvitePageProps> = ({ onSuccess, o
                             <UserPlus size={36} />
                         </div>
 
-                        <h2 className="text-2xl font-black text-gray-800 mb-2">مرحباً بك في VOGA</h2>
-                        <p className="text-gray-500 text-sm font-bold">تم دعوتك للانضمام</p>
+                        <h2 className="text-2xl font-black text-gray-800 mb-2">{t('batch4.k854')}</h2>
+                        <p className="text-gray-500 text-sm font-bold">{t('batch4.k855')}</p>
 
                         {/* Email Badge */}
                         <div className="mt-4 inline-flex items-center gap-2 bg-gray-50 px-4 py-2 rounded-xl">

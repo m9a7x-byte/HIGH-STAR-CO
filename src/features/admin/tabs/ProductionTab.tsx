@@ -1,4 +1,4 @@
-
+import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
     ListOrdered, Eye, Clock, Hourglass, Activity, CheckCircle2, Layers, Calendar,
@@ -11,6 +11,7 @@ import { ProductionConfirmationModal } from '../../../components/shared/Producti
 import { Tooltip } from '../../../components/ui/Tooltip';
 import { db } from '../../../lib/db';
 import { useAuth } from '../../../context/AuthContext';
+import { useToast } from '../../../context/ToastContext';
 import { formatDate, formatTime } from '../../../lib/dateUtils';
 
 // Status Badge Component
@@ -34,7 +35,9 @@ const StatusBadge = ({ status }: { status: ProductionStatus }) => {
 };
 
 export const ProductionTab = ({ productionQueue, canEdit, onUpdateStatus, onViewOrder, onNavigateToAgent }: any) => {
+    const { t } = useTranslation();
     const { user } = useAuth();
+    const toast = useToast();
     const [queuePage, setQueuePage] = useState(0);
     const [queueRowsPerPage, setQueueRowsPerPage] = useState(25);
     const [isLoading, setIsLoading] = useState(true);
@@ -107,6 +110,16 @@ export const ProductionTab = ({ productionQueue, canEdit, onUpdateStatus, onView
         // Directly call database update to bypass parent's confirmation logic
         db.updateOrderStatus(user!.id, order.id, 'production', newStatus);
         setConfirmModal(null);
+
+        // Toast feedback
+        const messages: Record<string, { title: string; msg: string }> = {
+            'START': { title: t('production.toast_started', 'تم بدء التحضير'), msg: `#${order.id}` },
+            'COMPLETE': { title: t('production.toast_completed', 'تم التجهيز'), msg: `#${order.id}` },
+            'OUT': { title: t('production.toast_removed', 'تم الإرجاع من الإنتاج'), msg: `#${order.id}` },
+            'RETURN': { title: t('production.toast_returned', 'تم الإرجاع لقيد الانتظار'), msg: `#${order.id}` },
+        };
+        const m = messages[action];
+        if (m) toast.success(m.title, m.msg);
     };
 
     return (
@@ -117,7 +130,7 @@ export const ProductionTab = ({ productionQueue, canEdit, onUpdateStatus, onView
                         <div className={`p-2 rounded-xl ${activeFilter === 'ALL' ? 'bg-white/10' : 'bg-gray-50 text-gray-500'}`}><Layers size={20} /></div>
                         <span className={`text-2xl font-black font-mono ${activeFilter === 'ALL' ? 'text-white' : 'text-gray-800'}`}>{stats.all.count}</span>
                     </div>
-                    <p className={`text-sm font-bold ${activeFilter === 'ALL' ? 'text-blue-100' : 'text-gray-600'}`}>الكل</p>
+                    <p className={`text-sm font-bold ${activeFilter === 'ALL' ? 'text-blue-100' : 'text-gray-600'}`}>{t('production.all_orders')}</p>
                     <p className={`text-xs font-mono mt-1 ${activeFilter === 'ALL' ? 'text-blue-200' : 'text-gray-400'}`}>${stats.all.amount.toLocaleString()}</p>
                 </div>
 
@@ -126,7 +139,7 @@ export const ProductionTab = ({ productionQueue, canEdit, onUpdateStatus, onView
                         <div className={`p-2 rounded-xl ${activeFilter === 'WAITING' ? 'bg-white/10' : 'bg-gray-50 text-gray-500'}`}><Hourglass size={20} /></div>
                         <span className={`text-2xl font-black font-mono ${activeFilter === 'WAITING' ? 'text-white' : 'text-gray-800'}`}>{stats.waiting.count}</span>
                     </div>
-                    <p className={`text-sm font-bold ${activeFilter === 'WAITING' ? 'text-gray-200' : 'text-gray-600'}`}>قيد الانتظار</p>
+                    <p className={`text-sm font-bold ${activeFilter === 'WAITING' ? 'text-gray-200' : 'text-gray-600'}`}>{t('production.waiting')}</p>
                     <p className={`text-xs font-mono mt-1 ${activeFilter === 'WAITING' ? 'text-gray-400' : 'text-gray-400'}`}>${stats.waiting.amount.toLocaleString()}</p>
                 </div>
 
@@ -135,7 +148,7 @@ export const ProductionTab = ({ productionQueue, canEdit, onUpdateStatus, onView
                         <div className={`p-2 rounded-xl ${activeFilter === 'IN_PROGRESS' ? 'bg-white/10' : 'bg-blue-50 text-blue-600'}`}><Activity size={20} /></div>
                         <span className={`text-2xl font-black font-mono ${activeFilter === 'IN_PROGRESS' ? 'text-white' : 'text-blue-600'}`}>{stats.processing.count}</span>
                     </div>
-                    <p className={`text-sm font-bold ${activeFilter === 'IN_PROGRESS' ? 'text-blue-100' : 'text-gray-600'}`}>جاري التحضير</p>
+                    <p className={`text-sm font-bold ${activeFilter === 'IN_PROGRESS' ? 'text-blue-100' : 'text-gray-600'}`}>{t('production.processing')}</p>
                     <p className={`text-xs font-mono mt-1 ${activeFilter === 'IN_PROGRESS' ? 'text-blue-200' : 'text-gray-400'}`}>${stats.processing.amount.toLocaleString()}</p>
                 </div>
 
@@ -144,7 +157,7 @@ export const ProductionTab = ({ productionQueue, canEdit, onUpdateStatus, onView
                         <div className={`p-2 rounded-xl ${activeFilter === 'PAID' ? 'bg-white/10' : 'bg-emerald-50 text-emerald-600'}`}><CheckCircle2 size={20} /></div>
                         <span className={`text-2xl font-black font-mono ${activeFilter === 'PAID' ? 'text-white' : 'text-emerald-600'}`}>{stats.paid.count}</span>
                     </div>
-                    <p className={`text-sm font-bold ${activeFilter === 'PAID' ? 'text-emerald-100' : 'text-gray-600'}`}>واصل كامل</p>
+                    <p className={`text-sm font-bold ${activeFilter === 'PAID' ? 'text-emerald-100' : 'text-gray-600'}`}>{t('production.paid_ready')}</p>
                     <p className={`text-xs font-mono mt-1 ${activeFilter === 'PAID' ? 'text-emerald-200' : 'text-gray-400'}`}>${stats.paid.amount.toLocaleString()}</p>
                 </div>
             </div>
@@ -155,14 +168,14 @@ export const ProductionTab = ({ productionQueue, canEdit, onUpdateStatus, onView
                         <thead className="bg-gray-50 text-gray-600 font-bold text-xs uppercase border-b">
                             <tr>
                                 <th className="p-4 w-12 text-center">#</th>
-                                <th className="p-4">الطلب</th>
-                                <th className="p-4">العميل</th>
-                                <th className="p-4">تاريخ ووقت الطلب</th>
-                                <th className="p-4">المبلغ / الواصل</th>
-                                <th className="p-4">تاريخ الدخول</th>
-                                <th className="p-4">مدة التجهيز</th>
-                                <th className="p-4 w-44">الحالة</th>
-                                <th className="p-4 text-center w-48">الإجراء</th>
+                                <th className="p-4">{t('production.th_order')}</th>
+                                <th className="p-4">{t('production.th_client')}</th>
+                                <th className="p-4">{t('production.th_date_time')}</th>
+                                <th className="p-4">{t('production.th_value')}</th>
+                                <th className="p-4">{t('production.th_transfer_date')}</th>
+                                <th className="p-4">{t('production.th_duration')}</th>
+                                <th className="p-4 w-44">{t('production.th_status')}</th>
+                                <th className="p-4 text-center w-48">{t('production.th_actions')}</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100 text-sm">
@@ -173,14 +186,14 @@ export const ProductionTab = ({ productionQueue, canEdit, onUpdateStatus, onView
                                         <div className="flex items-center gap-2">
                                             #{o.id}
                                             {o.hasSpecialRequest && (
-                                                <Tooltip content="يحتوي على طلب خاص">
+                                                <Tooltip content={t('production.has_special_request')}>
                                                     <div className="p-1 rounded-md bg-amber-50 text-amber-500 animate-pulse cursor-help">
                                                         <Sparkles size={14} className="fill-amber-500" />
                                                     </div>
                                                 </Tooltip>
                                             )}
                                             {o.isManual && (
-                                                <Tooltip content={`تم إنشاء الطلب يدوياً بواسطة: ${o.manualBy || 'الإدارة'}`}>
+                                                <Tooltip content={`${t('production.manual_order_by')} ${o.manualBy || t('production.admin')}`}>
                                                     <div className="p-1 rounded-md bg-amber-100 text-amber-600 animate-pulse shadow-sm cursor-help">
                                                         <PenTool size={14} />
                                                     </div>
@@ -200,7 +213,7 @@ export const ProductionTab = ({ productionQueue, canEdit, onUpdateStatus, onView
                                     </td>
                                     <td className="p-4">
                                         <div className="font-mono font-black text-[#0e3c63]">${o.totalAmount.toLocaleString()}</div>
-                                        <div className="font-mono text-[10px] text-green-600 font-bold">الواصل: ${o.paidAmount.toLocaleString()}</div>
+                                        <div className="font-mono text-[10px] text-emerald-600 font-bold">{t('production.paid_amount')} ${o.paidAmount.toLocaleString()}</div>
                                     </td>
                                     <td className="p-4">
                                         <span className="font-mono text-xs text-gray-600 font-bold">
@@ -215,7 +228,7 @@ export const ProductionTab = ({ productionQueue, canEdit, onUpdateStatus, onView
                                             ) : (
                                                 <span className="font-bold text-gray-700 px-1">{o.estimatedDays || 0}</span>
                                             )}
-                                            <span className="text-[10px] text-gray-400 font-bold">يوم</span>
+                                            <span className="text-[10px] text-gray-400 font-bold">{t('production.days')}</span>
                                         </div>
                                     </td>
                                     <td className="p-4">
@@ -223,7 +236,7 @@ export const ProductionTab = ({ productionQueue, canEdit, onUpdateStatus, onView
                                     </td>
                                     <td className="p-4">
                                         <div className="flex items-center justify-center gap-2">
-                                            <Tooltip content="مشاهدة التفاصيل">
+                                            <Tooltip content={t('production.view_details')}>
                                                 <button
                                                     onClick={() => onViewOrder(o)}
                                                     className="w-10 h-10 flex items-center justify-center bg-blue-50 text-[#0e3c63] rounded-xl transition-all btn-draw-border hover:bg-blue-100"
@@ -236,7 +249,7 @@ export const ProductionTab = ({ productionQueue, canEdit, onUpdateStatus, onView
                                                 <>
                                                     {o.productionStatus === ProductionStatus.IN_PROGRESS ? (
                                                         <div className="flex items-center gap-2">
-                                                            <Tooltip content="تأكيد: تم تجهيز الطلب">
+                                                            <Tooltip content={t('production.confirm_ready', 'تم التجهيز')}>
                                                                 <button
                                                                     onClick={() => setConfirmModal({ order: o, action: 'COMPLETE' })}
                                                                     className="w-10 h-10 flex items-center justify-center bg-emerald-50 text-emerald-600 rounded-xl transition-all btn-draw-border hover:bg-emerald-100"
@@ -245,7 +258,7 @@ export const ProductionTab = ({ productionQueue, canEdit, onUpdateStatus, onView
                                                                 </button>
                                                             </Tooltip>
 
-                                                            <Tooltip content="إلغاء وإرجاع للانتظار">
+                                                            <Tooltip content={t('production.cancel_and_return', 'إلغاء وإرجاع')}>
                                                                 <button
                                                                     onClick={() => setConfirmModal({ order: o, action: 'RETURN' })}
                                                                     className="w-10 h-10 flex items-center justify-center bg-amber-50 text-amber-600 rounded-xl transition-all btn-draw-border hover:bg-amber-100"
@@ -256,7 +269,7 @@ export const ProductionTab = ({ productionQueue, canEdit, onUpdateStatus, onView
                                                         </div>
                                                     ) : o.productionStatus === ProductionStatus.WAITING ? (
                                                         <div className="flex items-center gap-2">
-                                                            <Tooltip content="تأكيد وبدء التجهيز">
+                                                            <Tooltip content={t('production.confirm_start', 'تأكيد البدء')}>
                                                                 <button
                                                                     onClick={() => setConfirmModal({ order: o, action: 'START' })}
                                                                     className="w-10 h-10 flex items-center justify-center bg-blue-50 text-blue-600 rounded-xl transition-all btn-draw-border hover:bg-blue-100"
@@ -265,7 +278,7 @@ export const ProductionTab = ({ productionQueue, canEdit, onUpdateStatus, onView
                                                                 </button>
                                                             </Tooltip>
 
-                                                            <Tooltip content="إخراج من قائمة الإنتاج">
+                                                            <Tooltip content={t('production.return_to_waiting', 'إرجاع لقيد الانتظار')}>
                                                                 <button
                                                                     onClick={() => setConfirmModal({ order: o, action: 'OUT' })}
                                                                     className="w-10 h-10 flex items-center justify-center bg-red-50 text-red-600 rounded-xl transition-all btn-draw-border hover:bg-red-100"
@@ -294,18 +307,18 @@ export const ProductionTab = ({ productionQueue, canEdit, onUpdateStatus, onView
                     onClose={() => setConfirmModal(null)}
                     onConfirm={handleConfirmAction}
                     title={
-                        confirmModal.action === 'START' ? 'تأكيد بدء الإنتاج' :
-                            confirmModal.action === 'COMPLETE' ? 'إكمال تجهيز الطلب' :
-                                confirmModal.action === 'OUT' ? 'إخراج من الإنتاج' : 'إرجاع للانتظار'
+                        confirmModal.action === 'START' ? t('production.confirm_start_production') :
+                            confirmModal.action === 'COMPLETE' ? t('production.complete_order_prep') :
+                                confirmModal.action === 'OUT' ? t('production.remove_from_prod') : t('production.return_to_waiting')
                     }
                     subtitle={
-                        confirmModal.action === 'START' ? 'Starting Production Cycle' :
-                            confirmModal.action === 'COMPLETE' ? 'Production Cycle Complete' : 'Production Workflow'
+                        confirmModal.action === 'START' ? t('production.sub_start_prod') :
+                            confirmModal.action === 'COMPLETE' ? t('production.sub_complete_prep') : t('production.sub_workflow')
                     }
                     confirmLabel={
-                        confirmModal.action === 'START' ? 'تأكيد البدء' :
-                            confirmModal.action === 'COMPLETE' ? 'تأكيد التجهيز' :
-                                confirmModal.action === 'OUT' ? 'تأكيد الإخراج' : 'تأكيد'
+                        confirmModal.action === 'START' ? t('production.btn_confirm_start') :
+                            confirmModal.action === 'COMPLETE' ? t('production.btn_confirm_prep') :
+                                confirmModal.action === 'OUT' ? t('production.btn_confirm_remove') : t('production.btn_confirm')
                     }
                     icon={
                         confirmModal.action === 'START' ? PlayCircle :
@@ -317,3 +330,4 @@ export const ProductionTab = ({ productionQueue, canEdit, onUpdateStatus, onView
         </div>
     );
 };
+

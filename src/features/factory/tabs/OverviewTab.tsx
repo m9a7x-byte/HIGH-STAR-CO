@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
     TrendingDown, Box, AlertCircle, DollarSign, Activity,
     PieChart, ArrowUpRight, ArrowDownLeft, ShieldCheck,
@@ -13,7 +14,7 @@ import { Card, Badge, Button } from '../../../components/ui';
 import { db } from '../../../lib/db';
 import { MONTHS_AR, materialLabels } from '../components/SharedFactoryComponents';
 import { formatDate } from '../../../lib/dateUtils';
-import { GoogleGenAI, Type } from "@google/genai";
+import { supabase } from '../../../lib/supabase';
 
 const ESTIMATED_WORKING_HOURS = 300;
 const GEN_TO_NATIONAL_COST_RATIO = 5;
@@ -22,22 +23,45 @@ const AI_USAGE_KEY = 'voga_factory_ai_usage_count';
 const AI_COOLDOWN_MS = 300000; // 5 minutes cooldown
 const FREE_TIER_LIMIT = 50; // تقديري لعدد الطلبات في اليوم
 
-const arabicCategoryMap: Record<string, string> = {
-    'SALARY': 'رواتب الموظفين',
-    'RENT': 'إيجار الموقع',
-    'FOOD': 'طعام وإطعام',
-    'DAILY_EXPENSE': 'نثريات يومية',
-    'ELECTRICITY': 'طاقة وكهرباء',
-    'TRANSPORT_OUT': 'نقل صادر',
-    'TRANSPORT_IN': 'نقل وارد',
-    'INVENTORY': 'المخزن',
-    'CUSTOMS': 'تخليص كمركي',
-    'SUPPLIER': 'حساب موردين',
-    'SAFE_WITHDRAWAL': 'سحب نقدي',
-    'SAFE_DEPOSIT': 'إيداع نقدي'
-};
-
 export const OverviewTab = ({ refreshTrigger }: { refreshTrigger: number }) => {
+    const { t } = useTranslation();
+        const getMatKey = (type: string) => {
+        if (!type) return '';
+        const keys: Record<string, string> = {
+            'SILICON_HOT': 'factory_shared.mat_silicon_hot',
+            'SILICON_COLD': 'factory_shared.mat_silicon_cold',
+            'SAND': 'factory_shared.mat_sand',
+            'SAND_ADHESIVE': 'factory_shared.mat_sand_adhesive',
+            'CEMENT_BLACK': 'factory_shared.mat_cement_black',
+            'CEMENT_WHITE': 'factory_shared.mat_cement_white',
+            'EPS_RAW': 'factory_shared.mat_eps_raw',
+            'POLYMER_ADHESIVE': 'factory_shared.mat_polymer',
+            'SILOSH_ADHESIVE': 'factory_shared.mat_silosh',
+            'SHASTA_ADHESIVE': 'factory_shared.mat_shasta',
+            'CARTON_FOAM': 'factory_shared.mat_carton_foam',
+            'BAGS_1051': 'factory_shared.mat_bags_1051',
+            'BAGS_1052': 'factory_shared.mat_bags_1052',
+            'BAGS_1053': 'factory_shared.mat_bags_1053',
+            'BAGS_1054': 'factory_shared.mat_bags_1054',
+            'BAGS_1059': 'factory_shared.mat_bags_1059'
+        };
+        return keys[type] ? t(keys[type]) : type;
+    };
+
+    const categoryMap: Record<string, string> = {
+        'SALARY': t('factory_overview.cat_salary'),
+        'RENT': t('factory_overview.cat_rent'),
+        'FOOD': t('factory_overview.cat_food'),
+        'DAILY_EXPENSE': t('factory_overview.cat_daily_expense'),
+        'ELECTRICITY': t('factory_overview.cat_electricity'),
+        'TRANSPORT_OUT': t('factory_overview.cat_transport_out'),
+        'TRANSPORT_IN': t('factory_overview.cat_transport_in'),
+        'INVENTORY': t('factory_overview.cat_inventory'),
+        'CUSTOMS': t('factory_overview.cat_customs'),
+        'SUPPLIER': t('factory_overview.cat_supplier'),
+        'SAFE_WITHDRAWAL': t('factory_overview.cat_safe_withdrawal'),
+        'SAFE_DEPOSIT': t('factory_overview.cat_safe_deposit'),
+    };
     const txs = db.getFactoryTransactions();
     const settings = db.vehicleConfig;
     const currentMonth = new Date().getMonth();
@@ -95,10 +119,10 @@ export const OverviewTab = ({ refreshTrigger }: { refreshTrigger: number }) => {
     }, [totalEnergy, stats.nationalPower, stats.generatorPower]);
 
     const loadStatus = useMemo(() => {
-        if (totalEnergy === 0) return { label: 'لا توجد بيانات', color: 'gray', textClass: 'text-gray-500', dotClass: 'bg-gray-400', bgClass: 'bg-gray-50', borderClass: 'border-gray-100' };
-        if (nationalPerc >= 70) return { label: 'مثالي', color: 'emerald', textClass: 'text-emerald-700', dotClass: 'bg-emerald-500', bgClass: 'bg-emerald-50', borderClass: 'border-emerald-100' };
-        if (nationalPerc >= 40) return { label: 'مستقر', color: 'blue', textClass: 'text-blue-700', dotClass: 'bg-blue-500', bgClass: 'bg-blue-50', borderClass: 'border-blue-100' };
-        return { label: 'كلفة مرتفعة', color: 'red', textClass: 'text-red-700', dotClass: 'bg-red-500', bgClass: 'bg-red-50', borderClass: 'border-red-100' };
+        if (totalEnergy === 0) return { label: t('factory_overview.load_no_data'), color: 'gray', textClass: 'text-gray-500', dotClass: 'bg-gray-400', bgClass: 'bg-gray-50', borderClass: 'border-gray-100' };
+        if (nationalPerc >= 70) return { label: t('factory_overview.load_optimal'), color: 'emerald', textClass: 'text-emerald-700', dotClass: 'bg-emerald-500', bgClass: 'bg-emerald-50', borderClass: 'border-emerald-100' };
+        if (nationalPerc >= 40) return { label: t('factory_overview.load_stable'), color: 'blue', textClass: 'text-blue-700', dotClass: 'bg-blue-500', bgClass: 'bg-blue-50', borderClass: 'border-blue-100' };
+        return { label: t('factory_overview.load_high_cost'), color: 'red', textClass: 'text-red-700', dotClass: 'bg-red-500', bgClass: 'bg-red-50', borderClass: 'border-red-100' };
     }, [totalEnergy, nationalPerc]);
 
     // Load AI Cache on Mount
@@ -117,7 +141,7 @@ export const OverviewTab = ({ refreshTrigger }: { refreshTrigger: number }) => {
 
     const callAI = async () => {
         if (lastUpdated && Date.now() - lastUpdated < AI_COOLDOWN_MS) {
-            setAiError(`يرجى الانتظار قليلاً قبل التحديث مرة أخرى.`);
+            setAiError(t('factory_overview.ai_wait_msg'));
             return;
         }
 
@@ -125,38 +149,18 @@ export const OverviewTab = ({ refreshTrigger }: { refreshTrigger: number }) => {
         setAiError(null);
 
         try {
-            // استخدام المفتاح من الإعدادات أو الافتراضي
-            const apiKey = settings.geminiApiKey || process.env.API_KEY;
-            const ai = new GoogleGenAI({ apiKey: apiKey });
-
-            const prompt = `أنت خبير مالي لمصنع فلين.البيانات الحالية لشهر ${MONTHS_AR[currentMonth]}:
-- استثمار المخزن: $${stats.inventoryInvestment}
-- مصاريف تشغيلية: $${stats.totalExpenses}
-- توفير طاقة: % ${energyAnalytics.savings.toFixed(0)}
-- كلفة ساعة الطاقة: $${energyAnalytics.hourly.toFixed(2)}
-            
-            قدم 3 نصائح استراتيجية قصيرة جداً(مباشرة للهندسة والمالية) بالعربية الفصحى البسيطة.`;
-
-            const response = await ai.models.generateContent({
-                model: "gemini-3-flash-preview",
-                contents: prompt,
-                config: {
-                    responseMimeType: "application/json",
-                    responseSchema: {
-                        type: Type.ARRAY,
-                        items: {
-                            type: Type.OBJECT,
-                            properties: {
-                                title: { type: Type.STRING },
-                                text: { type: Type.STRING }
-                            },
-                            required: ["title", "text"]
-                        }
-                    }
+            const { data: responseData, error } = await supabase.functions.invoke('factory-insights', {
+                body: {
+                    month: currentMonth,
+                    inventoryInvestment: stats.inventoryInvestment,
+                    totalExpenses: stats.totalExpenses,
+                    savings: Math.max(0, energyAnalytics.savings),
+                    hourly: energyAnalytics.hourly
                 }
             });
-
-            const data = JSON.parse(response.text || "[]");
+            if (error) throw new Error(error.context?.status === 429 ? '429' : error.message);
+            if (!Array.isArray(responseData?.insights)) throw new Error('Invalid insights response');
+            const data = responseData.insights;
             setAiInsights(data);
 
             const now = Date.now();
@@ -168,9 +172,9 @@ export const OverviewTab = ({ refreshTrigger }: { refreshTrigger: number }) => {
         } catch (err: any) {
             console.error(err);
             if (err.message?.includes('quota') || err.message?.includes('429')) {
-                setAiError('نفد رصيد التوكنات المجاني (Quota Exceeded). يرجى تحديث المفتاح من الإعدادات.');
+                setAiError(t('factory_overview.ai_quota_exceeded'));
             } else {
-                setAiError('تعذر الاتصال بالمحرك الذكي حالياً.');
+                setAiError(t('factory_overview.ai_connection_failed'));
             }
         } finally {
             setIsAiLoading(false);
@@ -186,12 +190,12 @@ export const OverviewTab = ({ refreshTrigger }: { refreshTrigger: number }) => {
             <div className="flex flex-row justify-between items-end px-2">
                 <div className="text-right">
                     <h2 className="text-2xl md:text-3xl font-black text-gray-800 flex items-center gap-3">
-                        إحصائيات شهر {MONTHS_AR[currentMonth]}
+                        {t('factory_overview.monthly_stats', { month: MONTHS_AR[currentMonth] })}
                         <BarChart size={32} className="text-[#0e3c63]" />
                     </h2>
-                    <p className="text-[10px] text-gray-400 font-bold tracking-[0.2em] mt-1 uppercase">VOGA FACTORY INTELLIGENCE</p>
+                    <p className="text-[10px] text-gray-400 font-bold tracking-[0.2em] mt-1 uppercase">{t('factory_overview.voga_intelligence')}</p>
                 </div>
-                <Badge color="blue" className="px-4 py-1.5 rounded-lg text-[10px] font-black">محدث لحظياً</Badge>
+                <Badge color="blue" className="px-4 py-1.5 rounded-lg text-[10px] font-black">{t('factory_overview.live_update')}</Badge>
             </div>
 
             {/* Top 3 Cards */}
@@ -200,7 +204,7 @@ export const OverviewTab = ({ refreshTrigger }: { refreshTrigger: number }) => {
                     <div className="flex justify-between items-start">
                         <div className="p-4 bg-emerald-50 text-emerald-600 rounded-2xl group-hover:scale-110 transition-transform"><Truck size={28} /></div>
                         <div className="text-left">
-                            <p className="text-blue-300 text-[11px] font-black uppercase tracking-widest mb-1">تكاليف النقل والكمارك</p>
+                            <p className="text-blue-300 text-[11px] font-black uppercase tracking-widest mb-1">{t('factory_overview.logistics_cost')}</p>
                             <h3 className="text-3xl font-black font-mono text-gray-800">${stats.logisticsCost.toLocaleString()}</h3>
                         </div>
                     </div>
@@ -210,7 +214,7 @@ export const OverviewTab = ({ refreshTrigger }: { refreshTrigger: number }) => {
                     <div className="flex justify-between items-start">
                         <div className="p-4 bg-red-50 text-red-600 rounded-2xl group-hover:scale-110 transition-transform"><TrendingDown size={28} /></div>
                         <div className="text-left">
-                            <p className="text-blue-300 text-[11px] font-black uppercase tracking-widest mb-1">إجمالي الإنفاق للفترة</p>
+                            <p className="text-blue-300 text-[11px] font-black uppercase tracking-widest mb-1">{t('factory_overview.total_spending')}</p>
                             <h3 className="text-3xl font-black font-mono text-gray-800">${stats.totalExpenses.toLocaleString()}</h3>
                         </div>
                     </div>
@@ -220,7 +224,7 @@ export const OverviewTab = ({ refreshTrigger }: { refreshTrigger: number }) => {
                     <div className="flex justify-between items-start">
                         <div className="p-4 bg-blue-50 text-blue-600 rounded-2xl group-hover:scale-110 transition-transform"><Layers size={28} /></div>
                         <div className="text-left">
-                            <p className="text-blue-300 text-[11px] font-black uppercase tracking-widest mb-1">قيمة المواد المتوفرة</p>
+                            <p className="text-blue-300 text-[11px] font-black uppercase tracking-widest mb-1">{t('factory_overview.inventory_value')}</p>
                             <h3 className="text-3xl font-black font-mono text-gray-800">${stats.inventoryInvestment.toLocaleString()}</h3>
                         </div>
                     </div>
@@ -234,9 +238,9 @@ export const OverviewTab = ({ refreshTrigger }: { refreshTrigger: number }) => {
                         <div className="text-right">
                             <h4 className="font-black text-2xl text-gray-800 flex items-center gap-2">
                                 <Lightbulb size={24} className="text-amber-500" />
-                                كفاءة وتحليل كلف الطاقة
+                                {t('factory_overview.energy_analysis')}
                             </h4>
-                            <p className="text-[9px] text-gray-400 font-bold tracking-[0.2em] mt-1 uppercase">ENERGY SOURCE DYNAMICS</p>
+                            <p className="text-[9px] text-gray-400 font-bold tracking-[0.2em] mt-1 uppercase">{t('factory_overview.energy_subtitle')}</p>
                         </div>
                     </div>
 
@@ -247,7 +251,7 @@ export const OverviewTab = ({ refreshTrigger }: { refreshTrigger: number }) => {
                                     <div className="p-2.5 bg-blue-500 text-white rounded-xl shadow-lg shadow-blue-100"><ZapIcon size={20} /></div>
                                     <Badge color="blue" className="bg-white border-blue-100 text-blue-600 text-[10px] font-black">{nationalPerc.toFixed(1)}%</Badge>
                                 </div>
-                                <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">الكهرباء الوطنية</p>
+                                <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">{t('factory_overview.national_power')}</p>
                                 <h5 className="font-black text-blue-900 text-2xl tracking-tight">${stats.nationalPower.toLocaleString()}</h5>
                             </div>
                             <div className="bg-gray-50/50 p-6 rounded-[2rem] border border-gray-100 text-right">
@@ -255,7 +259,7 @@ export const OverviewTab = ({ refreshTrigger }: { refreshTrigger: number }) => {
                                     <div className="p-2.5 bg-amber-500 text-white rounded-xl shadow-lg shadow-amber-100"><Fuel size={20} /></div>
                                     <Badge color="yellow" className="bg-white border-amber-100 text-amber-600 text-[10px] font-black">{(100 - nationalPerc).toFixed(1)}%</Badge>
                                 </div>
-                                <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-1">المولدات الأهلية</p>
+                                <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-1">{t('factory_overview.generator_power')}</p>
                                 <h5 className="font-black text-amber-900 text-2xl tracking-tight">${stats.generatorPower.toLocaleString()}</h5>
                             </div>
                         </div>
@@ -271,18 +275,18 @@ export const OverviewTab = ({ refreshTrigger }: { refreshTrigger: number }) => {
                                     )}
                                 </svg>
                                 <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">إجمالي الفاتورة</span>
+                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">{t('factory_overview.total_bill')}</span>
                                     <span className="text-4xl md:text-5xl font-black font-mono text-gray-800">${totalEnergy.toLocaleString()}</span>
                                 </div>
                             </div>
                         </div>
                         <div className="md:col-span-3 space-y-4 text-center">
                             <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
-                                <p className="text-[9px] font-black text-gray-400 uppercase mb-1">كلفة الساعة</p>
+                                <p className="text-[9px] font-black text-gray-400 uppercase mb-1">{t('factory_overview.hourly_cost')}</p>
                                 <p className="text-xl font-black text-gray-800 font-mono">${energyAnalytics.hourly.toFixed(2)}</p>
                             </div>
                             <div className="bg-emerald-50 rounded-2xl p-4 border border-emerald-100">
-                                <p className="text-[9px] font-black text-emerald-400 uppercase mb-1">توفير الطاقة</p>
+                                <p className="text-[9px] font-black text-emerald-400 uppercase mb-1">{t('factory_overview.energy_savings')}</p>
                                 <p className="text-xl font-black text-emerald-600 font-mono">+{energyAnalytics.savings.toFixed(1)}%</p>
                             </div>
                         </div>
@@ -297,8 +301,8 @@ export const OverviewTab = ({ refreshTrigger }: { refreshTrigger: number }) => {
                         <div className="flex items-center gap-4">
                             <div className="p-3 bg-purple-600 text-white rounded-2xl shadow-lg shadow-purple-200"><BrainCircuit size={28} /></div>
                             <div>
-                                <h4 className="font-black text-2xl text-gray-800">تحليلات الـ AI</h4>
-                                <p className="text-[10px] text-purple-600 font-black uppercase tracking-widest">Powered by VOGA Brain</p>
+                                <h4 className="font-black text-2xl text-gray-800">{t('factory_overview.ai_analytics')}</h4>
+                                <p className="text-[10px] text-purple-600 font-black uppercase tracking-widest">{t('factory_overview.powered_by')}</p>
                             </div>
                         </div>
                         <Button
@@ -307,7 +311,7 @@ export const OverviewTab = ({ refreshTrigger }: { refreshTrigger: number }) => {
                             className="bg-[#0e3c63] text-white px-4 h-12 rounded-xl text-xs font-black shadow-lg hover:shadow-blue-900/20 active:scale-95 transition-all"
                         >
                             {isAiLoading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCcw size={16} />}
-                            {isAiLoading ? 'تحليل...' : 'تحديث الذكاء'}
+                            {isAiLoading ? t('factory_overview.ai_analyzing') : t('factory_overview.ai_refresh')}
                         </Button>
                     </div>
 
@@ -315,7 +319,7 @@ export const OverviewTab = ({ refreshTrigger }: { refreshTrigger: number }) => {
                     <div className="relative z-10 mb-6 bg-purple-50 p-4 rounded-2xl border border-purple-100">
                         <div className="flex justify-between items-center mb-2">
                             <span className="text-[10px] font-black text-purple-600 uppercase tracking-widest flex items-center gap-1.5">
-                                <Gauge size={12} /> استهلاك الحصة المجانية
+                                <Gauge size={12} /> {t('factory_overview.free_quota_usage')}
                             </span>
                             <span className="text-xs font-black text-purple-700 font-mono">{quotaPercentage.toFixed(0)}%</span>
                         </div>
@@ -333,7 +337,7 @@ export const OverviewTab = ({ refreshTrigger }: { refreshTrigger: number }) => {
                                 <AlertCircle size={20} className="text-red-500 shrink-0 mt-0.5" />
                                 <div>
                                     <p className="text-[11px] text-red-700 font-black leading-relaxed">{aiError}</p>
-                                    <p className="text-[9px] text-red-600/70 font-bold mt-1">تلميح: يمكنك تغيير كود الـ API من إعدادات النظام.</p>
+                                    <p className="text-[9px] text-red-600/70 font-bold mt-1">{t('factory_overview.ai_hint')}</p>
                                 </div>
                             </div>
                         )}
@@ -355,7 +359,7 @@ export const OverviewTab = ({ refreshTrigger }: { refreshTrigger: number }) => {
                         ) : (
                             <div className="text-center py-16 text-gray-400 bg-gray-50 rounded-[3rem] border-2 border-dashed border-gray-200">
                                 <MessageSquareText size={48} className="mx-auto mb-4 opacity-10" />
-                                <p className="font-black text-xs px-10 leading-relaxed text-gray-400">اضغط على زر التحديث لاستدعاء الذكاء الاصطناعي وتحليل بيانات المصنع الحالية.</p>
+                                <p className="font-black text-xs px-10 leading-relaxed text-gray-400">{t('factory_overview.ai_empty_prompt')}</p>
                             </div>
                         )}
                     </div>
@@ -366,11 +370,11 @@ export const OverviewTab = ({ refreshTrigger }: { refreshTrigger: number }) => {
             <div className="space-y-4">
                 <div className="flex items-center gap-2 px-2">
                     <History size={18} className="text-[#0e3c63]" />
-                    <h4 className="font-black text-sm text-gray-800 uppercase tracking-widest">أحدث حركات المخزن (تغليف ومواد)</h4>
+                    <h4 className="font-black text-sm text-gray-800 uppercase tracking-widest">{t('factory_overview.inventory_movements')}</h4>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
                     {stats.last4Inventory.length === 0 ? (
-                        <div className="col-span-full py-12 text-center text-gray-400 font-bold bg-white rounded-3xl border-2 border-dashed border-gray-100">لم يتم تسجيل حركات مخزن بعد</div>
+                        <div className="col-span-full py-12 text-center text-gray-400 font-bold bg-white rounded-3xl border-2 border-dashed border-gray-100">{t('factory_overview.no_inventory_yet')}</div>
                     ) : stats.last4Inventory.map(item => {
                         const isIN = item.transactionType === 'IN';
                         return (
@@ -381,12 +385,12 @@ export const OverviewTab = ({ refreshTrigger }: { refreshTrigger: number }) => {
                                     </div>
                                 </div>
                                 <div className="text-right mb-6 min-h-[40px]">
-                                    <p className={`text-[10px] font-black uppercase mb-1 ${isIN ? 'text-emerald-500' : 'text-orange-500'}`}>{isIN ? 'وارد للمخزن' : 'صرف للإنتاج'}</p>
-                                    <h5 className="font-black text-gray-800 text-sm uppercase tracking-tight">{materialLabels[item.materialType!] || item.materialType}</h5>
+                                    <p className={`text-[10px] font-black uppercase mb-1 ${isIN ? 'text-emerald-500' : 'text-orange-500'}`}>{isIN ? t('factory_overview.incoming_inventory') : t('factory_overview.outgoing_production')}</p>
+                                    <h5 className="font-black text-gray-800 text-sm uppercase tracking-tight">{t(getMatKey(item.materialType!))}</h5>
                                 </div>
                                 <div className="flex items-baseline gap-2">
                                     <span className={`text-4xl font-black font-mono tracking-tighter ${isIN ? 'text-emerald-700' : 'text-orange-700'}`}>{item.quantity?.toLocaleString()}</span>
-                                    <span className="text-xs font-bold text-gray-400 uppercase">وحدة</span>
+                                    <span className="text-xs font-bold text-gray-400 uppercase">{t('factory_overview.unit_label')}</span>
                                 </div>
                                 <div className={`absolute bottom-0 left-0 right-0 h-1.5 rounded-b-[2rem] overflow-hidden ${isIN ? 'bg-emerald-500' : 'bg-orange-500'}`}></div>
                             </Card>
@@ -401,40 +405,40 @@ export const OverviewTab = ({ refreshTrigger }: { refreshTrigger: number }) => {
                     <div className="p-8 bg-gray-50/50 border-b border-gray-100 flex justify-between items-center px-10">
                         <h4 className="font-black text-xl text-gray-800 flex items-center gap-3">
                             <Activity size={24} className="text-[#0e3c63]" />
-                            آخر العمليات المسجلة (أحدث 8)
+                            {t('factory_overview.latest_transactions')}
                         </h4>
-                        <div className="bg-white px-4 py-1.5 rounded-lg text-[10px] font-black text-gray-400 uppercase tracking-widest border border-gray-200">LATEST RECORDS</div>
+                        <div className="bg-white px-4 py-1.5 rounded-lg text-[10px] font-black text-gray-400 uppercase tracking-widest border border-gray-200">{t('factory_overview.latest_records')}</div>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-right text-sm">
                             <tbody className="divide-y divide-gray-50">
-                                {stats.recentTxs.map(t => (
-                                    <tr key={t.id} className="hover:bg-blue-50/20 transition-all group">
+                                {stats.recentTxs.map(tx => (
+                                    <tr key={tx.id} className="hover:bg-blue-50/20 transition-all group">
                                         <td className="p-6 pr-10">
                                             <div className="flex items-center gap-5">
                                                 <div className="w-12 h-12 rounded-2xl bg-gray-100 flex items-center justify-center text-gray-400">
-                                                    {t.category === 'INVENTORY' ? <Box size={20} /> : <DollarSign size={20} />}
+                                                    {tx.category === 'INVENTORY' ? <Box size={20} /> : <DollarSign size={20} />}
                                                 </div>
                                                 <div className="text-right">
                                                     <p className="font-black text-gray-800 text-xs font-mono uppercase tracking-tight">
-                                                        {arabicCategoryMap[t.category] || t.category}
+                                                        {categoryMap[tx.category] || tx.category}
                                                     </p>
-                                                    <p className="text-[10px] text-gray-400 font-black font-mono mt-1 tracking-widest">{formatDate(t.date)}</p>
+                                                    <p className="text-[10px] text-gray-400 font-black font-mono mt-1 tracking-widest">{formatDate(tx.date)}</p>
                                                 </div>
                                             </div>
                                         </td>
                                         <td className="p-6">
-                                            <p className="text-sm font-bold text-gray-500 truncate max-w-[400px]">{t.notes || t.supplierName || t.brokerName || '-'}</p>
+                                            <p className="text-sm font-bold text-gray-500 truncate max-w-[400px]">{tx.notes || tx.supplierName || tx.brokerName || '-'}</p>
                                         </td>
                                         <td className="p-6 text-left pl-10">
-                                            <span className={`font-mono font-black text-xl ${t.transactionType === 'OUT' || ['SALARY', 'RENT', 'FOOD', 'DAILY_EXPENSE', 'ELECTRICITY', 'TRANSPORT_OUT', 'CUSTOMS'].includes(t.category) ? 'text-gray-800' : 'text-emerald-600'}`}>
-                                                ${t.amount.toLocaleString()}
+                                            <span className={`font-mono font-black text-xl ${tx.transactionType === 'OUT' || ['SALARY', 'RENT', 'FOOD', 'DAILY_EXPENSE', 'ELECTRICITY', 'TRANSPORT_OUT', 'CUSTOMS'].includes(tx.category) ? 'text-gray-800' : 'text-emerald-600'}`}>
+                                                ${tx.amount.toLocaleString()}
                                             </span>
                                         </td>
                                     </tr>
                                 ))}
                                 {stats.recentTxs.length === 0 && (
-                                    <tr><td colSpan={3} className="p-20 text-center text-gray-400 font-black">لا توجد عمليات مسجلة حالياً</td></tr>
+                                    <tr><td colSpan={3} className="p-20 text-center text-gray-400 font-black">{t('factory_overview.no_transactions')}</td></tr>
                                 )}
                             </tbody>
                         </table>
