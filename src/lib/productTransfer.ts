@@ -59,7 +59,7 @@ const numberValue = (value: unknown, fallback: number, label: string, positive =
 
 export const buildProductRow = (product: Product, categories: Category[]): ProductRow => ({
     id: String(product.id), code: product.code, name: product.name || '', paintType: product.paintType || '', category: product.category, dimensions: product.dimensions,
-    packageUnits: Number(product.metersPerCarton || (getCategoryType(categories, product.category) === 'ADHESIVE' ? 80 : 1)),
+    packageUnits: Number(product.metersPerCarton ?? (getCategoryType(categories, product.category) === 'ADHESIVE' ? 80 : 1)),
     normalMeter: Number(product.prices['عادي']?.pricePerMeter || 0),
     vipMeter: Number(product.prices.VIP?.pricePerMeter || 0),
     normalUnit: Number(product.prices['عادي']?.pricePerCarton || 0),
@@ -74,7 +74,7 @@ export const buildImportPayload = (row: ImportedProductRow, target: Product, cat
         throw new Error('نوع المنتج لا يطابق القسم المختار؛ استورد ملف الفلين واللاصقة كل واحد بقسمه');
     }
     const adhesive = family !== 'STYROFOAM';
-    const quantity = family === 'PAINT' ? 1 : numberValue(row.packageUnits, Number(target.metersPerCarton || (adhesive ? 80 : 1)), 'عدد وحدات العبوة', true);
+    const quantity = family === 'PAINT' ? 1 : numberValue(row.packageUnits, Number(target.metersPerCarton ?? (adhesive ? 80 : 1)), 'عدد وحدات العبوة');
     if (family === 'ADHESIVE' && !Number.isInteger(quantity)) throw new Error('عدد الأكياس في الباليت يجب أن يكون عدداً صحيحاً');
     const normal = numberValue(adhesive ? row.normalUnit : row.normalMeter,
         adhesive ? target.prices['عادي'].pricePerCarton : target.prices['عادي'].pricePerMeter, 'سعر العادي');

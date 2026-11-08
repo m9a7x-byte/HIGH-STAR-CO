@@ -123,11 +123,11 @@ export const ProductsSubTab = ({ products, categories, orders, canEdit, onViewOr
     // Dynamic Form Type: Derived from the selected category in the modal, fallback to mainType
     const selectedCategoryObject = categories.find((c: any) => c.name === modalCategory);
     const formType = selectedCategoryObject ? selectedCategoryObject.type : mainType;
-    const formBagsPerPallet = Math.max(1, Number(formMetersPerCarton || 80));
+    const formBagsPerPallet = Math.max(0, Number(formMetersPerCarton ?? 80));
     const formPalletPriceNormal = Math.round((formBagPriceNormal * formBagsPerPallet) * 100) / 100;
     const formPalletPriceVIP = Math.round((formBagPriceVIP * formBagsPerPallet) * 100) / 100;
 
-    const getBagsPerPallet = (product?: Product | null) => Math.max(1, Number(product?.metersPerCarton || 80));
+    const getBagsPerPallet = (product?: Product | null) => Math.max(0, Number(product?.metersPerCarton ?? 80));
     const getPalletPrice = (bagPrice: number, product?: Product | null) => Math.round((Number(bagPrice || 0) * getBagsPerPallet(product)) * 100) / 100;
 
     // Constraints
@@ -511,7 +511,7 @@ export const ProductsSubTab = ({ products, categories, orders, canEdit, onViewOr
                     <div className="bg-white/80 backdrop-blur-md p-4 rounded-[2.5rem] shadow-xl border border-white flex flex-col md:flex-row justify-between items-center gap-6">
 
                         <div className="relative flex-1 w-full"><input className="w-full h-16 bg-gray-50 border-2 border-transparent rounded-[1.8rem] pl-16 pr-8 text-gray-800 font-black focus:bg-white focus:border-[#0e3c63] outline-none transition-all placeholder:text-gray-300 shadow-inner" placeholder={t("products_tab.search_product_code")} value={productSearch} onChange={e => setProductSearch(e.target.value)} /><Search className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300" size={28} /></div>
-                        {canEdit && <Button onClick={() => { setEditingProduct(null); setModalCategory(mainType === 'PAINT' ? PAINT_CATEGORY : mainType === 'ADHESIVE' ? (categories.find((c: any) => c.type === 'ADHESIVE')?.name || ADHESIVE_CATEGORY) : 'PAN'); setShowProductModal(true); }} className="h-16 px-10 rounded-[1.8rem] shadow-2xl bg-[#0e3c63] text-lg font-black"><Plus size={24} /> {t("products_tab.add_product")}</Button>}
+                        {canEdit && <Button onClick={() => { setEditingProduct(null); setModalCategory(mainType === 'PAINT' ? (categories.find((c: any) => c.type === 'PAINT')?.name || PAINT_CATEGORY) : mainType === 'ADHESIVE' ? (categories.find((c: any) => c.type === 'ADHESIVE')?.name || ADHESIVE_CATEGORY) : 'PAN'); setShowProductModal(true); }} className="h-16 px-10 rounded-[1.8rem] shadow-2xl bg-[#0e3c63] text-lg font-black"><Plus size={24} /> {t("products_tab.add_product")}</Button>}
                     </div>
 
                     {/* Dynamic Category Filter Buttons - For both Styrofoam and Adhesive */}
@@ -548,10 +548,10 @@ export const ProductsSubTab = ({ products, categories, orders, canEdit, onViewOr
                                 {canEdit && (
                                     <button onClick={(e) => { e.stopPropagation(); handleConfirmDelete(p); }} className="absolute top-6 left-6 z-40 p-4 bg-red-50 text-red-500 rounded-2xl opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 transition-all hover:bg-red-500 hover:text-white"><Trash2 size={24} /></button>
                                 )}
-                                <div className="flex items-start gap-6 mb-8">
+                                <div className="flex items-start gap-4 sm:gap-6 mb-8">
                                     <div className="w-28 h-28 rounded-[2rem] overflow-hidden bg-gray-50 shadow-inner border border-gray-100 shrink-0">{productType === 'PAINT' && !p.imageUrl ? <PaintBucket className="w-full h-full p-6 text-[#0e3c63]" /> : <img src={p.imageUrl || undefined} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" />}</div>
-                                    <div className="flex-1 pt-2">
-                                        <h4 className="font-black text-gray-800 text-3xl font-mono tracking-tighter mb-1">{p.name || p.code}</h4>
+                                    <div className="min-w-0 flex-1 pt-2">
+                                        <h4 className={`text-gray-800 mb-1 ${productType === 'PAINT' ? 'text-base sm:text-lg font-bold leading-relaxed break-words' : 'text-3xl font-black font-mono tracking-tighter'}`}>{p.name || p.code}</h4>
                                         {productType === 'PAINT' && <p className="text-xs font-bold text-[#0e3c63] mb-2">{p.paintType} · {p.code}</p>}
                                         {p.imageNote && <p className="text-[10px] font-medium text-gray-500 mb-2">{p.imageNote}</p>}
                                         <p className="text-xs font-bold text-gray-400 flex items-center gap-1.5">{isAdhesive ? <Scale size={12} /> : <Ruler size={12} />} {p.dimensions}</p>
@@ -687,7 +687,7 @@ export const ProductsSubTab = ({ products, categories, orders, canEdit, onViewOr
                                         {formType !== 'PAINT' && <Input
                                             type="number"
                                             required
-                                            min="1"
+                                            min="0"
                                             label={formType === 'ADHESIVE' ? 'عدد الأكياس بالباليت' : t("products_tab.meters_in_carton")}
                                             name={formType === 'ADHESIVE' ? 'bagsPerPallet' : 'metersPerCarton'}
                                             value={formMetersPerCarton}

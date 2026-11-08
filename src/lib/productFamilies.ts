@@ -1,9 +1,9 @@
 import type { Category, Product } from '../types';
 
 export type ProductFamily = 'STYROFOAM' | 'ADHESIVE' | 'PAINT';
-export const PAINT_CATEGORY = 'أصباغ';
+export const PAINT_CATEGORY = 'paints';
 export const getProductFamily = (product: Pick<Product, 'category'> | undefined, categories: Category[]): ProductFamily =>
-    categories.find(category => category.name === product?.category)?.type || (product?.category === PAINT_CATEGORY ? 'PAINT' : 'STYROFOAM');
+    categories.find(category => category.name === product?.category)?.type || ([PAINT_CATEGORY, 'أصباغ'].includes(product?.category || '') ? 'PAINT' : 'STYROFOAM');
 export const getProductName = (product: Pick<Product, 'name' | 'code'> | undefined) => product?.name || product?.code || '';
 export const getProductUnit = (product: Pick<Product, 'category'> | undefined, categories: Category[]) => {
     const family = getProductFamily(product, categories);

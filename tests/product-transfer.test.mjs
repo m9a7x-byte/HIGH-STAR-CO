@@ -30,8 +30,8 @@ test('blank cells preserve prices; zero is an intentional value', () => {
   assert.equal(payload.prices['عادي'].pricePerCarton, 24);
   assert.equal(payload.prices.VIP.pricePerCarton, 0);
 });
-test('rejects invalid, negative or zero package quantities before writes', () => {
-  for (const value of ['bad', '-1', '0']) assert.throws(() => buildImportPayload({ packageUnits: value }, product, categories, 'STYROFOAM'));
+test('rejects invalid or negative package quantities before writes', () => {
+  for (const value of ['bad', '-1']) assert.throws(() => buildImportPayload({ packageUnits: value }, product, categories, 'STYROFOAM'));
   for (const value of ['bad', '-1', 'Infinity']) assert.throws(() => buildImportPayload({ normalMeter: value }, product, categories, 'STYROFOAM'));
   assert.equal(buildImportPayload({ normalMeter: '٣٫٥' }, product, categories, 'STYROFOAM').prices['عادي'].pricePerMeter, 3.5);
 });
@@ -57,6 +57,18 @@ test('duplicate codes require dimensions or an ID, and mismatched IDs cannot upd
 test('export preserves original unit prices for each family', () => {
   assert.equal(buildProductRow(product, categories).normalMeter, 2);
   assert.equal(buildProductRow(bag, categories).normalUnit, 5);
+});
+
+test('an unknown package quantity stays zero in exports and price recalculation', () => {
+  const unknown = { ...product, metersPerCarton: 0 };
+  assert.equal(buildProductRow(unknown, categories).packageUnits, 0);
+  const payload = buildImportPayload({ normalMeter: '6.5', vipMeter: '6.5', packageUnits: '0' }, unknown, categories, 'STYROFOAM');
+  assert.equal(payload.meters_per_carton, 0);
+  assert.equal(payload.prices['عادي'].pricePerMeter, 6.5);
+  assert.equal(payload.prices.VIP.pricePerCarton, 0);
+  const bagPayload = buildImportPayload({ packageUnits: '0' }, bag, categories, 'ADHESIVE');
+  assert.equal(bagPayload.meters_per_carton, 0);
+  assert.equal(bagPayload.prices['عادي'].pricePerCarton, 5);
 });
 
 test('invalid categories, states and fractional bag counts are rejected', () => {

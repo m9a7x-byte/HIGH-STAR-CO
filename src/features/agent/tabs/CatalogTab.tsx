@@ -314,7 +314,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
                             const isAdhesive = family === 'ADHESIVE';
                             const isPaint = family === 'PAINT';
                             const isUnitProduct = isAdhesive || isPaint;
-                            const bagsPerPallet = Math.max(1, Number(p.metersPerCarton || 80));
+                            const bagsPerPallet = Math.max(0, Number(p.metersPerCarton ?? 80));
                             const palletPrice = Math.round((Number(price.pricePerCarton || 0) * bagsPerPallet) * 100) / 100;
                             return (
                                 <div key={p.id} className="group relative bg-white rounded-[2.5rem] p-6 border border-gray-100 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)] hover:shadow-[0_20px_50px_-12px_rgba(14,60,99,0.15)] hover:border-blue-100 hover:-translate-y-1 transition-all duration-500 flex flex-col">
@@ -323,8 +323,8 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
                                             <div className="w-24 h-24 rounded-3xl overflow-hidden bg-gray-50 shadow-inner">{isPaint && !p.imageUrl ? <PaintBucket className="w-full h-full p-5 text-[#0e3c63]" /> : <img src={p.imageUrl || undefined} className="w-full h-full object-cover mix-blend-multiply opacity-90 group-hover:scale-110 transition-transform duration-700" />}</div>
                                             <div className={`absolute -bottom-2 -right-2 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider shadow-sm ${isAdhesive ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-[#0e3c63]'}`}>{isAdhesive ? t('common.adhesive') : p.category}</div>
                                         </div>
-                                        <div className="flex-1 pt-1">
-                                            <h4 className="font-black text-gray-800 text-3xl font-mono tracking-tighter mb-1 group-hover:text-[#0e3c63] transition-colors">{p.name || p.code}</h4>
+                                        <div className="min-w-0 flex-1 pt-1">
+                                            <h4 className={`text-gray-800 mb-1 group-hover:text-[#0e3c63] transition-colors ${isPaint ? 'text-base sm:text-lg font-bold leading-relaxed break-words' : 'text-3xl font-black font-mono tracking-tighter'}`}>{p.name || p.code}</h4>
                                             <p className="text-sm font-bold text-gray-400 leading-tight">{p.paintType ? `${p.paintType} — ${p.dimensions}` : p.dimensions}</p>
                                             {p.imageNote && <p className="text-[10px] text-gray-500 mt-2">{p.imageNote}</p>}
                                             {isAdhesive && (
