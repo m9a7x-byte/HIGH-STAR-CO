@@ -17,6 +17,8 @@ interface InvoiceModalProps {
     respectPrintSetting?: boolean;
 }
 
+const formatAmount = (value: number) => value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 export const InvoiceModal = ({ order, onClose, allowPrint = true, respectPrintSetting = true }: InvoiceModalProps) => {
     const { t } = useTranslation();
 
@@ -237,15 +239,15 @@ export const InvoiceModal = ({ order, onClose, allowPrint = true, respectPrintSe
                         <div className="grid grid-cols-3 gap-4 mb-8 print:hidden">
                             <div className="bg-gray-50 p-4 rounded-2xl text-center border border-gray-100">
                                 <p className="text-[10px] font-black text-gray-400 uppercase mb-1">{t('invoice.total_amount')}</p>
-                                <p className="text-xl font-black font-mono text-gray-800">${(order.totalAmount || 0).toLocaleString()}</p>
+                                <p className="text-xl font-black font-mono text-gray-800">${formatAmount(order.totalAmount || 0)}</p>
                             </div>
                             <div className="bg-emerald-50 p-4 rounded-2xl text-center border border-emerald-100 text-emerald-700">
                                 <p className="text-[10px] font-black uppercase mb-1 opacity-70">{t('invoice.paid_amount')}</p>
-                                <p className="text-xl font-black font-mono">${(order.paidAmount || 0).toLocaleString()}</p>
+                                <p className="text-xl font-black font-mono">${formatAmount(order.paidAmount || 0)}</p>
                             </div>
                             <div className="bg-red-50 p-4 rounded-2xl text-center border border-red-100 text-red-700">
                                 <p className="text-[10px] font-black uppercase mb-1 opacity-70">{t('invoice.remaining_amount')}</p>
-                                <p className="text-xl font-black font-mono">${((order.totalAmount || 0) - (order.paidAmount || 0)).toLocaleString()}</p>
+                                <p className="text-xl font-black font-mono">${formatAmount((order.totalAmount || 0) - (order.paidAmount || 0))}</p>
                             </div>
                         </div>
 
@@ -267,12 +269,11 @@ export const InvoiceModal = ({ order, onClose, allowPrint = true, respectPrintSe
                                 <tbody className="divide-y divide-gray-100 print:divide-gray-400">
                                     {sortOrderItemsByProductCode(order.items).map((item, index) => {
                                         const product = db.products.find((p: any) => p.id === item.productId || String(p.id) === String(item.productId));
-                                        const isAdhesive = isUnitPricedProduct(product, db.categories, item.productSaleMode) || !!item.productPaintType;
-                                        const itemUnit = item.productPaintType ? 'سطلة' : getProductUnit(product, db.categories, item.productSaleMode);
+                                        const isUnitPriced = !!item.isSpecialRequest || isUnitPricedProduct(product, db.categories, item.productSaleMode) || !!item.productPaintType;
+                                        const itemUnit = item.isSpecialRequest ? 'وحدة' : item.productPaintType ? 'سطلة' : getProductUnit(product, db.categories, item.productSaleMode);
                                         const metersPerCarton = item.productMetersPerCarton ?? product?.metersPerCarton ?? 0;
-                                        const totalMeters = isAdhesive ? 0 : (item.quantityCartons * metersPerCarton) + (item.quantityMeters || 0);
-                                        const unitPriceMeter = isAdhesive ? 0 : (metersPerCarton > 0 ? (item.unitPriceCarton / metersPerCarton) : (item.unitPriceMeter || 0));
-                                        const computedTotalPrice = isAdhesive ? (item.totalPrice || 0) : (totalMeters * unitPriceMeter);
+                                        const totalMeters = isUnitPriced ? 0 : (item.quantityCartons * metersPerCarton) + (item.quantityMeters || 0);
+                                        const unitPriceMeter = isUnitPriced ? 0 : (metersPerCarton > 0 ? (item.unitPriceCarton / metersPerCarton) : (item.unitPriceMeter || 0));
 
                                         return (
                                         <React.Fragment key={item.id}>
@@ -288,31 +289,30 @@ export const InvoiceModal = ({ order, onClose, allowPrint = true, respectPrintSe
                                                 </td>
                                                 <td className="p-3 print:p-1.5 text-gray-500 print:text-black">{item.productPaintType || product?.paintType ? `${item.productPaintType || product?.paintType} — ${item.productDimensions}` : item.productDimensions}{item.paintColor && <p className="mt-1 text-xs font-bold text-[#0e3c63] whitespace-pre-line">الألوان: {item.paintColor}</p>}</td>
                                                 <td className="p-3 print:p-1.5 text-center font-bold">
-                                                    {isAdhesive ? (
+                                                    {isUnitPriced ? (
                                                         <span>{item.quantityCartons} <span className="text-[10px] opacity-50">{itemUnit}</span></span>
                                                     ) : (
                                                         <span>{item.quantityCartons}</span>
                                                     )}
                                                 </td>
                                                 <td className="p-3 print:p-1.5 text-center font-mono">
-                                                    {isAdhesive ? '-' : ((item.quantityMeters || 0) > 0 ? item.quantityMeters : '-')}
+                                                    {isUnitPriced ? '-' : ((item.quantityMeters || 0) > 0 ? item.quantityMeters : '-')}
                                                 </td>
                                                 <td className="p-3 print:p-1.5 text-center font-mono">
-                                                    {isAdhesive ? '-' : metersPerCarton}
+                                                    {isUnitPriced ? '-' : metersPerCarton}
                                                 </td>
                                                 <td className="p-3 print:p-1.5 text-center font-bold">
-                                                    {isAdhesive ? '-' : totalMeters}
+                                                    {isUnitPriced ? '-' : totalMeters}
                                                 </td>
                                                 <td className="p-3 print:p-1.5 text-center font-mono price-col">
-                                                    {isAdhesive ? (
+                                                    {isUnitPriced ? (
                                                         item.unitPriceCarton > 0 ? `$${item.unitPriceCarton}` : <span className="text-xs text-amber-600 font-black">{t('invoice.pending_pricing')}</span>
                                                     ) : (
                                                         unitPriceMeter > 0 ? `$${unitPriceMeter % 1 === 0 ? unitPriceMeter : unitPriceMeter.toFixed(2)}` : <span className="text-xs text-amber-600 font-black">{t('invoice.pending_pricing')}</span>
                                                     )}
                                                 </td>
                                                 <td className="p-3 print:p-1.5 text-left font-mono font-black price-col">
-                                                    <span className="print:hidden">${(computedTotalPrice || 0).toLocaleString()}</span>
-                                                    <span className="hidden print:inline">${(item.totalPrice || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                    {`$${formatAmount(item.totalPrice || 0)}`}
                                                 </td>
                                             </tr>
                                             {item.isSpecialRequest && (
@@ -332,17 +332,17 @@ export const InvoiceModal = ({ order, onClose, allowPrint = true, respectPrintSe
                                 <tfoot className="bg-gray-50 print:bg-white border-t-2 print:border-black price-col">
                                     <tr className="print:text-[11px]">
                                         <td colSpan={8} className="p-4 print:p-1 print:pr-2 font-bold text-gray-500 print:text-black text-left">{t('invoice.subtotal')}</td>
-                                        <td className="p-4 print:p-1 text-left font-mono font-bold print:pl-2">${(order.subTotalAmount || order.totalAmount || 0).toLocaleString()}</td>
+                                        <td className="p-4 print:p-1 text-left font-mono font-bold print:pl-2">${formatAmount(order.subTotalAmount ?? order.totalAmount ?? 0)}</td>
                                     </tr>
                                     {order.discountValue > 0 && (
                                         <tr className="text-red-600 print:text-black print:text-[11px]">
                                             <td colSpan={8} className="p-4 print:p-1 print:pr-2 font-black text-left">{t('invoice.discount')}</td>
-                                            <td className="p-4 print:p-1 text-left font-mono font-black print:pl-2">-${(order.discountType === 'PERCENT' ? (order.subTotalAmount * order.discountValue / 100) : order.discountValue).toLocaleString()}</td>
+                                            <td className="p-4 print:p-1 text-left font-mono font-black print:pl-2">-${formatAmount(order.discountType === 'PERCENT' ? (order.subTotalAmount * order.discountValue / 100) : order.discountValue)}</td>
                                         </tr>
                                     )}
                                     <tr className="bg-[#0e3c63] text-white print:bg-gray-100 print:text-black">
                                         <td colSpan={8} className="p-4 print:p-1 print:pr-2 font-black text-lg print:text-[12px] text-left">{t('invoice.final_net')}</td>
-                                        <td className="p-4 print:p-1 text-left font-mono font-black text-xl print:text-[12px] print:pl-2">${(order.totalAmount || 0).toLocaleString()}</td>
+                                        <td className="p-4 print:p-1 text-left font-mono font-black text-xl print:text-[12px] print:pl-2">${formatAmount(order.totalAmount || 0)}</td>
                                     </tr>
                                 </tfoot>
                             </table>

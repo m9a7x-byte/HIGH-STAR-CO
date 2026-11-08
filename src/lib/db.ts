@@ -5,6 +5,7 @@ import { STYROFOAM_CATEGORIES, ADHESIVE_CATEGORY } from './constants';
 import { supabase } from './supabase';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { getAdjustedProductPrices } from './pricing';
+import { calculateLineTotal, calculateOrderTotals } from './orderMoney';
 import { snapshotProductUnits, validateProductQuantities, isPieceProduct, getProductFamily, normalizePaintColor } from './productFamilies';
 
 type Listener = () => void;
@@ -750,7 +751,7 @@ class SupabaseService {
 
       const prices = getAdjustedProductPrices(p, user.agentDetails);
       validateProductQuantities(p, this.categories, Number(item.qCartons), Number(item.qMeters));
-      const totalPrice = (item.qCartons * prices.pricePerCarton) + (item.qMeters * prices.pricePerMeter);
+      const totalPrice = calculateLineTotal(item.qCartons, prices.pricePerCarton, item.qMeters, prices.pricePerMeter);
       return {
         id: Math.random(),
         productId: p.id,
@@ -769,7 +770,7 @@ class SupabaseService {
       };
     });
 
-    const subTotal = orderItems.reduce((acc, curr) => acc + curr.totalPrice, 0);
+    const { subTotal } = calculateOrderTotals(orderItems);
     const totalVolume = orderItems.reduce((acc, curr) => {
       const p = this.products.find(x => x.id == curr.productId);
       return acc + (isPieceProduct(p) ? 0 : curr.quantityCartons * (p?.volumePerCarton || 0));
@@ -901,7 +902,7 @@ class SupabaseService {
       const product = this.products.find(p => p.id == item.productId);
       if (!item.isSpecialRequest && product) validateProductQuantities(product, this.categories, Number(item.qCartons), Number(item.qMeters), item.productSaleMode);
 
-      const totalPrice = (Number(item.qCartons) * Number(item.unitPriceCarton)) + (Number(item.qMeters) * Number(item.unitPriceMeter));
+      const totalPrice = calculateLineTotal(Number(item.qCartons), Number(item.unitPriceCarton), Number(item.qMeters), Number(item.unitPriceMeter));
 
       if (!item.isSpecialRequest && product) {
         newVolume += isPieceProduct(product, item.productSaleMode) ? 0 : (Number(item.qCartons) * (product.volumePerCarton || 0));
@@ -928,9 +929,7 @@ class SupabaseService {
       };
     });
 
-    const newSubTotal = newItems.reduce((acc, curr) => acc + curr.totalPrice, 0);
-    const discountAmount = discountType === 'PERCENT' ? (newSubTotal * discountValue / 100) : discountValue;
-    const newTotalAmount = newSubTotal - discountAmount;
+    const { subTotal: newSubTotal, total: newTotalAmount } = calculateOrderTotals(newItems, discountValue, discountType);
 
     // 3. Calculate Deltas
     const oldTotalAmount = existingOrder.totalAmount;
