@@ -9,6 +9,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { db } from '../../lib/db';
+import { isVisibleStaffAccount } from '../../lib/staffAccounts';
 import { UserRole, ProductionStatus, PaymentStatus, Order, User as UserType } from '../../types';
 import { Button, Badge } from '../../components/ui';
 import { InvoiceModal } from '../../components/shared/InvoiceModal';
@@ -47,7 +48,7 @@ export const AdminDashboard = ({ activeTab, setActiveTab }: AdminDashboardProps)
     const [orders, setOrders] = useState(db.orders);
     const [productionQueue, setProductionQueue] = useState<Order[]>([]);
     const [agents, setAgents] = useState(db.users.filter(u => u.role === UserRole.AGENT && !u.deleted_at));
-    const [employees, setEmployees] = useState(db.users.filter(u => u.role !== UserRole.AGENT && !u.deleted_at));
+    const [employees, setEmployees] = useState(db.users.filter(isVisibleStaffAccount));
     const [allUsers, setAllUsers] = useState(db.users.filter(u => !u.deleted_at));
     const [settings, setSettings] = useState(db.vehicleConfig);
     const [allTransactions, setAllTransactions] = useState(db.getAllTransactions());
@@ -74,7 +75,7 @@ export const AdminDashboard = ({ activeTab, setActiveTab }: AdminDashboardProps)
         setOrders([...db.orders]);
         setProductionQueue(db.getProductionQueue());
         setAgents(db.users.filter(u => u.role === UserRole.AGENT && !u.deleted_at));
-        setEmployees(db.users.filter(u => u.role !== UserRole.AGENT && !u.deleted_at));
+        setEmployees(db.users.filter(isVisibleStaffAccount));
         setAllUsers([...db.users].filter(u => !u.deleted_at));
         setSettings(db.vehicleConfig);
         setAllTransactions(db.getAllTransactions());

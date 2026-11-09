@@ -619,7 +619,11 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                     <Button
                                         onClick={async () => {
                                             try {
-                                                await db.setAgentStatus(currentUser!.id, selectedEmployee.id, 'active');
+                                                if (selectedEmployee.deleted_at) {
+                                                    await db.restoreAgent(currentUser!.id, selectedEmployee.id);
+                                                } else {
+                                                    await db.setAgentStatus(currentUser!.id, selectedEmployee.id, 'active');
+                                                }
                                                 const updated = db.users.find(e => e.id === selectedEmployee.id);
                                                 if (updated) onSelectEmployee({ ...updated, status: 'active' });
                                                 toast.success(t('batch4.k541'));

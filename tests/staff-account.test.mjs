@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import ts from 'typescript';
+import { isVisibleStaffAccount } from '../src/lib/staffAccounts.ts';
 
 const ar = JSON.parse(readFileSync(new URL('../src/i18n/locales/ar.json', import.meta.url), 'utf8'));
 const translate = key => key.split('.').reduce((value, part) => value?.[part], ar) ?? key;
@@ -54,8 +55,8 @@ function button(tree, label) {
   return found;
 }
 
-function staffHarness({ fail = false } = {}) {
-  const employee = { id: 'employee', fullName: 'موظف الاختبار', email: 'staff@example.test', role: 'VIEWER', status: 'active', deleted_at: null };
+function staffHarness({ fail = false, legacyFrozen = false } = {}) {
+  const employee = { id: 'employee', fullName: 'موظف الاختبار', email: 'staff@example.test', role: 'VIEWER', status: legacyFrozen ? 'suspended' : 'active', deleted_at: legacyFrozen ? '2026-11-08T23:00:00Z' : null };
   const calls = [];
   const errors = [];
   const db = {
@@ -65,6 +66,11 @@ function staffHarness({ fail = false } = {}) {
       calls.push({ actor, id, status });
       if (fail) throw new Error('Status update failed');
       db.users = db.users.map(user => user.id === id ? { ...user, status } : user);
+    },
+    async restoreAgent(actor, id) {
+      calls.push({ actor, id, action: 'restore' });
+      if (fail) throw new Error('Restore failed');
+      db.users = db.users.map(user => user.id === id ? { ...user, status: 'active', deleted_at: null } : user);
     }
   };
   const props = {
@@ -114,6 +120,42 @@ test('a failed freeze keeps the employee active and the confirmation available f
   assert.equal(app.props.selectedEmployee.status, 'active');
   assert.equal(app.errors.length, 1);
   assert.equal(button(app.render(), translate('batch4.confirm_freeze_account')).props.disabled, false);
+});
+
+test('legacy frozen staff remain visible without changing their suspension or deletion metadata', () => {
+  const employee = { role: 'VIEWER', status: 'suspended', deleted_at: '2026-11-08T23:00:00Z', email: 'staff@example.test' };
+  const original = { ...employee };
+  assert.equal(isVisibleStaffAccount(employee), true);
+  assert.deepEqual(employee, original);
+  assert.equal(isVisibleStaffAccount({ ...employee, deleted_at: null }), true);
+});
+
+test('archived accounts and agents stay excluded from the staff list', () => {
+  const employee = { role: 'VIEWER', status: 'suspended', deleted_at: '2026-11-08T23:00:00Z', email: 'staff@example.test' };
+  for (const changes of [
+    { role: 'AGENT', deleted_at: null },
+    { role: 'AGENT' },
+    { status: 'active' },
+    { email: 'deleted_123@voga.deleted' },
+    { email: 'DELETED_123@VOGA.DELETED' },
+    { email: '' }
+  ]) assert.equal(isVisibleStaffAccount({ ...employee, ...changes }), false);
+});
+
+test('unfreezing legacy staff clears the old deletion marker as well as the suspension', async () => {
+  const app = staffHarness({ legacyFrozen: true });
+  await button(app.render(), translate('batch4.unfreeze_account')).props.onClick();
+  assert.equal(app.props.selectedEmployee.status, 'active');
+  assert.equal(app.props.selectedEmployee.deleted_at, null);
+  assert.deepEqual(app.calls, [{ actor: 'admin', id: 'employee', action: 'restore' }]);
+});
+
+test('failed legacy restoration keeps the account suspended and available for retry', async () => {
+  const app = staffHarness({ legacyFrozen: true, fail: true });
+  await button(app.render(), translate('batch4.unfreeze_account')).props.onClick();
+  assert.equal(app.props.selectedEmployee.status, 'suspended');
+  assert.ok(app.props.selectedEmployee.deleted_at);
+  assert.equal(app.errors.length, 1);
 });
 
 test('pagination renders its options outside the clipped footer and changes page size', () => {
