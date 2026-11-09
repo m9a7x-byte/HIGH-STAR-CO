@@ -199,15 +199,11 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                 setStaffSuspendConfirm(null);
                 return;
             }
-            setIsDeleting(true); // Reuse deleting state for spinner or create new one? reusing is fine for now or simpler to use separate but let's reuse to save lines if logical, or better use a local loading.
-            // Actually reusing `isDeleting` might be confusing UI wise if multiple loaders exist, but here it's a modal.
-            // Let's us setIsDeleting for the spinner on the button inside the modal for simplicity as it blocks interaction.
+            setIsDeleting(true);
             try {
-                await db.softDeleteAgent(currentUser!.id, staffSuspendConfirm.id);
-                // Update local state is tricky here because we need to update the list.
-                // The original logic did: const updated = employees.find...
-                const updated = employees.find((e: any) => e.id === staffSuspendConfirm.id);
-                if (updated) onSelectEmployee({ ...updated, status: 'suspended', is_deleted: true } as any);
+                await db.setAgentStatus(currentUser!.id, staffSuspendConfirm.id, 'suspended');
+                const updated = db.users.find(e => e.id === staffSuspendConfirm.id);
+                if (updated) onSelectEmployee({ ...updated, status: 'suspended' });
 
                 toast.success(t('batch4.k525'));
                 setStaffSuspendConfirm(null);
@@ -619,14 +615,13 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                         {isSuperAdmin && (
                             <div className="flex gap-3">
                                 {/* Suspend/Unsuspend Button */}
-                                {(selectedEmployee as any).status === 'suspended' || (selectedEmployee as any).is_deleted ? (
+                                {selectedEmployee.status === 'suspended' ? (
                                     <Button
                                         onClick={async () => {
                                             try {
-                                                await db.restoreAgent(currentUser!.id, selectedEmployee.id);
-                                                // Update local state to reflect change
-                                                const updated = employees.find((e: any) => e.id === selectedEmployee.id);
-                                                if (updated) onSelectEmployee({ ...updated, status: 'active', is_deleted: false } as any);
+                                                await db.setAgentStatus(currentUser!.id, selectedEmployee.id, 'active');
+                                                const updated = db.users.find(e => e.id === selectedEmployee.id);
+                                                if (updated) onSelectEmployee({ ...updated, status: 'active' });
                                                 toast.success(t('batch4.k541'));
                                             } catch (err: any) {
                                                 toast.error('خطأ', err.message);
@@ -1598,7 +1593,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                         className={`w-full h-14 rounded-2xl font-black text-sm transition-all border border-gray-200 ${isDeleting ? 'bg-gray-100 text-gray-300 cursor-not-allowed' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'
                                             }`}
                                     >
-                                        {t('batch4.k287')}
+                                        {t('common.cancel')}
                                     </button>
                                 </div>
                             </div>
