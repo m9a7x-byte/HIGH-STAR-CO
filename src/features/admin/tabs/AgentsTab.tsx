@@ -1933,8 +1933,8 @@ export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, i
             {/* Agent Order Payment Modal */}
             {agentOrderPaymentModal.order && (
                 <div className="fixed inset-0 bg-slate-950/45 backdrop-blur-md z-[720] flex items-center justify-center p-4 !mt-0">
-                    <form onSubmit={handleAgentInvoicePayment} className="bg-white rounded-[2rem] w-full max-w-3xl shadow-2xl overflow-hidden">
-                        <div className="p-6 bg-[#0e3c63] text-white flex justify-between items-start gap-4">
+                    <form onSubmit={handleAgentInvoicePayment} className="bg-white rounded-[2rem] w-full max-w-3xl shadow-2xl overflow-hidden flex flex-col max-h-[calc(100vh-2rem)] supports-[height:100dvh]:max-h-[calc(100dvh-2rem)]">
+                        <div className="p-6 bg-[#0e3c63] text-white flex justify-between items-start gap-4 shrink-0">
                             <div className="flex items-start gap-4">
                                 <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center"><CreditCard size={24} /></div>
                                 <div>
@@ -1950,7 +1950,7 @@ export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, i
                             const after = Math.max((order.totalAmount || 0) - ((order.paidAmount || 0) + Number(agentOrderPaymentModal.amount || 0)), 0);
                             const ratio = order.totalAmount > 0 ? Math.min(100, Math.round(((order.paidAmount || 0) / order.totalAmount) * 100)) : 0;
                             return (
-                                <div className="p-6 bg-gray-50 space-y-5">
+                                <div className="p-6 bg-gray-50 space-y-5 min-h-0 overflow-y-auto overscroll-contain custom-scrollbar">
                                     <div className="bg-white rounded-[1.5rem] border border-gray-100 shadow-sm p-5 space-y-4">
                                         <div className="flex justify-between items-center">
                                             <div>
@@ -1978,7 +1978,7 @@ export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, i
                                         {(order.paymentHistory || []).length === 0 ? (
                                             <div className="h-20 rounded-2xl border border-dashed border-gray-200 flex items-center justify-center text-xs font-bold text-gray-400">لا توجد دفعات</div>
                                         ) : (
-                                            <div className="space-y-2 max-h-52 overflow-y-auto custom-scrollbar">
+                                            <div className="space-y-2 sm:max-h-52 sm:overflow-y-auto custom-scrollbar">
                                                 {[...(order.paymentHistory || [])].reverse().map(pay => {
                                                     const isEditing = agentOrderPaymentModal.editingPaymentId === pay.id;
                                                     return (
