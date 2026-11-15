@@ -1,19 +1,19 @@
 
 import i18n from 'i18next';
+import { useTranslation } from 'react-i18next';
 const t = i18n.t.bind(i18n);
 
-import React, { useState, useRef, useEffect } from 'react';
-import { Calendar, ChevronDown, Check, Search, X, ChevronRight, ChevronLeft, CalendarDays, RotateCcw, ArrowLeft } from 'lucide-react';
-import { MaterialType } from '../../../types';
-import { formatDate } from '../../../lib/dateUtils';
+import { useState, useRef, useEffect } from 'react';
+import { Calendar, ChevronDown, Check, Search, X, ChevronRight, ChevronLeft, CalendarDays, type LucideIcon } from 'lucide-react';
+import type { MaterialType } from '../../../types';
+import { getTodayDateString } from '../../../lib/dateUtils';
+import { FactoryFieldPopover, factoryFieldInput } from './FactoryFieldPopover';
 import carbonFibre from '../../../assets/patterns/carbon-fibre.png';
 
 export const MONTHS_AR = (i18n.t('factory_shared.months', { returnObjects: true }) as string[]) || [
     'كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران',
     'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول'
 ];
-
-const WEEKDAYS_AR = (i18n.t('factory_shared.weekdays', { returnObjects: true }) as string[]) || ['أ', 'إ', 'ث', 'ر', 'خ', 'ج', 'س'];
 
 export const materialLabels: Record<string, string> = {
     'SILICON_HOT': 'factory_shared.mat_silicon_hot',
@@ -36,184 +36,139 @@ export const materialLabels: Record<string, string> = {
 
 export const materials: MaterialType[] = Object.keys(materialLabels) as MaterialType[];
 
-export const ModalHeader = ({ title, subtitle, onClose }: { title: string, subtitle: string, onClose: () => void }) => (
-    <div className="p-8 bg-gradient-to-br from-[#0e3c63] to-[#1a4d7a] text-white shrink-0 relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-full opacity-10" style={{ backgroundImage: `url(${carbonFibre})` }}></div>
-        <div className="relative z-10 flex justify-between items-center">
-            <div>
-                <h3 className="font-black text-2xl">{title}</h3>
-                <p className="text-blue-200 text-[10px] font-bold uppercase tracking-widest mt-1">{subtitle}</p>
-            </div>
-            <button type="button" onClick={onClose} className="bg-white/10 hover:bg-red-500 p-3 rounded-2xl transition-all shadow-inner"><X size={20} /></button>
-        </div>
-    </div>
-);
-
-// --- COMPONENT: PREMIUM SINGLE DATE PICKER ---
-export const ModernSingleDatePicker = ({ label, value, onChange }: { label: string, value: string, onChange: (v: string) => void }) => {
-    const [isOpen, setIsOpen] = useState(false);
-    const [viewDate, setViewDate] = useState(new Date());
-    const [viewMode, setViewMode] = useState<'DAYS' | 'MONTHS' | 'YEARS'>('DAYS');
-    const containerRef = useRef<HTMLDivElement>(null);
-
-    const parseDate = (dateStr: string) => {
-        if (!dateStr) return new Date();
-        const [y, m, d] = dateStr.split('-').map(Number);
-        return new Date(y, m - 1, d);
-    };
-
-    useEffect(() => {
-        if (isOpen) {
-            setViewMode('DAYS');
-            setViewDate(parseDate(value));
-        }
-    }, [isOpen, value]);
-
-    useEffect(() => {
-        const handleClick = (e: MouseEvent) => {
-            if (containerRef.current && !containerRef.current.contains(e.target as Node)) setIsOpen(false);
-        };
-        document.addEventListener('mousedown', handleClick);
-        return () => document.removeEventListener('mousedown', handleClick);
-    }, []);
-
-    const handleDateSelect = (day: number) => {
-        const newDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), day);
-        const y = newDate.getFullYear();
-        const m = String(newDate.getMonth() + 1).padStart(2, '0');
-        const d = String(newDate.getDate()).padStart(2, '0');
-        onChange(`${y}-${m}-${d}`);
-        setIsOpen(false);
-    };
-
-    const navigate = (offset: number) => {
-        if (viewMode === 'DAYS') setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() + offset, 1));
-        else if (viewMode === 'YEARS') setViewDate(new Date(viewDate.getFullYear() + (offset * 12), viewDate.getMonth(), 1));
-        else setViewDate(new Date(viewDate.getFullYear() + offset, viewDate.getMonth(), 1));
-    };
-
-    const renderDays = () => {
-        const year = viewDate.getFullYear();
-        const month = viewDate.getMonth();
-        const daysInMonth = new Date(year, month + 1, 0).getDate();
-        const firstDayOfMonth = new Date(year, month, 1).getDay();
-
-        const days = [];
-        for (let i = 0; i < firstDayOfMonth; i++) {
-            days.push(<div key={`pad-${i}`} className="w-9 h-9" />);
-        }
-
-        const selectedDate = parseDate(value);
-        const today = new Date();
-
-        for (let d = 1; d <= daysInMonth; d++) {
-            const isToday = today.getDate() === d && today.getMonth() === month && today.getFullYear() === year;
-            const isSelected = selectedDate.getDate() === d && selectedDate.getMonth() === month && selectedDate.getFullYear() === year;
-
-            days.push(
-                <button
-                    key={d}
-                    type="button"
-                    onClick={() => handleDateSelect(d)}
-                    className={`w-9 h-9 flex items-center justify-center text-[11px] font-black rounded-xl transition-all ${isSelected
-                        ? 'bg-[#0e3c63] text-white shadow-lg scale-110 z-10'
-                        : isToday
-                            ? 'bg-blue-50 text-[#0e3c63] border border-[#0e3c63]/20'
-                            : 'text-gray-600 hover:bg-gray-100'
-                        }`}
-                >
-                    {d}
-                </button>
-            );
-        }
-        return <div className="grid grid-cols-7 gap-1 animate-fade-in">{days}</div>;
-    };
-
-    const displayValue = value ? formatDate(value, { day: '2-digit', month: 'long', year: 'numeric' }) : t('factory_shared.pick_date');
-
+export const ModalHeader = ({ title, subtitle, titleId, busy, onClose }: {
+    title: string;
+    subtitle?: string;
+    titleId?: string;
+    busy?: boolean;
+    onClose: () => void;
+}) => {
+    const { t } = useTranslation();
     return (
-        <div className="space-y-2 relative" ref={containerRef}>
-            <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mr-1">{label}</label>
-            <button
-                type="button"
-                onClick={() => setIsOpen(!isOpen)}
-                className={`w-full h-[60px] flex items-center justify-between px-5 bg-white border-2 rounded-2xl transition-all duration-300 ${isOpen ? 'border-[#0e3c63] ring-4 ring-blue-50 shadow-lg' : 'border-gray-100 hover:border-blue-200 shadow-sm'}`}
-            >
-                <div className="flex items-center gap-3">
-                    <CalendarDays size={20} className={isOpen ? 'text-[#0e3c63]' : 'text-gray-300'} />
-                    <span className={`font-black text-sm ${value ? 'text-gray-800' : 'text-gray-300'}`}>{displayValue}</span>
+        <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-[#0e3c63] to-[#1a4d7a] p-5 text-white sm:p-7">
+            <div className="absolute inset-0 opacity-10" style={{ backgroundImage: `url(${carbonFibre})` }} />
+            <div className="relative flex items-center justify-between gap-3">
+                <div>
+                    <h3 id={titleId} className="text-xl font-black sm:text-2xl">{title}</h3>
+                    {subtitle && <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-blue-200">{subtitle}</p>}
                 </div>
-                <ChevronDown size={18} className={`text-gray-300 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-            </button>
-
-            {isOpen && (
-                <div className="absolute top-full mt-3 w-[320px] left-0 md:right-0 md:left-auto z-[500] animate-fade-in-up origin-top">
-                    <div className="bg-white rounded-[2rem] shadow-2xl border border-gray-100 p-5 overflow-hidden">
-                        <div className="flex items-center justify-between mb-5">
-                            <button type="button" onClick={() => navigate(-1)} className="p-2 hover:bg-gray-100 rounded-xl text-gray-400 hover:text-[#0e3c63] transition-all">
-                                <ChevronRight size={20} />
-                            </button>
-
-                            <div className="flex items-center gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => setViewMode(viewMode === 'MONTHS' ? 'DAYS' : 'MONTHS')}
-                                    className="px-3 py-1.5 rounded-xl text-xs font-black text-[#0e3c63] bg-blue-50 hover:bg-blue-100 transition-all"
-                                >
-                                    {MONTHS_AR[viewDate.getMonth()]}
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setViewMode(viewMode === 'YEARS' ? 'DAYS' : 'YEARS')}
-                                    className="px-3 py-1.5 rounded-xl text-xs font-black text-gray-700 bg-gray-50 hover:bg-gray-100 transition-all font-mono"
-                                >
-                                    {viewDate.getFullYear()}
-                                </button>
-                            </div>
-
-                            <button type="button" onClick={() => navigate(1)} className="p-2 hover:bg-gray-100 rounded-xl text-gray-400 hover:text-[#0e3c63] transition-all">
-                                <ChevronLeft size={20} />
-                            </button>
-                        </div>
-
-                        <div className="min-h-fit">
-                            {viewMode === 'DAYS' && (
-                                <>
-                                    <div className="grid grid-cols-7 mb-2">
-                                        {WEEKDAYS_AR.map(day => (
-                                            <div key={day} className="text-[10px] font-black text-gray-300 text-center uppercase">{day}</div>
-                                        ))}
-                                    </div>
-                                    {renderDays()}
-                                </>
-                            )}
-                            {viewMode === 'MONTHS' && (
-                                <div className="grid grid-cols-3 gap-2 animate-fade-in">
-                                    {MONTHS_AR.map((m, idx) => (
-                                        <button key={idx} type="button" onClick={() => { setViewDate(new Date(viewDate.getFullYear(), idx, 1)); setViewMode('DAYS'); }} className={`py-3 rounded-xl text-[10px] font-black transition-all ${viewDate.getMonth() === idx ? 'bg-[#0e3c63] text-white shadow-lg' : 'bg-gray-50 text-gray-500 hover:bg-blue-50 hover:text-[#0e3c63]'}`}>{m}</button>
-                                    ))}
-                                </div>
-                            )}
-                            {viewMode === 'YEARS' && (
-                                <div className="grid grid-cols-3 gap-2 animate-fade-in">
-                                    {Array.from({ length: 12 }).map((_, i) => {
-                                        const y = viewDate.getFullYear() - 5 + i;
-                                        return <button key={y} type="button" onClick={() => { setViewDate(new Date(y, viewDate.getMonth(), 1)); setViewMode('DAYS'); }} className={`py-3 rounded-xl text-xs font-black font-mono transition-all ${viewDate.getFullYear() === y ? 'bg-[#0e3c63] text-white shadow-lg' : 'bg-gray-50 text-gray-500 hover:bg-blue-50 hover:text-[#0e3c63]'}`}>{y}</button>
-                                    })}
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="mt-4 pt-4 border-t border-gray-50 flex justify-between items-center">
-                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{t('batch4.k658')}</span>
-                            <button type="button" onClick={() => { handleDateSelect(new Date().getDate()); setViewDate(new Date()); }} className="text-[10px] font-black text-[#0e3c63] bg-blue-50 px-4 py-2 rounded-xl hover:bg-blue-100 transition-colors">{t('batch4.k135')}</button>
-                        </div>
-                    </div>
-                </div>
-            )}
+                <button type="button" onClick={onClose} disabled={busy} aria-label={t('common.close')}
+                    className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl bg-white/10 transition-colors hover:bg-white/20 disabled:opacity-50"><X size={20} aria-hidden /></button>
+            </div>
         </div>
     );
 };
+
+const calendarDateKey = (date: Date) =>
+    [date.getFullYear(), date.getMonth() + 1, date.getDate()].map(part => String(part).padStart(2, '0')).join('-');
+
+const calendarDate = (key: string) => {
+    const [year, month, day] = key.split('-').map(Number);
+    return new Date(year, month - 1, day);
+};
+
+export function ModernSingleDatePicker({ label, value, onChange, min, max, disabled }: {
+    label: string;
+    value: string;
+    onChange: (value: string) => void;
+    min?: string;
+    max?: string;
+    disabled?: boolean;
+}) {
+    const { t } = useTranslation();
+    const [viewDate, setViewDate] = useState(() => new Date());
+    const [viewMode, setViewMode] = useState<'DAYS' | 'MONTHS' | 'YEARS'>('DAYS');
+    const today = getTodayDateString();
+    const months = t('factory_shared.months', { returnObjects: true }) as string[];
+    const weekdays = t('factory_shared.weekdays', { returnObjects: true }) as string[];
+    const year = viewDate.getFullYear();
+    const month = viewDate.getMonth();
+    const firstDay = new Date(year, month, 1).getDay();
+    const dayCount = new Date(year, month + 1, 0).getDate();
+    const outsideRange = (date: string) => (min && date < min) || (max && date > max);
+    const display = (key: string) => {
+        const date = calendarDate(key);
+        return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
+    };
+
+    const openCalendar = () => {
+        const preferred = value || today;
+        const initial = min && preferred < min ? min : max && preferred > max ? max : preferred;
+        setViewDate(calendarDate(initial));
+        setViewMode('DAYS');
+    };
+
+    const navigate = (offset: number) => {
+        if (viewMode === 'DAYS') setViewDate(new Date(year, month + offset, 1));
+        else setViewDate(new Date(year + offset * (viewMode === 'YEARS' ? 12 : 1), month, 1));
+    };
+
+    const calendarButton = 'rounded-lg px-3 py-2 text-sm font-bold transition-colors hover:bg-blue-100';
+    return (
+        <FactoryFieldPopover label={label} value={value ? display(value) : undefined} placeholder={t('factory_shared.pick_date')}
+            icon={CalendarDays} disabled={disabled} panelWidth={324} panelHeight={410} onOpen={openCalendar}>
+            {close => (
+                <div className="space-y-3 p-3 sm:p-4">
+                    <div className="flex items-center justify-between gap-1">
+                        <button type="button" onClick={() => navigate(-1)} aria-label={t('common.back')}
+                            className="flex min-h-10 min-w-9 items-center justify-center rounded-xl text-slate-600 hover:bg-slate-100"><ChevronLeft size={18} className="rtl:rotate-180" aria-hidden /></button>
+                        <div className="flex items-center gap-1">
+                            <button type="button" onClick={() => setViewMode(viewMode === 'MONTHS' ? 'DAYS' : 'MONTHS')}
+                                className={calendarButton + ' bg-blue-50 text-[#0e3c63]'}>{months[month]}</button>
+                            <button type="button" onClick={() => setViewMode(viewMode === 'YEARS' ? 'DAYS' : 'YEARS')}
+                                className={calendarButton + ' bg-slate-100 tabular-nums text-slate-800'}>{year}</button>
+                        </div>
+                        <button type="button" onClick={() => navigate(1)} aria-label={t('common.next')}
+                            className="flex min-h-10 min-w-9 items-center justify-center rounded-xl text-slate-600 hover:bg-slate-100"><ChevronRight size={18} className="rtl:rotate-180" aria-hidden /></button>
+                    </div>
+                    {viewMode === 'DAYS' && (
+                        <div className="grid grid-cols-7 gap-1 text-center">
+                            {weekdays.map((day, index) => <span key={index} className="py-1 text-xs font-bold text-slate-500">{day}</span>)}
+                            {Array.from({ length: firstDay }, (_, index) => <span key={`blank-${index}`} />)}
+                            {Array.from({ length: dayCount }, (_, index) => {
+                                const day = index + 1;
+                                const key = calendarDateKey(new Date(year, month, day));
+                                const selected = value === key;
+                                return (
+                                    <button key={key} type="button" disabled={!!outsideRange(key)} aria-label={display(key)}
+                                        aria-pressed={selected} aria-current={key === today ? 'date' : undefined}
+                                        onClick={() => { onChange(key); close(); }}
+                                        className={'min-h-9 min-w-0 rounded-xl text-sm font-bold tabular-nums transition-colors disabled:text-slate-300 ' +
+                                            (selected ? 'bg-[#0e3c63] text-white' : 'enabled:hover:bg-blue-50 ' + (key === today ? 'bg-blue-50 text-[#0e3c63]' : 'text-slate-700'))}>
+                                        {day}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
+                    {viewMode === 'MONTHS' && (
+                        <div className="grid grid-cols-3 gap-1.5">
+                            {months.map((name, index) => (
+                                <button key={name} type="button" onClick={() => { setViewDate(new Date(year, index, 1)); setViewMode('DAYS'); }}
+                                    className={calendarButton + (index === month ? ' bg-blue-50 text-[#0e3c63]' : ' bg-slate-50 text-slate-700')}>{name}</button>
+                            ))}
+                        </div>
+                    )}
+                    {viewMode === 'YEARS' && (
+                        <div className="grid grid-cols-3 gap-1.5">
+                            {Array.from({ length: 12 }, (_, index) => {
+                                const entry = year - 5 + index;
+                                return (
+                                    <button key={entry} type="button" onClick={() => { setViewDate(new Date(entry, month, 1)); setViewMode('DAYS'); }}
+                                        className={calendarButton + ' tabular-nums' + (entry === year ? ' bg-blue-50 text-[#0e3c63]' : ' bg-slate-50 text-slate-700')}>{entry}</button>
+                                );
+                            })}
+                        </div>
+                    )}
+                    <div className="flex justify-end border-t border-slate-100 pt-2">
+                        <button type="button" disabled={!!outsideRange(today)} onClick={() => { onChange(today); close(); }}
+                            className={calendarButton + ' bg-blue-50 text-[#0e3c63] disabled:opacity-40'}>{t('batch4.k135')}</button>
+                    </div>
+                </div>
+            )}
+        </FactoryFieldPopover>
+    );
+}
 
 // --- COMPONENT: PREMIUM MONTH YEAR PICKER (With Month Number Support) ---
 export const ModernMonthYearPicker = ({ label, value, onChange }: { label: string, value: string, onChange: (v: string) => void }) => {
@@ -297,69 +252,52 @@ export const ModernMonthYearPicker = ({ label, value, onChange }: { label: strin
     );
 };
 
-export const ModalModernSelect = ({ label, value, options, onChange, icon: Icon }: any) => {
-    const [isOpen, setIsOpen] = useState(false);
+export function ModalModernSelect<T extends string>({ label, value, options, onChange, icon, disabled, placeholder }: {
+    label: string;
+    value: T;
+    options: { value: T; label: string }[];
+    onChange: (value: T) => void;
+    icon?: LucideIcon;
+    disabled?: boolean;
+    placeholder?: string;
+}) {
+    const { t } = useTranslation();
     const [search, setSearch] = useState('');
-    const containerRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        const handleClick = (e: MouseEvent) => {
-            if (containerRef.current && !containerRef.current.contains(e.target as Node)) setIsOpen(false);
-        };
-        document.addEventListener('mousedown', handleClick);
-        return () => document.removeEventListener('mousedown', handleClick);
-    }, []);
-
-    const filtered = options.filter((o: any) => o.label.toLowerCase().includes(search.toLowerCase()));
-    const selectedLabel = options.find((o: any) => o.value === value)?.label || t('factory_shared.pick_from_list');
+    const searchText = search.trim().toLocaleLowerCase();
+    const filtered = options.filter(option => option.label.toLocaleLowerCase().includes(searchText));
+    const selectedLabel = options.find(option => option.value === value)?.label;
 
     return (
-        <div className="relative w-full" ref={containerRef}>
-            <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 mr-1">{label}</label>
-            <button
-                type="button"
-                onClick={() => setIsOpen(!isOpen)}
-                className={`w-full h-[60px] flex items-center justify-between px-5 bg-white border-2 rounded-2xl transition-all duration-300 ${isOpen ? 'border-[#0e3c63] ring-4 ring-blue-50 shadow-lg' : 'border-gray-100 hover:border-blue-200 shadow-sm'}`}
-            >
-                <div className="flex items-center gap-3">
-                    {Icon && <Icon size={20} className={isOpen ? 'text-[#0e3c63]' : 'text-gray-400'} />}
-                    <span className={`font-black text-sm ${value ? 'text-gray-800' : 'text-gray-300'}`}>{selectedLabel}</span>
-                </div>
-                <ChevronDown size={18} className={`text-gray-300 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-            </button>
-
-            {isOpen && (
-                <div className="absolute top-full mt-2 w-full bg-white rounded-[1.8rem] shadow-2xl border border-gray-100 z-[500] overflow-hidden animate-fade-in-up">
+        <FactoryFieldPopover label={label} value={selectedLabel} placeholder={placeholder ?? t('factory_shared.pick_from_list')}
+            icon={icon} disabled={disabled} onOpen={() => setSearch('')}>
+            {close => (
+                <>
                     {options.length > 8 && (
-                        <div className="p-3 border-b border-gray-50 bg-gray-50/50">
+                        <div className="sticky top-0 z-10 border-b border-slate-100 bg-white p-2">
                             <div className="relative">
-                                <input
-                                    className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-4 py-2.5 text-xs font-bold outline-none focus:border-[#0e3c63] shadow-inner"
-                                    placeholder={t('batch4.k659')}
-                                    value={search}
-                                    onChange={e => setSearch(e.target.value)}
-                                    autoFocus
-                                />
-                                <Search size={14} className="absolute left-3 top-3 text-gray-400" />
+                                <Search size={16} className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-slate-500" aria-hidden />
+                                <input type="text" aria-label={t('common.search')} placeholder={t('batch4.k659')}
+                                    className={factoryFieldInput + ' ps-9'} value={search} onChange={event => setSearch(event.target.value)}
+                                    onKeyDown={event => { if (event.key === 'Enter') event.preventDefault(); }} />
                             </div>
                         </div>
                     )}
-                    <div className="max-h-64 overflow-y-auto custom-scrollbar p-1.5">
-                        {filtered.map((opt: any) => (
-                            <button
-                                key={opt.value}
-                                type="button"
-                                onClick={() => { onChange(opt.value); setIsOpen(false); setSearch(''); }}
-                                className={`w-full text-right px-4 py-3.5 rounded-xl text-sm font-black flex justify-between items-center transition-all ${value === opt.value ? 'bg-blue-50 text-[#0e3c63]' : 'hover:bg-gray-50 text-gray-600'}`}
-                            >
-                                {opt.label}
-                                {value === opt.value && <Check size={16} />}
-                            </button>
-                        ))}
-                        {filtered.length === 0 && <p className="p-8 text-center text-xs text-gray-300 font-bold italic">{t('batch4.k660')}</p>}
+                    <div className="space-y-0.5 p-1.5">
+                        {filtered.map(option => {
+                            const selected = value === option.value;
+                            return (
+                                <button key={option.value} type="button" aria-pressed={selected} onClick={() => { onChange(option.value); close(); }}
+                                    className={'flex min-h-11 w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-start text-sm font-bold transition-colors ' +
+                                        (selected ? 'bg-blue-50 text-[#0e3c63]' : 'text-slate-700 hover:bg-slate-50')}>
+                                    <span className="min-w-0 [overflow-wrap:anywhere]">{option.label}</span>
+                                    {selected && <Check size={16} className="shrink-0" aria-hidden />}
+                                </button>
+                            );
+                        })}
+                        {filtered.length === 0 && <p className="px-3 py-5 text-center text-sm text-slate-600">{t('batch4.k660')}</p>}
                     </div>
-                </div>
+                </>
             )}
-        </div>
+        </FactoryFieldPopover>
     );
-};
+}

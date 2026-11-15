@@ -323,23 +323,7 @@ export type FactoryCategory =
   | 'SUPPLIER_DEPOSIT'
   | 'SUPPLIER_WITHDRAWAL';
 
-export type MaterialType =
-  | 'SILICON_HOT'
-  | 'SILICON_COLD'
-  | 'SAND'
-  | 'SAND_ADHESIVE'
-  | 'CEMENT_BLACK'
-  | 'CEMENT_WHITE'
-  | 'EPS_RAW'
-  | 'POLYMER_ADHESIVE'
-  | 'SILOSH_ADHESIVE'
-  | 'SHASTA_ADHESIVE'
-  | 'CARTON_FOAM'
-  | 'BAGS_1051'
-  | 'BAGS_1052'
-  | 'BAGS_1053'
-  | 'BAGS_1054'
-  | 'BAGS_1059';
+export type MaterialType = string;
 
 export interface Supplier {
   id: number | string;

@@ -1,470 +1,459 @@
+import { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import i18n from 'i18next';
-
-
-import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Box, Filter, Plus, ArrowDown, ArrowUp, Layers, Package, Beaker, Zap, Search, Hexagon, DollarSign, Calculator, RotateCcw, XCircle, TrendingUp, Calendar, ChevronDown, Check, Clock, ShieldCheck, Tag, Info, ArrowUpRight, ArrowDownLeft, Lock, Edit3, Trash2, AlertOctagon } from 'lucide-react';
-import { formatDate, formatTime } from '../../../lib/dateUtils';
-import { Button, Badge, DateRangePicker, Card } from '../../../components/ui';
+import { ArrowDown, ArrowUp, Box, Edit3, History, Lock, Plus, RotateCcw, Search, Trash2, TrendingUp, X } from 'lucide-react';
+import { Badge, Button } from '../../../components/ui';
 import { PaginationControl } from '../../../components/shared/PaginationControl';
-import { db } from '../../../lib/db';
-import { MaterialType, FactoryTransaction, UserRole } from '../../../types';
 import { useAuth } from '../../../context/AuthContext';
 import { useToast } from '../../../context/ToastContext';
-import carbonFibre from '../../../assets/patterns/carbon-fibre.png';
+import { TIMEZONE, formatDate, formatTime } from '../../../lib/dateUtils';
+import { db } from '../../../lib/db';
+import { materialName, materialUnit } from '../../../lib/factoryMaterials';
+import { UserRole, type FactoryTransaction } from '../../../types';
+import { InventoryDialog } from '../components/InventoryDialog';
+import { MaterialCatalogDialog, type CatalogAction } from '../components/MaterialCatalogDialog';
+import { ModernSingleDatePicker, ModalModernSelect } from '../components/SharedFactoryComponents';
+import { factoryFieldInput } from '../components/FactoryFieldPopover';
 
 interface InventoryTabProps {
     refreshTrigger: number;
-    onOpenModal: (category: any, metadata?: any) => void;
+    onOpenModal: (category: 'INVENTORY', metadata?: { material?: string; tx?: FactoryTransaction }) => void;
 }
 
-const materialLabels: Record<string, { ar: string, en: string, unit: string, icon: any, color: string, iconProps?: any }> = {
-    'SILICON_HOT': { ar: 'factory_shared.mat_silicon_hot', en: 'SILICON HOT', unit: 'factory_tabs.inv_unit_ton', icon: Zap, color: 'text-orange-500 bg-orange-50 border-orange-100' },
-    'SILICON_COLD': { ar: 'factory_shared.mat_silicon_cold', en: 'SILICON COLD', unit: 'factory_tabs.inv_unit_ton', icon: Zap, color: 'text-blue-500 bg-blue-50 border-blue-100' },
-    'SAND': { ar: 'factory_shared.mat_sand', en: 'FOAM SAND', unit: 'factory_tabs.inv_unit_ton', icon: Box, color: 'text-amber-500 bg-amber-50 border-amber-100' },
-    'SAND_ADHESIVE': { ar: 'factory_shared.mat_sand_adhesive', en: 'ADHESIVE SAND', unit: 'factory_tabs.inv_unit_ton', icon: Box, color: 'text-yellow-600 bg-yellow-50 border-yellow-100' },
-    'CEMENT_BLACK': { ar: 'factory_shared.mat_cement_black', en: 'BLACK CEMENT', unit: 'factory_tabs.inv_unit_ton', icon: Hexagon, color: 'text-gray-700 bg-gray-100 border-gray-200', iconProps: { fill: 'currentColor' } },
-    'CEMENT_WHITE': { ar: 'factory_shared.mat_cement_white', en: 'WHITE CEMENT', unit: 'factory_tabs.inv_unit_ton', icon: Hexagon, color: 'text-gray-400 bg-gray-50 border-gray-100' },
-    'EPS_RAW': { ar: 'factory_shared.mat_eps_raw', en: 'EPS RAW', unit: 'factory_tabs.inv_unit_ton', icon: Package, color: 'text-indigo-500 bg-indigo-50 border-indigo-100' },
-    'POLYMER_ADHESIVE': { ar: 'factory_shared.mat_polymer', en: 'POLYMER', unit: 'factory_tabs.inv_unit_ton', icon: Beaker, color: 'text-teal-600 bg-teal-50 border-teal-100' },
-    'SILOSH_ADHESIVE': { ar: 'factory_shared.mat_silosh', en: 'CELLULOSE', unit: 'factory_tabs.inv_unit_ton', icon: Beaker, color: 'text-purple-600 bg-purple-50 border-purple-100' },
-    'SHASTA_ADHESIVE': { ar: 'factory_shared.mat_shasta', en: 'STARCH', unit: 'factory_tabs.inv_unit_ton', icon: Beaker, color: 'text-emerald-600 bg-emerald-50 border-emerald-100' },
-    'CARTON_FOAM': { ar: 'factory_shared.mat_carton_foam', en: 'FOAM CARTON', unit: 'factory_tabs.inv_unit_carton', icon: Box, color: 'text-emerald-600 bg-emerald-50 border-emerald-100' },
-    'BAGS_1051': { ar: 'factory_shared.mat_bags_1051', en: 'ADHESIVE BAGS 1051', unit: 'factory_tabs.inv_unit_bag', icon: Box, color: 'text-slate-600 bg-slate-50 border-slate-100' },
-    'BAGS_1052': { ar: 'factory_shared.mat_bags_1052', en: 'ADHESIVE BAGS 1052', unit: 'factory_tabs.inv_unit_bag', icon: Box, color: 'text-slate-600 bg-slate-50 border-slate-100' },
-    'BAGS_1053': { ar: 'factory_shared.mat_bags_1053', en: 'ADHESIVE BAGS 1053', unit: 'factory_tabs.inv_unit_bag', icon: Box, color: 'text-slate-600 bg-slate-50 border-slate-100' },
-    'BAGS_1054': { ar: 'factory_shared.mat_bags_1054', en: 'ADHESIVE BAGS 1054', unit: 'factory_tabs.inv_unit_bag', icon: Box, color: 'text-slate-600 bg-slate-50 border-slate-100' },
-    'BAGS_1059': { ar: 'factory_shared.mat_bags_1059', en: 'ADHESIVE BAGS 1059', unit: 'factory_tabs.inv_unit_bag', icon: Box, color: 'text-slate-600 bg-slate-50 border-slate-100' }
-};
+const dateKey = new Intl.DateTimeFormat('sv-SE', { timeZone: TIMEZONE, dateStyle: 'short' });
+const dateDigits: Intl.DateTimeFormatOptions = { numberingSystem: 'latn' };
+const quantity = (value: number) => value.toLocaleString(undefined, { maximumFractionDigits: 4 });
+const usd = (value: number) => '$' + value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+const iconButtonClass = 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0e3c63]';
+const actionClass = iconButtonClass + ' text-slate-600 hover:bg-slate-100 hover:text-[#0e3c63]';
+const selectedClass = 'bg-[#eaf2f8] text-[#0e3c63]';
+const toggleClass = 'min-h-11 rounded-lg px-3 text-sm font-semibold hover:bg-slate-100';
+const materialGrid = 'grid grid-cols-2 items-center gap-x-4 gap-y-2 sm:grid-cols-[minmax(0,1.55fr)_repeat(3,minmax(0,1fr))_auto]';
+const emptyStats = { stock: 0, purchased: 0, cost: 0, inQty: 0, inValue: 0, outQty: 0, avg: 0 };
+const unitPrice = (tx: FactoryTransaction) => tx.quantity ? (tx.amount || 0) / tx.quantity : 0;
 
-const allMaterialsList: MaterialType[] = [
-    'SAND_ADHESIVE', 'SAND', 'SILICON_COLD', 'SILICON_HOT',
-    'CEMENT_BLACK', 'CEMENT_WHITE', 'EPS_RAW', 'POLYMER_ADHESIVE',
-    'SILOSH_ADHESIVE', 'SHASTA_ADHESIVE', 'CARTON_FOAM',
-    'BAGS_1051', 'BAGS_1052', 'BAGS_1053', 'BAGS_1054', 'BAGS_1059'
-];
-
-const MaterialCard = ({ mat, stats, onClick, isActive, onAdd }: any) => {
-    const { t } = useTranslation();
-    const info = materialLabels[mat];
-    if (!info) return null;
-    const Icon = info.icon;
-    const unitPrice = stats.totalInQty > 0 ? (stats.totalInVal / stats.totalInQty) : 0;
-
-    return (
-        <div
-            onClick={onClick}
-            className={`bg-white rounded-[2.5rem] border shadow-sm flex flex-col transition-all duration-300 group relative cursor-pointer overflow-hidden ${isActive ? 'ring-4 ring-blue-100 border-[#0e3c63] shadow-xl transform -translate-y-1' : 'border-gray-100 hover:shadow-2xl hover:border-blue-200'}`}
-        >
-            <div className="p-6 pb-0 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                    <div className={`p-2.5 rounded-xl border shadow-sm transition-transform group-hover:rotate-12 shrink-0 ${info.color}`}>
-                        {React.createElement(Icon, { size: 18, ...(info.iconProps || {}) })}
-                    </div>
-                    <div className="text-right min-w-0">
-                        <h4 className="text-lg font-black text-gray-800 leading-tight truncate">{t(info.ar)}</h4>
-                        
-                    </div>
-                </div>
-                <button
-                    onClick={(e) => { e.stopPropagation(); onAdd(); }}
-                    className="w-10 h-10 rounded-xl bg-[#0e3c63] text-white flex items-center justify-center shadow-lg hover:bg-[#1a4d7a] active:scale-95 transition-all transform hover:rotate-90 z-20 shrink-0 opacity-0 group-hover:opacity-100"
-                    title={t('batch4.k693')}
-                >
-                    <Plus size={20} />
-                </button>
-            </div>
-
-            <div className="flex-1 flex flex-col items-center justify-center py-6">
-                <div className="flex items-baseline justify-center gap-2 mb-4">
-                    <span className="text-5xl font-black text-gray-800 font-mono tracking-tighter">{(stats.currentStock || 0).toLocaleString()}</span>
-                    <span className="text-lg font-black text-gray-400">{t(info.unit)}</span>
-                </div>
-                <div className="space-y-2 w-full px-8">
-                    <div className="bg-gray-50 border border-gray-100 rounded-xl py-2 px-4 flex justify-center items-center gap-2 text-gray-500">
-                        <span className="text-xs font-black">{t('batch4.k694')}</span>
-                        <span className="text-sm font-black font-mono">${(stats.currentStockValue || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
-                    </div>
-                    <div className="bg-blue-50 border border-blue-100 rounded-xl py-2 px-4 flex justify-center items-center gap-2 text-blue-700">
-                        <Tag size={14} />
-                        <span className="text-xs font-black">{t('batch4.k695')}</span>
-                        <span className="text-sm font-black font-mono">${(unitPrice || 0).toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
-                    </div>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-2 border-t border-dashed border-gray-100 divide-x divide-x-reverse divide-gray-50">
-                {/* الصرف */}
-                <div className="p-4 flex flex-col items-center justify-center hover:bg-orange-50/30 transition-colors group/sec">
-                    <div className="flex items-center gap-1 text-orange-500 mb-1">
-                        <span className="text-[10px] font-black uppercase tracking-tighter">{t('batch4.k696')}</span>
-                        <ArrowUp size={12} />
-                    </div>
-                    <div className="flex flex-col items-center">
-                        <span className="font-black text-gray-800 text-lg font-mono leading-none">{(stats.periodOutQty || 0).toLocaleString()}</span>
-                        <span className="text-[10px] font-black text-orange-600 mt-1">${(stats.periodOutVal || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
-                    </div>
-                </div>
-                {/* الوارد */}
-                <div className="p-4 flex flex-col items-center justify-center hover:bg-emerald-50/30 transition-colors">
-                    <div className="flex items-center gap-1 text-emerald-500 mb-1">
-                        <span className="text-[10px] font-black uppercase tracking-tighter">{t('batch4.k697')}</span>
-                        <ArrowDown size={12} />
-                    </div>
-                    <div className="flex flex-col items-center">
-                        <span className="font-black text-gray-800 text-lg font-mono leading-none">{(stats.periodInQty || 0).toLocaleString()}</span>
-                        <span className="text-[10px] font-black text-emerald-600 mt-1">${(stats.periodInVal || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-export const InventoryTab = ({ refreshTrigger, onOpenModal }: InventoryTabProps) => {
+export function InventoryTab({ refreshTrigger, onOpenModal }: InventoryTabProps) {
     const { t } = useTranslation();
     const { user } = useAuth();
     const toast = useToast();
-
+    const [view, setView] = useState<'materials' | 'movements' | 'prices'>('materials');
+    const [showArchived, setShowArchived] = useState(false);
+    const [search, setSearch] = useState('');
+    const [filter, setFilter] = useState('');
     const [fromDate, setFromDate] = useState('');
     const [toDate, setToDate] = useState('');
-    const [filterMat, setFilterMat] = useState<'ALL' | string>('ALL');
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(10);
-    const [activeSubTab, setActiveSubTab] = useState<'TRANSACTIONS' | 'PRICE_HISTORY'>('TRANSACTIONS');
+    const [catalogAction, setCatalogAction] = useState<CatalogAction | null>(null);
+    const [movementAction, setMovementAction] = useState<{ type: 'delete' | 'lock'; tx: FactoryTransaction } | null>(null);
+    const [busy, setBusy] = useState(false);
+    const [movementError, setMovementError] = useState('');
 
-    const [confirmAction, setConfirmAction] = useState<{ type: 'DELETE' | 'LOCK', tx: FactoryTransaction | null }>({ type: 'DELETE', tx: null });
+    const materials = db.getFactoryMaterials();
+    const catalogReady = db.factoryMaterialsStatus === 'ready';
+    const editor = user?.role === UserRole.ADMIN || user?.role === UserRole.SUPER_ADMIN || user?.role === UserRole.SUPERVISOR;
+    const canAdd = editor && user?.permissions?.includes('ADD_FACTORY_INV');
+    const canEdit = editor && user?.permissions?.includes('EDIT_FACTORY_INV');
+    const canDelete = editor && user?.permissions?.includes('DELETE_FACTORY_INV');
+    const canLock = editor && user?.permissions?.includes('LOCK_FACTORY_INV');
+    const byId = useMemo(() => new Map(materials.map(material => [material.id, material])), [materials]);
+    const label = (id?: string) => materialName(t, id, id ? byId.get(id) : undefined);
+    const unit = (id?: string) => id ? materialUnit(t, byId.get(id)) : '';
+    const activeCount = materials.filter(material => !material.archived_at).length;
+    const visibleMaterials = materials.filter(material =>
+        Boolean(material.archived_at) === showArchived && label(material.id).toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())
+    );
 
-    // حساب معدلات الأسعار لجميع المواد لعرضها في الجدول
-    const avgPricesMap = useMemo(() => {
-        const map: Record<string, number> = {};
+    const { allTxs, periodTxs, statsById, summary } = useMemo(() => {
         const allTxs = db.getFactoryTransactions('INVENTORY');
+        const periodTxs: FactoryTransaction[] = [];
+        const statsById = new Map<string | undefined, typeof emptyStats>();
 
-        allMaterialsList.forEach(mat => {
-            const inTxs = allTxs.filter(t => t.materialType === mat && t.transactionType === 'IN');
-            const totalVal = inTxs.reduce((s, t) => s + (t.amount || 0), 0);
-            const totalQty = inTxs.reduce((s, t) => s + (t.quantity || 0), 0);
-            map[mat] = totalQty > 0 ? (totalVal / totalQty) : 0;
-        });
-
-        return map;
-    }, [refreshTrigger]);
-
-    const filteredTxs = useMemo(() => {
-        return db.getFactoryTransactions('INVENTORY').filter(t => {
-            const matchesMat = filterMat === 'ALL' || t.materialType === filterMat;
-            const txDate = new Date(t.date).setHours(0, 0, 0, 0);
-            const start = fromDate ? new Date(fromDate).setHours(0, 0, 0, 0) : 0;
-            const end = toDate ? new Date(toDate).setHours(23, 59, 59, 999) : Infinity;
-            return matchesMat && txDate >= start && txDate <= end;
-        });
-    }, [refreshTrigger, filterMat, fromDate, toDate]);
-
-    const priceHistory = useMemo(() => {
-        if (filterMat === 'ALL') return [];
-        const inTxs = db.getFactoryTransactions('INVENTORY')
-            .filter(t => t.materialType === filterMat && t.transactionType === 'IN')
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-        return inTxs.map((tx, index, arr) => {
-            const unitPrice = (tx.quantity && tx.quantity > 0) ? (tx.amount || 0) / tx.quantity : 0;
-            const prevTx = arr[index + 1];
-            let priceChange: 'up' | 'down' | 'same' = 'same';
-            let changePercentage = 0;
-
-            if (prevTx) {
-                const prevUnitPrice = (prevTx.quantity && prevTx.quantity > 0) ? (prevTx.amount || 0) / prevTx.quantity : 0;
-                if (prevUnitPrice > 0) {
-                    if (unitPrice > prevUnitPrice) {
-                        priceChange = 'up';
-                        changePercentage = ((unitPrice - prevUnitPrice) / prevUnitPrice) * 100;
-                    } else if (unitPrice < prevUnitPrice) {
-                        priceChange = 'down';
-                        changePercentage = ((prevUnitPrice - unitPrice) / prevUnitPrice) * 100;
-                    }
+        for (const tx of allTxs) {
+            const time = Date.parse(tx.date);
+            const day = Number.isFinite(time) ? dateKey.format(time) : '';
+            const inPeriod = (!fromDate || day >= fromDate) && (!toDate || day <= toDate);
+            if (inPeriod) periodTxs.push(tx);
+            const stats = statsById.get(tx.materialType) ?? { ...emptyStats };
+            const qty = tx.quantity || 0;
+            if (tx.transactionType === 'IN') {
+                stats.stock += qty;
+                stats.purchased += qty;
+                stats.cost += tx.amount || 0;
+                if (inPeriod) {
+                    stats.inQty += qty;
+                    stats.inValue += tx.amount || 0;
                 }
+            } else if (tx.transactionType === 'OUT') {
+                stats.stock -= qty;
+                if (inPeriod) stats.outQty += qty;
             }
-            return { ...tx, unitPrice, priceChange, changePercentage };
-        });
-    }, [filterMat, refreshTrigger]);
+            statsById.set(tx.materialType, stats);
+        }
 
-    const currentTxs = useMemo(() => filteredTxs.slice(page * rowsPerPage, (page + 1) * rowsPerPage), [filteredTxs, page, rowsPerPage]);
+        const summary = { stockValue: 0, inValue: 0, outValue: 0 };
+        for (const stats of statsById.values()) {
+            stats.avg = stats.purchased > 0 ? stats.cost / stats.purchased : 0;
+            summary.stockValue += stats.stock * stats.avg;
+            summary.inValue += stats.inValue;
+            summary.outValue += stats.outQty * stats.avg;
+        }
+        return { allTxs, periodTxs, statsById, summary };
+    }, [refreshTrigger, fromDate, toDate]);
 
-    const handleExecuteAction = () => {
-        if (!confirmAction.tx || !user) return;
+    const filteredTxs = filter ? periodTxs.filter(tx => tx.materialType === filter) : periodTxs;
+    const currentPage = Math.min(page, Math.max(0, Math.ceil(filteredTxs.length / rowsPerPage) - 1));
+    const historyMaterialIds = Array.from(new Set([
+        ...materials.map(material => material.id),
+        ...allTxs.flatMap(tx => tx.materialType ? [tx.materialType] : []),
+    ]));
+    const priceHistory = useMemo(() => {
+        if (!filter || view !== 'prices') return [];
+        const inPeriod = new Set(periodTxs);
+        return allTxs.filter(tx => tx.materialType === filter && tx.transactionType === 'IN')
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+            .map((tx, index, purchases) => {
+                const previous = purchases[index + 1];
+                const price = unitPrice(tx);
+                const priorPrice = previous ? unitPrice(previous) : 0;
+                const change = priorPrice > 0 ? (price - priorPrice) / priorPrice * 100 : 0;
+                return { tx, price, change };
+            })
+            .filter(({ tx }) => inPeriod.has(tx));
+    }, [allTxs, periodTxs, filter, view]);
+
+    const openHistory = (material: string) => {
+        setView('movements');
+        setFilter(material);
+        setPage(0);
+    };
+
+    const executeMovementAction = async () => {
+        if (!movementAction || !user || busy) return;
+        if (movementAction.type === 'lock' ? !canLock : !canDelete) return;
+        setBusy(true);
+        setMovementError('');
         try {
-            if (confirmAction.type === 'DELETE') {
-                db.deleteFactoryTransaction(user.id, confirmAction.tx.id);
-                toast.success(t('batch4.k683'));
-            } else if (confirmAction.type === 'LOCK') {
-                db.lockFactoryTransaction(user.id, confirmAction.tx.id);
-                toast.success(t('batch4.k684'));
+            if (movementAction.type === 'delete') {
+                await db.deleteFactoryTransaction(user.id, movementAction.tx.id, true);
+            } else {
+                await db.setInventoryMovementLock(user.id, movementAction.tx.id, true);
             }
-            setConfirmAction({ type: 'DELETE', tx: null });
-        } catch (err: any) {
-            toast.error(t('factory_tabs.inv_error'), err.message);
+            toast.success(t(movementAction.type === 'delete' ? 'batch4.k683' : 'batch4.k684'));
+            setMovementAction(null);
+        } catch {
+            setMovementError(t('factory_materials.save_failed'));
+        } finally {
+            setBusy(false);
         }
     };
 
-    const calculateMaterialFinancials = (mat: string) => {
-        const allHistoryTxs = db.getFactoryTransactions('INVENTORY').filter(t => t.materialType === mat);
-        const totalInValueAllTime = allHistoryTxs.filter(t => t.transactionType === 'IN').reduce((acc, t) => acc + (t.amount || 0), 0);
-        const totalInQtyAllTime = allHistoryTxs.filter(t => t.transactionType === 'IN').reduce((acc, t) => acc + (t.quantity || 0), 0);
-
-        const avgPurchasePrice = totalInQtyAllTime > 0 ? (totalInValueAllTime / totalInQtyAllTime) : 0;
-        const currentStock = db.getMaterialStock(mat);
-        const currentStockValue = currentStock * avgPurchasePrice;
-
-        const periodTxs = allHistoryTxs.filter(t => {
-            const txDate = new Date(t.date).setHours(0, 0, 0, 0);
-            const start = fromDate ? new Date(fromDate).setHours(0, 0, 0, 0) : 0;
-            const end = toDate ? new Date(toDate).setHours(23, 59, 59, 999) : Infinity;
-            return txDate >= start && txDate <= end;
-        });
-
-        const periodInQty = periodTxs.filter(t => t.transactionType === 'IN').reduce((acc, t) => acc + (t.quantity || 0), 0);
-        const periodInVal = periodTxs.filter(t => t.transactionType === 'IN').reduce((acc, t) => acc + (t.amount || 0), 0);
-        const periodOutQty = periodTxs.filter(t => t.transactionType === 'OUT').reduce((acc, t) => acc + (t.quantity || 0), 0);
-
-        const periodOutVal = periodOutQty * avgPurchasePrice;
-
-        return {
-            currentStock,
-            currentStockValue,
-            totalInQty: totalInQtyAllTime,
-            totalInVal: totalInValueAllTime,
-            periodInQty,
-            periodInVal,
-            periodOutQty,
-            periodOutVal
-        };
+    const unlockMovement = async (tx: FactoryTransaction) => {
+        if (!user || !canLock || !tx.isLocked) return;
+        try {
+            await db.setInventoryMovementLock(user.id, tx.id, false);
+            toast.success(t('factory_materials.movement_unlocked'));
+        } catch {
+            toast.error(t('factory_materials.unlock_failed'));
+        }
     };
 
-    const globalStats = useMemo(() => {
-        let totalStockValue = 0, totalInValue = 0, totalOutValue = 0;
-        allMaterialsList.forEach(mat => {
-            const stats = calculateMaterialFinancials(mat);
-            totalStockValue += stats.currentStockValue;
-            totalInValue += stats.periodInVal;
-            totalOutValue += stats.periodOutVal;
-        });
-        return { totalStockValue, totalInValue, totalOutValue };
-    }, [refreshTrigger, fromDate, toDate]);
-
-    const hasPerm = (p: string) => user?.permissions?.includes(p as any);
-    const isAdmin = user?.role === UserRole.ADMIN;
+    const movementButton = canAdd && activeCount > 0 && (
+        <Button variant="secondary" className="text-sm" onClick={() => onOpenModal('INVENTORY', {
+            material: view !== 'materials' && byId.has(filter) && !byId.get(filter)?.archived_at ? filter : undefined,
+        })}><Plus size={17} aria-hidden />{t('batch4.k693')}</Button>
+    );
 
     return (
-        <div className="space-y-8 animate-fade-in">
-            <div className="bg-white p-4 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col gap-4">
-                <div className="flex flex-col lg:flex-row justify-between items-center gap-4">
-                    <h3 className="font-bold text-gray-800 flex items-center gap-2 text-xl px-2"><Box size={24} className="text-[#0e3c63]" />{t('batch4.k698')}</h3>
-                    <DateRangePicker from={fromDate} to={toDate} onChangeFrom={setFromDate} onChangeTo={setToDate} />
+        <div className="min-w-0 space-y-5">
+            <section className="space-y-4 rounded-[1.5rem] border border-gray-100 bg-white p-4 shadow-sm sm:p-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <h3 className="flex items-center gap-2 text-xl font-bold text-slate-900"><Box size={22} className="text-[#0e3c63]" aria-hidden />{t('batch4.k698')}</h3>
+                    <div className="flex w-full items-end gap-2 sm:w-auto">
+                        <div className="grid min-w-0 flex-1 grid-cols-2 gap-2 sm:min-w-96">
+                            <ModernSingleDatePicker label={t('batch4.k133')} value={fromDate} max={toDate || undefined}
+                                onChange={value => { setFromDate(value); setPage(0); }} />
+                            <ModernSingleDatePicker label={t('batch4.k134')} value={toDate} min={fromDate || undefined}
+                                onChange={value => { setToDate(value); setPage(0); }} />
+                        </div>
+                        {(fromDate || toDate) && <button type="button" className={actionClass + ' min-h-12 border-2 border-gray-100 bg-white'} title={t('common.reset_date')} aria-label={t('common.reset_date')}
+                            onClick={() => { setFromDate(''); setToDate(''); setPage(0); }}><RotateCcw size={16} aria-hidden /></button>}
+                    </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-gray-800 p-6 rounded-[1.5rem] text-white text-center">
-                    <div className="md:border-l border-white/10"><p className="text-[10px] opacity-60 font-bold mb-1 uppercase tracking-widest">{t('batch4.k699')}</p><p className="text-2xl font-black font-mono text-green-400">${globalStats.totalInValue.toLocaleString()}</p></div>
-                    <div className="md:border-l border-white/10"><p className="text-[10px] opacity-60 font-bold mb-1 uppercase tracking-widest">{t('batch4.k700')}</p><p className="text-2xl font-black font-mono text-amber-400">${Math.round(globalStats.totalOutValue).toLocaleString()}</p></div>
-                    <div><p className="text-[10px] opacity-60 font-bold mb-1 uppercase tracking-widest">{t('batch4.k701')}</p><p className="text-2xl font-black font-mono text-blue-300">${Math.round(globalStats.totalStockValue).toLocaleString()}</p></div>
-                </div>
-            </div>
-
-            <div className="space-y-4">
-                <div className="flex items-center justify-between px-2">
-                    <h4 className="font-black text-gray-400 text-[11px] uppercase tracking-[0.2em] flex items-center gap-2"><Hexagon size={14} className="text-[#0e3c63]" />{t('batch4.k702')}</h4>
-                    <div className="h-px flex-1 bg-gray-100 mx-4"></div>
-                    {hasPerm('ADD_FACTORY_INV') && (
-                        <Button onClick={() => onOpenModal('INVENTORY')} className="h-10 px-4 rounded-xl text-[10px] font-black"><Plus size={14} />{t('batch4.k703')}</Button>
-                    )}
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-                    {allMaterialsList.map(mat => (
-                        <MaterialCard key={mat} mat={mat} stats={calculateMaterialFinancials(mat)} onClick={() => { setFilterMat(filterMat === mat ? 'ALL' : mat); setPage(0); }} onAdd={() => onOpenModal('INVENTORY', { material: mat })} isActive={filterMat === mat} />
+                <dl className="grid gap-px overflow-hidden rounded-xl border border-slate-200 bg-slate-200 sm:grid-cols-3">
+                    {[
+                        { label: t('batch4.k701'), value: summary.stockValue, color: 'text-[#0e3c63]' },
+                        { label: t('batch4.k699'), value: summary.inValue, color: 'text-emerald-700' },
+                        { label: t('batch4.k700'), value: summary.outValue, color: 'text-amber-800' },
+                    ].map(stat => (
+                        <div key={stat.label} className="flex flex-wrap items-baseline justify-between gap-2 bg-slate-50 px-4 py-3 sm:block">
+                            <dt className="text-sm text-slate-600">{stat.label}</dt>
+                            <dd className={'text-lg font-bold tabular-nums sm:mt-1 sm:text-xl ' + stat.color}><bdi>{usd(stat.value)}</bdi></dd>
+                        </div>
                     ))}
-                </div>
-            </div>
+                </dl>
+            </section>
 
-            {filterMat !== 'ALL' && (
-                <div className="flex justify-center mt-4 mb-2 animate-fade-in">
-                    <div className="flex items-center gap-2 bg-gray-100/80 p-1.5 rounded-2xl w-fit shadow-inner">
-                        <button 
-                            onClick={() => setActiveSubTab('TRANSACTIONS')} 
-                            className={`px-8 py-3 rounded-xl font-black text-sm transition-all flex items-center gap-2 ${activeSubTab === 'TRANSACTIONS' ? 'bg-white text-[#0e3c63] shadow-md transform scale-105' : 'text-gray-500 hover:text-gray-700 hover:bg-white/50'}`}
-                        >
-                            <Layers size={18} /> {t('factory_tabs.inv_transactions_log', 'سجل الحركات')}
+            <section className="min-w-0 rounded-[1.5rem] border border-gray-100 bg-white shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-5">
+                    <div className="flex flex-wrap gap-1">
+                        <button type="button" aria-pressed={view === 'materials'} className={toggleClass + (view === 'materials' ? ' ' + selectedClass : ' text-slate-600')} onClick={() => setView('materials')}>
+                            {t('factory_materials.title')}
                         </button>
-                        {priceHistory.length > 0 && (
-                            <button 
-                                onClick={() => setActiveSubTab('PRICE_HISTORY')} 
-                                className={`px-8 py-3 rounded-xl font-black text-sm transition-all flex items-center gap-2 ${activeSubTab === 'PRICE_HISTORY' ? 'bg-white text-[#0e3c63] shadow-md transform scale-105' : 'text-gray-500 hover:text-gray-700 hover:bg-white/50'}`}
-                            >
-                                <TrendingUp size={18} /> {t('factory_tabs.price_history_title', 'مؤشر أسعار الشراء')}
-                            </button>
+                        <button type="button" aria-pressed={view !== 'materials'} className={toggleClass + (view !== 'materials' ? ' ' + selectedClass : ' text-slate-600')} onClick={() => setView('movements')}>
+                            {t('batch4.k704')}
+                        </button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                        {movementButton}
+                        {canAdd && catalogReady && view === 'materials' && <Button className="text-sm"
+                            onClick={() => setCatalogAction({ type: 'add' })}><Plus size={17} aria-hidden />{t('factory_materials.add')}</Button>}
+                    </div>
+                </div>
+
+                {view === 'materials' ? (
+                    <>
+                        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-5">
+                            <div className="relative w-full sm:w-64">
+                                <Search size={17} className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-[#0e3c63]" aria-hidden />
+                                <input type="search" aria-label={t('factory_materials.search')} placeholder={t('factory_materials.search')} value={search}
+                                    onChange={event => setSearch(event.target.value)} className={factoryFieldInput + ' appearance-none pe-12 ps-9 [&::-webkit-search-cancel-button]:appearance-none'} />
+                                {search && <button type="button" aria-label={t('common.reset_filters')} onClick={() => setSearch('')}
+                                    className={actionClass + ' absolute end-0.5 top-1/2 -translate-y-1/2'}><X size={17} aria-hidden /></button>}
+                            </div>
+                            <div className="flex gap-1 rounded-xl bg-slate-50 p-1">
+                                <button type="button" aria-pressed={!showArchived} onClick={() => setShowArchived(false)}
+                                    className={toggleClass + (!showArchived ? ' ' + selectedClass : '')}>{t('common.active')} · {activeCount}</button>
+                                <button type="button" aria-pressed={showArchived} onClick={() => setShowArchived(true)}
+                                    className={toggleClass + (showArchived ? ' ' + selectedClass : '')}>{t('factory_materials.archived')} · {materials.length - activeCount}</button>
+                            </div>
+                        </div>
+
+                        {db.factoryMaterialsStatus === 'error' && (
+                            <div role="alert" className="mx-4 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-amber-50 px-3 text-sm text-amber-950 sm:mx-5">
+                                {t('factory_materials.load_failed')}
+                                <button type="button" onClick={() => void db.fetchFactoryMaterials()} className="min-h-11 font-bold underline">{t('common.refresh')}</button>
+                            </div>
                         )}
-                    </div>
-                </div>
-            )}
 
-            {filterMat !== 'ALL' && activeSubTab === 'PRICE_HISTORY' && priceHistory.length > 0 && (
-                <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 flex flex-col gap-6 animate-fade-in max-w-4xl mx-auto w-full">
-                    <h3 className="font-black text-gray-800 flex items-center gap-2 px-2">
-                        <TrendingUp size={20} className="text-[#0e3c63]" />
-                        {t('factory_tabs.price_history_title', 'مؤشر أسعار الشراء (السجل التاريخي)')}
-                    </h3>
-                    <div className="relative border-r-2 border-dashed border-gray-100 mr-4 pr-6 space-y-6">
-                        {priceHistory.map((tx) => (
-                            <div key={tx.id} className="relative group">
-                                <div className={`absolute -right-[33px] top-1 w-4 h-4 rounded-full border-4 border-white shadow-sm flex items-center justify-center
-                                    ${tx.priceChange === 'up' ? 'bg-red-500' : tx.priceChange === 'down' ? 'bg-emerald-500' : 'bg-gray-400'}`}>
+                        {visibleMaterials.length === 0 ? (
+                            <p className="border-t border-slate-100 px-5 py-10 text-center text-sm text-slate-600">
+                                {t(search.trim() ? 'factory_materials.no_results' : showArchived ? 'factory_materials.no_archived' : 'factory_materials.empty')}
+                            </p>
+                        ) : (
+                            <>
+                                <div aria-hidden="true" className={'hidden border-y border-slate-200 bg-slate-50 px-5 py-2.5 text-xs font-semibold text-slate-600 sm:grid ' + materialGrid}>
+                                    <span>{t('batch4.k705')}</span><span>{t('factory_materials.balance')}</span><span>{t('factory_tabs.inv_incoming')}</span><span>{t('factory_tabs.inv_dispatch')}</span>
+                                    <span className="min-w-36 text-center">{t('common.actions')}</span>
                                 </div>
-                                <div className="bg-gray-50/50 rounded-2xl p-4 border border-gray-100 hover:border-blue-200 hover:shadow-md transition-all">
-                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                <ul className="divide-y divide-slate-100">
+                                    {visibleMaterials.map(material => {
+                                        const name = label(material.id);
+                                        const stats = statsById.get(material.id) ?? emptyStats;
+                                        const measure = unit(material.id);
+                                        return (
+                                            <li key={material.id} className={materialGrid + ' px-4 py-3 sm:px-5'}>
+                                                <div className="col-span-2 flex min-w-0 items-center gap-2 sm:col-span-1">
+                                                    <span className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-[#0e3c63] lg:flex"><Box size={17} aria-hidden /></span>
+                                                    <div className="min-w-0">
+                                                        <button type="button" onClick={() => openHistory(material.id)} dir="auto"
+                                                            className="min-h-8 text-start text-sm font-bold text-[#0e3c63] hover:underline focus-visible:outline-2 [overflow-wrap:anywhere]">{name}</button>
+                                                        {stats.purchased > 0 && <p className="text-xs text-slate-600">{t('factory_materials.avg_price', { value: usd(stats.avg) })}</p>}
+                                                    </div>
+                                                </div>
+                                                <MaterialFigure label={t('factory_materials.balance')} value={quantity(stats.stock) + ' ' + measure} detail={usd(stats.stock * stats.avg)} />
+                                                <MaterialFigure label={t('factory_tabs.inv_incoming')} value={quantity(stats.inQty) + ' ' + measure} detail={usd(stats.inValue)} />
+                                                <MaterialFigure label={t('factory_tabs.inv_dispatch')} value={quantity(stats.outQty) + ' ' + measure} detail={usd(stats.outQty * stats.avg)} />
+                                                <div className="flex min-w-0 flex-wrap justify-end gap-1 sm:min-w-36 sm:justify-center">
+                                                    {!material.archived_at && canAdd && (
+                                                        <button type="button" className={actionClass + ' bg-blue-50 text-[#0e3c63]'} title={t('batch4.k693')} aria-label={t('factory_materials.movement_for', { name })}
+                                                            onClick={() => onOpenModal('INVENTORY', { material: material.id })}><Plus size={18} aria-hidden /></button>
+                                                    )}
+                                                    {catalogReady && canEdit && !material.archived_at && (
+                                                        <button type="button" className={actionClass} title={t('common.edit')} aria-label={t('factory_materials.edit_named', { name })}
+                                                            onClick={() => setCatalogAction({ type: 'edit', material })}><Edit3 size={17} aria-hidden /></button>
+                                                    )}
+                                                    {catalogReady && canDelete && (
+                                                        <button type="button" className={actionClass + (material.archived_at ? '' : ' hover:bg-red-50 hover:text-red-700')}
+                                                            title={t(material.archived_at ? 'factory_materials.restore' : 'common.delete')}
+                                                            aria-label={t(material.archived_at ? 'factory_materials.restore_named' : 'factory_materials.archive_named', { name })}
+                                                            onClick={() => setCatalogAction({ type: material.archived_at ? 'restore' : 'archive', material })}>
+                                                            {material.archived_at ? <RotateCcw size={17} aria-hidden /> : <Trash2 size={17} aria-hidden />}
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </li>
+                                        );
+                                    })}
+                                </ul>
+                            </>
+                        )}
+                    </>
+                ) : (
+                    <>
+                        <div className="flex flex-wrap items-end gap-3 border-b border-slate-200 px-4 py-3 sm:px-5">
+                            <div className="w-full sm:w-64">
+                                <ModalModernSelect label={t('batch4.k705')} value={filter} icon={Box} onChange={value => {
+                                    setFilter(value);
+                                    setPage(0);
+                                    if (!value) setView('movements');
+                                }} options={[
+                                    { value: '', label: t('factory_materials.all') },
+                                    ...historyMaterialIds.map(id => ({
+                                        value: id,
+                                        label: label(id) + (byId.get(id)?.archived_at ? ' · ' + t('factory_materials.archived') : ''),
+                                    })),
+                                ]} />
+                            </div>
+                            {filter && (
+                                <div className="flex flex-wrap items-center gap-1">
+                                    <button type="button" aria-pressed={view === 'movements'} onClick={() => setView('movements')}
+                                        className={toggleClass + (view === 'movements' ? ' ' + selectedClass : '')}><History size={15} className="me-1 inline" aria-hidden />{t('factory_materials.movements')}</button>
+                                    <button type="button" aria-pressed={view === 'prices'} onClick={() => setView('prices')}
+                                        className={toggleClass + (view === 'prices' ? ' ' + selectedClass : '')}><TrendingUp size={15} className="me-1 inline" aria-hidden />{t('factory_materials.prices')}</button>
+                                </div>
+                            )}
+                        </div>
+
+                        {view === 'prices' ? (
+                            <ul className="divide-y divide-slate-100">
+                                {priceHistory.length === 0 && <li className="px-5 py-10 text-center text-sm text-slate-600">{t('batch4.k709')}</li>}
+                                {priceHistory.map(({ tx, price, change }) => (
+                                    <li key={tx.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 text-sm">
                                         <div>
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <span className="font-bold text-gray-800 font-mono text-lg">${tx.unitPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
-                                                <span className="text-xs font-bold text-gray-400">/ {materialLabels[tx.materialType!] ? t(materialLabels[tx.materialType!].unit) : ''}</span>
-                                            </div>
-                                            <div className="flex items-center gap-3 text-xs text-gray-500">
-                                                <span className="flex items-center gap-1 font-bold"><Calendar size={12} /> {formatDate(tx.date)}</span>
-                                                <span className="flex items-center gap-1"><Package size={12} /> {tx.quantity?.toLocaleString()} {t('factory_tabs.inv_quantity_bought', 'كمية مشتراة')}</span>
-                                            </div>
+                                            <p className="font-bold text-slate-900"><bdi>{usd(price)}</bdi> / {unit(tx.materialType)}</p>
+                                            <p className="text-slate-600"><bdi className="tabular-nums">{formatDate(tx.date, dateDigits)}</bdi> · {quantity(tx.quantity || 0)} {unit(tx.materialType)}{tx.source ? ' · ' + tx.source : ''}</p>
                                         </div>
-                                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                                            {tx.source && (
-                                                <div className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-600 flex items-center gap-1.5">
-                                                    <Info size={12} className="text-blue-500" />
-                                                    {tx.source}
-                                                </div>
-                                            )}
-                                            {tx.priceChange !== 'same' && (
-                                                <div className={`flex items-center gap-1 text-xs font-black px-2 py-1 rounded-md
-                                                    ${tx.priceChange === 'up' ? 'text-red-600 bg-red-50' : 'text-emerald-600 bg-emerald-50'}`}>
-                                                    {tx.priceChange === 'up' ? <ArrowUpRight size={14} /> : <ArrowDownLeft size={14} />}
-                                                    {tx.changePercentage.toFixed(1)}% {tx.priceChange === 'up' ? t('factory_tabs.price_up', 'أغلى') : t('factory_tabs.price_down', 'أرخص')}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
+                                        {change !== 0 && <span className={'inline-flex items-center gap-1 font-semibold ' + (change > 0 ? 'text-red-700' : 'text-emerald-700')}>
+                                            {change > 0 ? <ArrowUp size={15} /> : <ArrowDown size={15} />} <bdi>{change > 0 ? '+' : ''}{change.toFixed(1)}%</bdi>
+                                        </span>}
+                                    </li>
+                                ))}
+                            </ul>
+                        ) : (
+                            <>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-start text-sm">
+                                        <thead className="border-b border-slate-200 bg-slate-50 text-slate-600">
+                                            <tr>{['k202', 'k705', 'k706', 'k389', 'k707', 'k708', 'k207'].map(key => <th key={key} scope="col" className="whitespace-nowrap px-4 py-3 text-start font-semibold">{t('batch4.' + key)}</th>)}</tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                            {filteredTxs.length === 0 && <tr><td className="px-4 py-10 text-center text-slate-600" colSpan={7}>{t('batch4.k709')}</td></tr>}
+                                            {filteredTxs.slice(currentPage * rowsPerPage, (currentPage + 1) * rowsPerPage).map(tx => {
+                                                const isOut = tx.transactionType === 'OUT';
+                                                const materialLabel = label(tx.materialType);
+                                                const value = isOut ? (tx.quantity || 0) * (statsById.get(tx.materialType)?.avg || 0) : tx.amount || 0;
+                                                return (
+                                                    <tr key={tx.id}>
+                                                        <td className="whitespace-nowrap px-4 py-3 tabular-nums"><p><bdi>{formatDate(tx.date, dateDigits)}</bdi></p><p className="text-xs text-slate-600"><bdi>{formatTime(tx.date, dateDigits)}</bdi></p></td>
+                                                        <td className="px-4 py-3 font-semibold text-[#0e3c63]">
+                                                            <div className="flex items-center gap-2">
+                                                                <bdi>{materialLabel}</bdi>
+                                                                {tx.isLocked && <MovementLockIcon name={materialLabel} onUnlock={canLock ? () => unlockMovement(tx) : undefined} />}
+                                                            </div>
+                                                        </td>
+                                                        <td className="whitespace-nowrap px-4 py-3"><Badge color={isOut ? 'orange' : 'green'}>{t(isOut ? 'factory_tabs.inv_type_out' : 'factory_tabs.inv_type_in')}</Badge></td>
+                                                        <td className="whitespace-nowrap px-4 py-3 tabular-nums">{quantity(tx.quantity || 0)} {unit(tx.materialType)}</td>
+                                                        <td className="min-w-28 px-4 py-3 text-slate-600 [overflow-wrap:anywhere]">{tx.source || tx.notes || '—'}</td>
+                                                        <td className="whitespace-nowrap px-4 py-3 font-semibold tabular-nums"><bdi>{usd(value)}</bdi></td>
+                                                        <td className="px-2">
+                                                            <div className="flex gap-1">
+                                                                {canEdit && !tx.isLocked && <button type="button" className={actionClass} aria-label={t('batch4.k468')} title={t('batch4.k468')} onClick={() => onOpenModal('INVENTORY', { tx })}><Edit3 size={17} aria-hidden /></button>}
+                                                                {canLock && !tx.isLocked && <button type="button" className={actionClass} aria-label={t('factory_materials.lock_movement')} title={t('factory_materials.lock_movement')} onClick={() => { setMovementError(''); setMovementAction({ type: 'lock', tx }); }}><Lock size={17} aria-hidden /></button>}
+                                                                {canDelete && !tx.isLocked && <button type="button" className={actionClass + ' hover:bg-red-50 hover:text-red-700'} aria-label={t('batch4.k471')} title={t('batch4.k471')} onClick={() => { setMovementError(''); setMovementAction({ type: 'delete', tx }); }}><Trash2 size={17} aria-hidden /></button>}
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
                                 </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
+                                {filteredTxs.length > 0 && <PaginationControl page={currentPage} rowsPerPage={rowsPerPage} setPage={setPage} setRowsPerPage={setRowsPerPage} totalItems={filteredTxs.length} />}
+                            </>
+                        )}
+                    </>
+                )}
+            </section>
 
-            {(filterMat === 'ALL' || activeSubTab === 'TRANSACTIONS') && (
-                <Card className="p-0 overflow-hidden border border-gray-100 shadow-xl rounded-[2.5rem] animate-fade-in mt-4">
-                    <div className="p-6 bg-gray-50/50 border-b border-gray-100 flex justify-between items-center px-10">
-                        <h4 className="font-black text-gray-700 flex items-center gap-2"><Search size={18} className="text-gray-400" />{t('batch4.k704')}</h4>
-                        <div className="flex items-center gap-3">
-                            {filterMat !== 'ALL' && <button onClick={() => { setFilterMat('ALL'); setPage(0); setActiveSubTab('TRANSACTIONS'); }} className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-xl text-[10px] font-black transition-all border border-red-100 shadow-sm"><XCircle size={14} /> {t('factory_tabs.inv_cancel_filter', { name: materialLabels[filterMat]?.ar ? t(materialLabels[filterMat].ar) : filterMat })}</button>}
-                        <Badge color="gray" className="font-black">{t('factory_tabs.inv_record_count', { count: filteredTxs.length })}</Badge>
-                    </div>
-                </div>
-                <div className="overflow-x-auto">
-                    <table className="w-full text-right text-sm">
-                        <thead className="bg-white text-gray-400 font-black uppercase text-[10px] tracking-widest border-b border-gray-100">
-                            <tr>
-                                <th className="p-5 pr-10">{t('batch4.k202')}</th>
-                                <th className="p-5">{t('batch4.k705')}</th>
-                                <th className="p-5 text-center">{t('batch4.k706')}</th>
-                                <th className="p-5">{t('batch4.k389')}</th>
-                                <th className="p-5">{t('batch4.k707')}</th>
-                                <th className="p-5 text-left">{t('batch4.k708')}</th>
-                                <th className="p-5 text-center">{t('batch4.k207')}</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-50">
-                            {filteredTxs.length === 0 ? <tr><td colSpan={7} className="p-20 text-center text-gray-400 font-bold italic">{t('batch4.k709')}</td></tr> : currentTxs.map(tx => {
-                                const isLocked = tx.isLocked;
-                                const isOut = tx.transactionType === 'OUT';
-                                const canEditTx = hasPerm('EDIT_FACTORY_INV') && (!isLocked || isAdmin);
-                                const canDeleteTx = hasPerm('DELETE_FACTORY_INV') && (!isLocked || isAdmin);
-                                const canLockTx = hasPerm('LOCK_FACTORY_INV') && !isLocked;
-
-                                // حساب القيمة التقديرية للصرف في السجل
-                                const estimatedValue = isOut ? ((tx.quantity || 0) * (avgPricesMap[tx.materialType!] || 0)) : tx.amount;
-
-                                return (
-                                    <tr key={tx.id} className="hover:bg-blue-50/30 transition-colors group">
-                                        <td className="p-5 pr-10">
-                                            <div className="flex items-center gap-5">
-                                                <div className="flex flex-col font-mono"><span className="font-black text-gray-800 text-sm">{formatDate(tx.date)}</span><span className="text-[10px] text-gray-400 mt-1 flex items-center gap-1"><Clock size={12} /> {formatTime(tx.date)}</span></div>
-                                            </div>
-                                        </td>
-                                        <td className="p-5 font-black text-[#0e3c63]">
-                                            <div className="flex items-center gap-2">
-                                                {materialLabels[tx.materialType!]?.ar ? t(materialLabels[tx.materialType!].ar) : tx.materialType}
-                                                {isLocked && <span title={t('batch4.k710')}><Lock size={12} className="text-amber-500" /></span>}
-                                            </div>
-                                        </td>
-                                        <td className="p-5 text-center"><Badge color={tx.transactionType === 'IN' ? 'green' : 'orange'} className="font-black">{tx.transactionType === 'IN' ? t('factory_tabs.inv_type_in') : t('factory_tabs.inv_type_out')}</Badge></td>
-                                        <td className="p-5 font-black text-gray-800 font-mono text-lg">{(tx.quantity || 0).toLocaleString()} <span className="text-[10px] text-gray-400 font-sans">{materialLabels[tx.materialType!] ? t(materialLabels[tx.materialType!].unit) : ''}</span></td>
-                                        <td className="p-5 text-gray-500 font-bold text-xs truncate max-w-[200px]">{tx.source || tx.notes || '-'}</td>
-                                        <td className="p-5 text-left font-mono font-black text-lg">
-                                            <span className={isOut ? 'text-orange-600' : 'text-emerald-600'}>
-                                                ${(estimatedValue || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                                            </span>
-                                        </td>
-                                        <td className="p-5 text-center">
-                                            <div className="flex items-center justify-center gap-2">
-                                                {canEditTx && (
-                                                    <button onClick={() => onOpenModal('INVENTORY', { tx: tx })} className="p-2.5 bg-white text-blue-600 border border-gray-200 rounded-xl hover:bg-blue-50 shadow-sm" title={t('batch4.k468')}><Edit3 size={18} /></button>
-                                                )}
-                                                {canLockTx && (
-                                                    <button onClick={() => setConfirmAction({ type: 'LOCK', tx: tx })} className="p-2.5 bg-white text-amber-600 border border-gray-200 rounded-xl hover:bg-amber-600 hover:text-white shadow-sm" title={t('batch4.k711')}><Lock size={18} /></button>
-                                                )}
-                                                {canDeleteTx && (
-                                                    <button onClick={() => setConfirmAction({ type: 'DELETE', tx: tx })} className="p-2.5 bg-white text-red-500 border border-gray-200 rounded-xl hover:bg-red-500 hover:text-white shadow-sm" title={t('batch4.k471')}><Trash2 size={18} /></button>
-                                                )}
-                                                {isLocked && !isAdmin && (
-                                                    <div className="p-2.5 bg-gray-50 text-gray-300 border border-gray-100 rounded-xl" title={t('batch4.k712')}><Lock size={18} /></div>
-                                                )}
-                                            </div>
-                                        </td>
-                                    </tr>
-                                )
-                            })}
-                        </tbody>
-                    </table>
-                </div>
-                <PaginationControl page={page} rowsPerPage={rowsPerPage} setPage={setPage} setRowsPerPage={setRowsPerPage} totalItems={filteredTxs.length} />
-            </Card>
-            )}
-
-            {/* نافذة تأكيد الإجراء */}
-            {confirmAction.tx && (
-                <div className="fixed inset-0 bg-[#0e3c63]/70 backdrop-blur-md z-[1000] flex items-center justify-center p-4 animate-fade-in">
-                    <div className="bg-white rounded-[3rem] w-full max-w-lg shadow-2xl overflow-hidden border border-white/20">
-                        <div className={`p-10 text-white text-center relative overflow-hidden bg-gradient-to-br ${confirmAction.type === 'LOCK' ? 'from-amber-500 to-orange-700' : 'from-red-600 to-red-800'}`}>
-                            <div className="absolute top-0 left-0 w-full h-full opacity-20" style={{ backgroundImage: `url(${carbonFibre})` }}></div>
-                            <div className="relative z-10">
-                                <div className="w-20 h-20 bg-white/20 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-xl backdrop-blur-md border border-white/20">
-                                    {confirmAction.type === 'LOCK' ? <Lock size={42} className="text-white animate-pulse" /> : <AlertOctagon size={42} className="text-white" />}
-                                </div>
-                                <h3 className="text-2xl font-black mb-2">{confirmAction.type === 'LOCK' ? t('factory_tabs.inv_confirm_lock_title') : t('factory_tabs.inv_confirm_delete_title')}</h3>
-                                <p className="text-white/80 text-sm font-bold opacity-80">
-                                    {confirmAction.type === 'LOCK' ? t('factory_tabs.inv_lock_warning') : t('factory_tabs.inv_delete_warning')}
-                                </p>
-                            </div>
+            {catalogAction && <MaterialCatalogDialog action={catalogAction}
+                unitInUse={'material' in catalogAction && statsById.has(catalogAction.material.id)} onClose={() => setCatalogAction(null)} />}
+            {movementAction && (
+                <InventoryDialog title={t(movementAction.type === 'lock' ? 'factory_tabs.inv_confirm_lock_title' : 'factory_tabs.inv_confirm_delete_title')}
+                    busy={busy} onClose={() => setMovementAction(null)}>
+                    <div className="space-y-4 p-5">
+                        <div>
+                            <p className="font-semibold">{label(movementAction.tx.materialType)} · {quantity(movementAction.tx.quantity || 0)} {unit(movementAction.tx.materialType)}</p>
+                            <p className="text-sm tabular-nums text-slate-600"><bdi>{formatDate(movementAction.tx.date, dateDigits)}</bdi></p>
                         </div>
-                        <div className="p-8 space-y-6">
-                            <div className="bg-gray-50 rounded-3xl p-6 border border-gray-100 space-y-4 text-right">
-                                <p className="font-black text-gray-800 text-lg">
-                                    {materialLabels[confirmAction.tx.materialType!]?.ar ? t(materialLabels[confirmAction.tx.materialType!].ar) : ''}: {(confirmAction.tx.quantity || 0)} {materialLabels[confirmAction.tx.materialType!]?.unit ? t(materialLabels[confirmAction.tx.materialType!].unit) : ''}
-                                </p>
-                                <p className="text-xs text-gray-500 font-bold">{formatDate(confirmAction.tx.date)}</p>
-                            </div>
-                            <div className="flex flex-col gap-3">
-                                <Button onClick={handleExecuteAction} className={`w-full h-16 text-white rounded-2xl font-black text-lg shadow-xl active:scale-95 flex items-center justify-center gap-3 transition-all ${confirmAction.type === 'LOCK' ? 'bg-orange-600 hover:bg-orange-700' : 'bg-red-600 hover:bg-red-700'}`}>
-                                    {confirmAction.type === 'LOCK' ? <Lock size={24} /> : <Trash2 size={24} />}
-                                    {confirmAction.type === 'LOCK' ? t('factory_tabs.inv_confirm_lock_btn') : t('factory_tabs.inv_confirm_delete_btn')}
-                                </Button>
-                                <button onClick={() => setConfirmAction({ type: 'DELETE', tx: null })} className="w-full h-14 bg-gray-50 text-gray-500 hover:bg-gray-100 rounded-2xl font-black text-sm transition-all border border-gray-200">{t('batch4.k156')}</button>
-                            </div>
+                        <p className="text-sm text-slate-600">{t(movementAction.type === 'lock' ? 'factory_materials.lock_movement_hint' : 'factory_tabs.inv_delete_warning')}</p>
+                        {movementError && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{movementError}</p>}
+                        <div className="flex flex-wrap justify-end gap-2">
+                            <Button variant="secondary" disabled={busy} onClick={() => setMovementAction(null)}>{t('common.cancel')}</Button>
+                            <Button variant={movementAction.type === 'delete' ? 'danger' : 'primary'} disabled={busy} onClick={executeMovementAction}>
+                                {t(movementAction.type === 'lock' ? 'factory_tabs.inv_confirm_lock_btn' : 'factory_tabs.inv_confirm_delete_btn')}
+                            </Button>
                         </div>
                     </div>
-                </div>
+                </InventoryDialog>
             )}
+        </div>
+    );
+}
+
+function MovementLockIcon({ name, onUnlock }: { name: string; onUnlock?: () => Promise<void> }) {
+    const { t } = useTranslation();
+    const [armed, setArmed] = useState(false);
+    const [busy, setBusy] = useState(false);
+    const pending = useRef(false);
+    const label = t(armed ? 'factory_materials.unlock_second_press' : 'factory_materials.unlock_two_presses', { name });
+
+    if (!onUnlock) {
+        const locked = t('factory_materials.movement_locked');
+        return <span role="img" aria-label={locked} title={locked}
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-800">
+            <Lock size={15} aria-hidden />
+        </span>;
+    }
+
+    const pressLock = async () => {
+        if (pending.current) return;
+        if (!armed) {
+            setArmed(true);
+            return;
+        }
+        pending.current = true;
+        setArmed(false);
+        setBusy(true);
+        try {
+            await onUnlock();
+        } finally {
+            pending.current = false;
+            setBusy(false);
+        }
+    };
+
+    return (
+        <>
+            <button type="button" disabled={busy} aria-label={label} title={label} onClick={pressLock} onBlur={() => setArmed(false)}
+                onKeyDown={event => {
+                    if (event.key === 'Escape') setArmed(false);
+                    if (event.key === 'Enter' && event.repeat) event.preventDefault();
+                }}
+                className={iconButtonClass + ' shrink-0 touch-manipulation select-none bg-amber-50 text-amber-800 hover:bg-amber-100 disabled:opacity-50' +
+                    (armed ? ' ring-2 ring-amber-400' : '')}>
+                <Lock size={16} aria-hidden />
+            </button>
+            <span role="status" className="sr-only">{armed ? label : ''}</span>
+        </>
+    );
+}
+
+function MaterialFigure({ label, value, detail }: { label: string; value: string; detail: string }) {
+    return (
+        <div className="min-w-0">
+            <p className="text-xs text-slate-600 sm:sr-only">{label}</p>
+            <p className="font-semibold tabular-nums text-slate-900">{value}</p>
+            <p className="text-xs tabular-nums text-slate-600"><bdi>{detail}</bdi></p>
         </div>
     );
 }

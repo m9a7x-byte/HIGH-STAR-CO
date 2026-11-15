@@ -144,7 +144,7 @@ export const PERMISSION_LABELS: Record<PermissionKey, { label: string, desc: str
     'ADD_FACTORY_INV': { label: t('batch4.k811'), desc: 'تسجيل وارد أو صرف للمواد' },
     'EDIT_FACTORY_INV': { label: t('batch4.k812'), desc: 'تعديل سجلات حركات المخزن' },
     'DELETE_FACTORY_INV': { label: t('batch4.k813'), desc: 'حذف سجل حركة من المخزن' },
-    'LOCK_FACTORY_INV': { label: t('batch4.k814'), desc: 'قفل حركات المخزن نهائياً' },
+    'LOCK_FACTORY_INV': { label: t('factory_materials.lock_permission'), desc: t('factory_materials.lock_permission_desc') },
 
     'VIEW_FACTORY_EXP': { label: t('batch4.k815'), desc: 'رؤية سجل المصاريف التشغيلية' },
     'ADD_FACTORY_EXP': { label: t('batch4.k816'), desc: 'تسجيل رواتب، إيجار، طاقة، نثرية' },

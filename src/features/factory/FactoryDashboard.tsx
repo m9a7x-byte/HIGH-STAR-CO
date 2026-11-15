@@ -74,7 +74,7 @@ export const FactoryDashboard = () => {
       }
 
       if (modalCategory === 'INVENTORY') {
-          return <InventoryModal isOpen={modalOpen} onClose={handleCloseModal} onSuccess={() => { refresh(); handleCloseModal(); }} initialMaterial={initialMaterial} transaction={selectedTx || undefined} />;
+          return <InventoryModal onClose={handleCloseModal} onSuccess={() => { refresh(); handleCloseModal(); }} initialMaterial={initialMaterial} transaction={selectedTx || undefined} />;
       }
 
       if (modalCategory === 'SUPPLIER') {

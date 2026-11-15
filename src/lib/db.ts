@@ -7,6 +7,8 @@ import { RealtimeChannel } from '@supabase/supabase-js';
 import { getAdjustedProductPrices } from './pricing';
 import { calculateLineTotal, calculateOrderTotals } from './orderMoney';
 import { snapshotProductUnits, validateProductQuantities, isPieceProduct, getProductFamily, normalizePaintColor } from './productFamilies';
+import { legacyFactoryMaterials } from './factoryMaterials';
+import type { FactoryMaterial } from './factoryMaterials';
 
 type Listener = () => void;
 
@@ -33,6 +35,9 @@ class SupabaseService {
   auditLogs: AuditLog[] = [];
   walletTransactions: WalletTransaction[] = [];
   factoryTransactions: FactoryTransaction[] = [];
+  private factoryMaterials = legacyFactoryMaterials;
+  private factoryMaterialsRequest = 0;
+  factoryMaterialsStatus: 'loading' | 'ready' | 'error' = 'loading';
   notifications: AppNotification[] = [];
 
   vehicleConfig: VehicleConfig = {
@@ -314,6 +319,7 @@ class SupabaseService {
       this.fetchUsers(),
       this.fetchOrders(),
       this.fetchFactoryTransactions(),
+      ...(APP_MODE === 'agent' ? [] : [this.fetchFactoryMaterials()]),
       this.fetchWalletTransactions(),
       this.fetchAuditLogs(),
       this.fetchNotifications()
@@ -364,6 +370,7 @@ class SupabaseService {
             break;
           case 'products': this.fetchProducts(); break;
           case 'factory_transactions': this.fetchFactoryTransactions().then(() => this.notify()); break;
+          case 'factory_materials': void this.fetchFactoryMaterials(); break;
           case 'supplier_transactions': this.fetchFactoryTransactions().then(() => this.notify()); break;
           case 'wallet_transactions': this.fetchWalletTransactions().then(() => this.notify()); break;
           case 'profiles': this.fetchUsers().then(() => this.notify()); break;
@@ -573,6 +580,43 @@ class SupabaseService {
     }
   }
 
+  async fetchFactoryMaterials() {
+    const request = ++this.factoryMaterialsRequest;
+    const { data, error } = await supabase.from('factory_materials')
+      .select('id, name, unit, sort_order, archived_at').order('sort_order').order('id');
+    if (request !== this.factoryMaterialsRequest) return;
+    this.factoryMaterialsStatus = error ? 'error' : 'ready';
+    if (!error) this.factoryMaterials = data as FactoryMaterial[];
+    this.notify();
+  }
+
+  getFactoryMaterials() {
+    return this.factoryMaterials;
+  }
+
+  async saveFactoryMaterial(values: Pick<FactoryMaterial, 'name' | 'unit'>, id?: string) {
+    const table = supabase.from('factory_materials');
+    const write = id ? table.update(values).eq('id', id) : table.insert(values);
+    const { data, error } = await write.select('id, name, unit, sort_order, archived_at').single();
+    if (error) throw error;
+    this.updateFactoryMaterialCache(data as FactoryMaterial);
+  }
+
+  async setFactoryMaterialArchived(id: string, archived: boolean) {
+    const { data, error } = await supabase.from('factory_materials')
+      .update({ archived_at: archived ? new Date().toISOString() : null })
+      .eq('id', id).select('id, name, unit, sort_order, archived_at').single();
+    if (error) throw error;
+    this.updateFactoryMaterialCache(data as FactoryMaterial);
+  }
+
+  private updateFactoryMaterialCache(material: FactoryMaterial) {
+    this.factoryMaterials = [...this.factoryMaterials.filter(item => item.id !== material.id), material]
+      .sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id));
+    void this.fetchFactoryMaterials();
+    this.notify();
+  }
+
   async fetchWalletTransactions() {
     const { data } = await supabase.from('wallet_transactions').select('*').order('created_at', { ascending: false });
     if (data) {
@@ -691,6 +735,9 @@ class SupabaseService {
     this.auditLogs = [];
     this.walletTransactions = [];
     this.factoryTransactions = [];
+    this.factoryMaterialsRequest++;
+    this.factoryMaterials = legacyFactoryMaterials;
+    this.factoryMaterialsStatus = 'loading';
     if (this.realtimeChannel) {
       await this.realtimeChannel.unsubscribe();
       this.realtimeChannel = null;
@@ -1651,6 +1698,7 @@ class SupabaseService {
       supplier_name: transaction.supplierName || null,
       transaction_type: transaction.transactionType,
       material_type: transaction.materialType || null,
+      sub_type: transaction.subType || null,
       quantity: transaction.quantity || null,
       transaction_date: transaction.date || new Date().toISOString(),
       // ... map other fields
@@ -1681,7 +1729,7 @@ class SupabaseService {
       // Wait a moment before refetching to ensure DB has synced
       // The realtime subscription will also pick this up
       setTimeout(() => {
-        this.fetchFactoryTransactions();
+        void this.fetchFactoryTransactions().then(() => this.notify());
       }, 1500);
     } catch (err) {
       console.error('Insert failed, reverting optimistic add:', err);
@@ -1702,7 +1750,7 @@ class SupabaseService {
     this.logActivity(userId, 'إضافة حركة', context as any, `إضافة حركة جديدة: ${transaction.category}`, '', transaction.amount?.toString());
   }
 
-  async updateFactoryTransaction(userId: any, txId: any, updates: any) {
+  async updateFactoryTransaction(userId: any, txId: any, updates: any, confirmWrite = false) {
     // Implement Update
     const payload: any = {};
     if (updates.amount !== undefined) payload.amount = updates.amount;
@@ -1738,10 +1786,10 @@ class SupabaseService {
     // Ideally we should have old value from local state.
     const oldTx = originalTxs.find(t => t.id === txId);
 
-    // Fire and forget (with error handling)
-    (async () => {
+    const write = (async () => {
       try {
-        const { error } = await supabase.from('factory_transactions').update(payload).eq('id', txId);
+        const request = supabase.from('factory_transactions').update(payload).eq('id', txId);
+        const { error } = await (confirmWrite ? request.select('id').single() : request);
         if (error) throw error;
 
         // Audit Log (Async)
@@ -1750,13 +1798,15 @@ class SupabaseService {
       } catch (err) {
         console.error('Update failed, reverting optimistic update:', err);
         // Revert to original state
-        this.factoryTransactions = originalTxs;
+        if (oldTx) this.factoryTransactions = this.factoryTransactions.map(tx => tx.id === txId ? oldTx : tx);
         this.notify();
+        if (confirmWrite) throw err;
       }
     })();
+    if (confirmWrite) await write;
   }
 
-  async deleteFactoryTransaction(userId: any, txId: any) {
+  async deleteFactoryTransaction(userId: any, txId: any, confirmWrite = false) {
     const originalTxs = [...this.factoryTransactions];
     const txToDelete = originalTxs.find(t => t.id === txId);
 
@@ -1764,10 +1814,10 @@ class SupabaseService {
     this.factoryTransactions = this.factoryTransactions.filter(t => t.id !== txId);
     this.notify();
 
-    // Fire and forget with catch
-    (async () => {
+    const write = (async () => {
       try {
-        const { error } = await supabase.from('factory_transactions').delete().eq('id', txId);
+        const request = supabase.from('factory_transactions').delete().eq('id', txId);
+        const { error } = await (confirmWrite ? request.select('id').single() : request);
         if (error) throw error;
 
         let context = 'FACTORY';
@@ -1781,31 +1831,50 @@ class SupabaseService {
         await this.logActivity(userId, 'حذف حركة', context as any, `حذف حركة #${txId}`, txToDelete?.amount?.toString(), '0');
       } catch (err) {
         console.error('Delete failed, reverting optimistic delete:', err);
-        this.factoryTransactions = originalTxs; // Restore
+        if (txToDelete && !this.factoryTransactions.some(tx => tx.id === txId)) {
+          this.factoryTransactions.splice(originalTxs.indexOf(txToDelete), 0, txToDelete);
+        }
         this.notify();
+        if (confirmWrite) throw err;
       }
     })();
+    if (confirmWrite) await write;
   }
 
-  lockFactoryTransaction(userId: any, txId: any) {
-    const originalTxs = [...this.factoryTransactions];
+  async lockFactoryTransaction(userId: any, txId: any, confirmWrite = false) {
+    const originalTx = this.factoryTransactions.find(tx => tx.id === txId);
     // Optimistic Update
     this.factoryTransactions = this.factoryTransactions.map(t => t.id === txId ? { ...t, isLocked: true } : t);
     this.notify();
 
-    (async () => {
+    const write = (async () => {
       try {
-        const { error } = await supabase.from('factory_transactions').update({ is_locked: true }).eq('id', txId);
+        const request = supabase.from('factory_transactions').update({ is_locked: true }).eq('id', txId);
+        const { error } = await (confirmWrite ? request.select('id').single() : request);
         if (error) throw error;
         this.logActivity(userId, 'قفل حركة', 'FACTORY', `قفل حركة #${txId}`);
       } catch (err) {
         console.error('Lock failed, reverting:', err);
-        this.factoryTransactions = originalTxs;
+        if (originalTx) this.factoryTransactions = this.factoryTransactions.map(tx => tx.id === txId ? originalTx : tx);
         this.notify();
+        if (confirmWrite) throw err;
       }
     })();
+    if (confirmWrite) await write;
   }
 
+  async setInventoryMovementLock(userId: string | number, txId: FactoryTransaction['id'], locked: boolean) {
+    const { data, error } = await supabase.from('factory_transactions').update({ is_locked: locked })
+      .eq('id', txId).eq('category', 'INVENTORY').select('id, is_locked').single();
+    if (error) throw error;
+    this.factoryTransactions = this.factoryTransactions.map(tx =>
+      tx.id === txId ? { ...tx, isLocked: data.is_locked } : tx
+    );
+    this.notify();
+
+    const action = locked ? 'قفل حركة' : 'فتح قفل حركة';
+    void this.logActivity(userId, action, 'INVENTORY', `${action} #${txId}`).catch(console.error);
+  }
 
 
   async registerEmployee(userId: any, empData: any) {

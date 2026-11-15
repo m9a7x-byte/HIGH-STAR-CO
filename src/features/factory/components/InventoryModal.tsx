@@ -1,275 +1,168 @@
+import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import i18n from 'i18next';
-
-
-import React, { useState, useEffect, useMemo } from 'react';
-import { Save, Box, Weight, PlusCircle, MinusCircle, FileText, DollarSign, Globe, MapPin, Edit3, Calculator, Tag, Info, AlertTriangle, CheckCircle2 } from 'lucide-react';
-// FIX: Added Badge to the imports
-import { Button, Badge } from '../../../components/ui';
-import { MaterialType, FactoryTransaction } from '../../../types';
-import { db } from '../../../lib/db';
+import { ArrowDown, ArrowUp, Box, Globe, MapPin } from 'lucide-react';
+import { Button } from '../../../components/ui';
 import { useAuth } from '../../../context/AuthContext';
 import { useToast } from '../../../context/ToastContext';
-import { ModalHeader, ModernSingleDatePicker, ModalModernSelect, materialLabels, materials } from './SharedFactoryComponents';
-import { getTodayDateString } from '../../../lib/dateUtils';
+import { TIMEZONE, getTodayDateString } from '../../../lib/dateUtils';
+import { db } from '../../../lib/db';
+import { materialName, materialUnit } from '../../../lib/factoryMaterials';
+import type { FactoryTransaction, MaterialType } from '../../../types';
+import { InventoryDialog } from './InventoryDialog';
+import { ModernSingleDatePicker, ModalModernSelect } from './SharedFactoryComponents';
+import { factoryFieldInput, factoryFieldLabel } from './FactoryFieldPopover';
 
 interface InventoryModalProps {
-    isOpen: boolean;
     onClose: () => void;
     onSuccess: () => void;
     initialMaterial?: MaterialType;
     transaction?: FactoryTransaction;
 }
 
-export const InventoryModal = ({ isOpen, onClose, onSuccess, initialMaterial, transaction }: InventoryModalProps) => {
+const dateKey = new Intl.DateTimeFormat('sv-SE', { timeZone: TIMEZONE, dateStyle: 'short' });
+const timeKey = new Intl.DateTimeFormat('en-GB', { timeZone: TIMEZONE, timeStyle: 'medium', hourCycle: 'h23' });
+const numberFieldClass = factoryFieldInput + ' [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none';
+
+export function InventoryModal({ onClose, onSuccess, initialMaterial, transaction }: InventoryModalProps) {
     const { t } = useTranslation();
     const { user } = useAuth();
     const toast = useToast();
+    const materials = db.getFactoryMaterials().filter(material => !material.archived_at || material.id === transaction?.materialType);
+    const [txType, setTxType] = useState(transaction?.transactionType ?? 'IN');
+    const [date, setDate] = useState(() => transaction ? dateKey.format(new Date(transaction.date)) : getTodayDateString());
+    const [materialType, setMaterialType] = useState(transaction?.materialType ?? initialMaterial ?? materials[0]?.id ?? '');
+    const [quantity, setQuantity] = useState(transaction?.quantity?.toString() ?? '');
+    const [amount, setAmount] = useState(transaction?.amount?.toString() ?? '');
+    const [source, setSource] = useState(transaction?.source || t('batch4.k635'));
+    const [region, setRegion] = useState(transaction?.subType || t('batch4.k639'));
+    const [notes, setNotes] = useState(transaction?.notes ?? '');
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState('');
 
-    const isEdit = !!transaction;
-    const [txType, setTxType] = useState<'IN' | 'OUT'>('IN');
-    const [date, setDate] = useState(() => getTodayDateString());
-    const [materialType, setMaterialType] = useState<MaterialType>('SILICON_HOT');
-    const [quantity, setQuantity] = useState('');
-    const [amount, setAmount] = useState('');
-    const [source, setSource] = useState(`🇮🇶 ${t('factory_modals.iraq')}`);
-    const [region, setRegion] = useState(t('factory_modals.derbendikhan'));
-    const [notes, setNotes] = useState('');
+    const material = materials.find(item => item.id === materialType);
+    const unchangedMaterial = !!materialType && materialType === transaction?.materialType;
+    const hasMaterial = !!material || unchangedMaterial;
+    const measure = materialUnit(t, material);
+    const inputQty = Number(quantity);
+    const isOutgoing = txType === 'OUT';
+    const showRegion = !isOutgoing && materialType === 'SAND_ADHESIVE';
+    const sources = ['k635', 'k636', 'k637'].map(key => t('batch4.' + key));
+    const regions = ['k639', 'k640'].map(key => t('batch4.' + key));
+    const materialOptions = materials.map(item => ({ value: item.id, label: materialName(t, item.id, item) }));
+    if (unchangedMaterial && !material) materialOptions.unshift({ value: materialType, label: materialName(t, materialType) });
 
-    // جلب الرصيد الحالي للمادة المختارة
-    const currentStockLevel = useMemo(() => {
-        return db.getMaterialStock(materialType);
-    }, [materialType, isOpen, txType]);
+    const currentStock = db.getMaterialStock(materialType);
+    const available = currentStock + (isOutgoing && unchangedMaterial ? transaction?.quantity || 0 : 0);
+    const stockExceeded = isOutgoing && (available <= 0 || inputQty > available + 1e-9);
+    const purchases = db.getFactoryTransactions('INVENTORY').filter(tx => tx.materialType === materialType && tx.transactionType === 'IN');
+    const totalPurchased = purchases.reduce((sum, tx) => sum + (tx.quantity || 0), 0);
+    const averagePrice = totalPurchased > 0 ? purchases.reduce((sum, tx) => sum + (tx.amount || 0), 0) / totalPurchased : 0;
+    const estimatedCost = averagePrice * inputQty;
 
-    // خوارزمية حساب معدل السعر للمادة المختارة
-    const unitPriceAnalysis = useMemo(() => {
-        const allTxs = db.getFactoryTransactions('INVENTORY').filter(t => t.materialType === materialType);
-        const inTxs = allTxs.filter(t => t.transactionType === 'IN');
-        const totalValue = inTxs.reduce((acc, t) => acc + (t.amount || 0), 0);
-        const totalQty = inTxs.reduce((acc, t) => acc + (t.quantity || 0), 0);
-
-        const avgPrice = totalQty > 0 ? (totalValue / totalQty) : 0;
-        const currentQty = Number(quantity) || 0;
-
-        return {
-            avgUnitPrice: avgPrice,
-            totalEstimatedCost: avgPrice * currentQty
-        };
-    }, [materialType, quantity, isOpen]);
-
-    useEffect(() => {
-        if (transaction) {
-            setTxType(transaction.transactionType || 'IN');
-            setDate(new Date(transaction.date).toISOString().split('T')[0]);
-            setMaterialType(transaction.materialType || 'SILICON_HOT');
-            setQuantity(transaction.quantity?.toString() || '');
-            setAmount(transaction.amount?.toString() || '');
-            setSource(transaction.source || `🇮🇶 ${t('factory_modals.iraq')}`);
-            setSubTypeFromTx(transaction.subType);
-            setNotes(transaction.notes || '');
-        } else if (initialMaterial) {
-            setMaterialType(initialMaterial);
+    const submit = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        if (busy || !user || !hasMaterial || stockExceeded) return;
+        if (!Number.isFinite(inputQty) || inputQty < 0.0001) {
+            setError(t('factory_materials.invalid_quantity'));
+            return;
         }
-    }, [transaction, initialMaterial, isOpen]);
-
-    const setSubTypeFromTx = (sub: string | undefined) => {
-        if (sub === t('factory_modals.derbendikhan') || sub === t('factory_modals.erbil')) setRegion(sub);
-    };
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        const inputQty = Number(quantity);
-
-        // نظام التحقق من المخزون عند الصرف
-        if (txType === 'OUT') {
-            if (currentStockLevel <= 0) {
-                toast.error('لا يمكن الصرف!', `المخزون من ${materialLabels[materialType] ? t(materialLabels[materialType]) : materialType} حالياً 0. لا توجد مواد أولية للصرف.`);
-                return;
-            }
-            if (inputQty > currentStockLevel) {
-                toast.error('تجاوزت المتوفر!', `الكمية المتوفرة في المخزن هي (${currentStockLevel}) فقط. لا يمكنك صرف (${inputQty}).`);
-                return;
-            }
+        const finalAmount = isOutgoing ? estimatedCost : Number(amount);
+        if ((!isOutgoing && !amount.trim()) || !Number.isFinite(finalAmount) || finalAmount < 0) {
+            setError(t('factory_materials.invalid_amount'));
+            return;
         }
 
+        setBusy(true);
+        setError('');
         try {
-            let finalSubType = undefined;
-            if (materialType === 'SAND_ADHESIVE' && txType === 'IN') finalSubType = region;
-
-            const finalAmount = txType === 'OUT' ? unitPriceAnalysis.totalEstimatedCost : Number(amount);
-
-            // Combine selected date with current time
-            const selectedDate = new Date(date);
-            const now = new Date();
-            selectedDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
-
+            const previousDate = transaction ? new Date(transaction.date) : undefined;
+            const txDate = new Date(date + 'T' + timeKey.format(previousDate ?? new Date()) + '+03:00');
             const payload = {
-                category: 'INVENTORY' as const,
-                date: selectedDate.toISOString(),
+                category: 'INVENTORY',
+                date: txDate.toISOString(),
                 amount: finalAmount,
-                paidAmount: finalAmount, // Treat as full cash payment
+                paidAmount: finalAmount,
                 notes,
                 materialType,
                 quantity: inputQty,
                 transactionType: txType,
-                subType: finalSubType,
-                source: txType === 'IN' ? source : undefined
+                subType: showRegion ? region : null,
+                source: isOutgoing ? null : source,
             };
-
-            if (isEdit && transaction) {
-                db.updateFactoryTransaction(user!.id, transaction.id, payload);
-                toast.success(t('batch4.k623'));
+            if (transaction) {
+                await db.updateFactoryTransaction(user.id, transaction.id, payload, true);
             } else {
-                db.addFactoryTransaction(user!.id, payload);
-                toast.success(t('batch4.k624'));
+                await db.addFactoryTransaction(user.id, payload);
             }
+            toast.success(t(transaction ? 'batch4.k623' : 'batch4.k624'));
             onSuccess();
-        } catch (err: any) { toast.error(err.message || 'حدث خطأ أثناء الحفظ'); }
+        } catch (failure) {
+            const unavailable = (failure as { message?: string })?.message === 'factory_material_unavailable';
+            setError(t(unavailable ? 'factory_materials.unavailable' : 'factory_materials.save_failed'));
+        } finally {
+            setBusy(false);
+        }
     };
 
-    if (!isOpen) return null;
-
-    const isStockLow = txType === 'OUT' && (Number(quantity) > currentStockLevel || currentStockLevel === 0);
-
     return (
-        <div className="fixed inset-0 bg-[#0e3c63]/40 backdrop-blur-md z-[200] flex items-center justify-center p-4 !mt-0">
-            <form onSubmit={handleSubmit} className="bg-white rounded-[2.5rem] w-full max-w-2xl shadow-2xl overflow-hidden animate-fade-in border border-white/20 flex flex-col max-h-[95vh]">
-                <ModalHeader
-                    title={isEdit ? "تعديل حركة مخزن" : "حركة مخزن جديدة"}
-                    subtitle={isEdit ? "Update Inventory Record" : "New Inventory Movement"}
-                    onClose={onClose}
-                />
+        <InventoryDialog title={t(transaction ? 'factory_materials.edit_movement' : 'batch4.k703')} busy={busy} onClose={onClose}>
+            <form noValidate onSubmit={submit} className="space-y-4 p-5">
+                <div className="grid grid-cols-2 gap-2">
+                    <button type="button" disabled={!!transaction || busy} aria-pressed={!isOutgoing} onClick={() => setTxType('IN')}
+                        className={'flex min-h-11 items-center justify-center gap-2 rounded-lg border font-semibold ' + (!isOutgoing ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-slate-200 text-slate-600')}>
+                        <ArrowDown size={17} aria-hidden />{t('factory_tabs.inv_type_in')}
+                    </button>
+                    <button type="button" disabled={!!transaction || busy} aria-pressed={isOutgoing} onClick={() => setTxType('OUT')}
+                        className={'flex min-h-11 items-center justify-center gap-2 rounded-lg border font-semibold ' + (isOutgoing ? 'border-amber-200 bg-amber-50 text-amber-900' : 'border-slate-200 text-slate-600')}>
+                        <ArrowUp size={17} aria-hidden />{t('factory_tabs.inv_type_out')}
+                    </button>
+                </div>
 
-                <div className="p-8 space-y-6 overflow-y-auto custom-scrollbar flex-1 bg-gray-50/30">
-                    {/* نوع الحركة */}
-                    <div className="bg-white p-2 rounded-2xl border border-gray-100 shadow-sm grid grid-cols-2 gap-2">
-                        <button type="button" disabled={isEdit} onClick={() => setTxType('IN')} className={`flex items-center justify-center gap-2 py-4 rounded-xl text-sm font-black transition-all ${txType === 'IN' ? 'bg-emerald-50 text-emerald-600 shadow-sm ring-1 ring-emerald-100' : 'text-gray-400 hover:bg-gray-50'} ${isEdit ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                            <PlusCircle size={18} /> وارد (شراء)
-                        </button>
-                        <button type="button" disabled={isEdit} onClick={() => setTxType('OUT')} className={`flex items-center justify-center gap-2 py-4 rounded-xl text-sm font-black transition-all ${txType === 'OUT' ? 'bg-orange-50 text-orange-600 shadow-sm ring-1 ring-orange-100' : 'text-gray-400 hover:bg-gray-50'} ${isEdit ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                            <MinusCircle size={18} /> صرف (إنتاج)
-                        </button>
-                    </div>
+                <ModalModernSelect label={t('batch4.k628')} value={materialType} options={materialOptions} onChange={setMaterialType}
+                    icon={Box} placeholder={t('factory_materials.select')} disabled={busy} />
 
-                    {/* تنبيه الرصيد المتاح عند الصرف */}
-                    {txType === 'OUT' && (
-                        <div className={`p-4 rounded-2xl flex items-center justify-between border-2 transition-all ${currentStockLevel > 0 ? 'bg-blue-50 border-blue-100' : 'bg-red-50 border-red-100'}`}>
-                            <div className="flex items-center gap-3">
-                                <div className={`p-2 rounded-xl ${currentStockLevel > 0 ? 'bg-blue-100 text-blue-600' : 'bg-red-100 text-red-600'}`}>
-                                    <Box size={20} />
-                                </div>
-                                <div>
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{t('batch4.k625')}</p>
-                                    <h4 className={`font-black text-lg ${currentStockLevel > 0 ? 'text-blue-800' : 'text-red-700'}`}>{currentStockLevel.toLocaleString()} وحدة</h4>
-                                </div>
-                            </div>
-                            {currentStockLevel <= 0 ? (
-                                <Badge color="red" className="animate-pulse">{t('batch4.k626')}</Badge>
-                            ) : (
-                                <Badge color="blue">{t('batch4.k627')}</Badge>
-                            )}
-                        </div>
-                    )}
+                <div className="grid gap-3 sm:grid-cols-2">
+                    <ModernSingleDatePicker label={t('batch4.k202')} value={date} onChange={setDate} disabled={busy} />
+                    <label className="block min-w-0 space-y-2">
+                        <span className={factoryFieldLabel}>{t('factory_modals.inv_qty_label')} ({measure})</span>
+                        <input type="number" inputMode="decimal" min="0.0001" step="any" className={numberFieldClass} value={quantity} onChange={event => setQuantity(event.target.value)} required />
+                    </label>
+                </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <ModernSingleDatePicker label={t('batch4.k474')} value={date} onChange={setDate} />
-                        <ModalModernSelect
-                            label={t('batch4.k628')}
-                            value={materialType}
-                            options={materials.map(m => ({ value: m, label: materialLabels[m] ? t(materialLabels[m]) : m ? t(materialLabels[m]) : m ? t(materialLabels[m]) : m ? t(materialLabels[m]) : m }))}
-                            onChange={setMaterialType}
-                            icon={Box}
-                        />
-                    </div>
-
-                    <div className={`grid grid-cols-1 ${txType === 'IN' ? 'md:grid-cols-2' : 'md:grid-cols-1'} gap-6`}>
-                        <div className="space-y-2">
-                            <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mr-1">الكمية ({materialLabels[materialType] ? t(materialLabels[materialType]) : materialType})</label>
-                            <div className="relative">
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    value={quantity}
-                                    onChange={e => setQuantity(e.target.value)}
-                                    className={`w-full h-[60px] bg-white border-2 rounded-2xl px-5 font-black text-gray-800 outline-none shadow-sm transition-all ${isStockLow ? 'border-red-500 ring-4 ring-red-50' : 'border-gray-100 focus:border-[#0e3c63]'}`}
-                                    placeholder="0.00"
-                                    required
-                                />
-                                <Weight size={18} className={`absolute left-5 top-1/2 -translate-y-1/2 ${isStockLow ? 'text-red-500' : 'text-gray-300'}`} />
-                            </div>
-                            {isStockLow && (
-                                <p className="text-[10px] text-red-600 font-bold flex items-center gap-1 mt-1">
-                                    <AlertTriangle size={12} /> {t('factory_modals.inv_qty_limit')} ({currentStockLevel})
-                                </p>
-                            )}
-                        </div>
-
-                        {txType === 'IN' && (
-                            <div className="space-y-2 animate-fade-in">
-                                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mr-1">{t('batch4.k629')}</label>
-                                <div className="relative">
-                                    <input type="number" value={amount} onChange={e => setAmount(e.target.value)} className="w-full h-[60px] bg-white border-2 border-gray-100 rounded-2xl px-5 font-black text-gray-800 focus:border-[#0e3c63] outline-none shadow-sm" placeholder="0" required />
-                                    <DollarSign size={18} className="absolute left-5 top-1/2 -translate-y-1/2 text-emerald-500" />
-                                </div>
-                            </div>
+                {isOutgoing ? (
+                    <dl className={'space-y-2 rounded-lg p-3 text-sm ' + (stockExceeded ? 'bg-red-50 text-red-800' : 'bg-slate-50 text-slate-800')}>
+                        <div className="flex justify-between gap-2"><dt>{t('batch4.k625')}</dt><dd className="font-semibold">{available.toLocaleString()} {measure}</dd></div>
+                        <div className="flex justify-between gap-2"><dt>{t('batch4.k631')}</dt><dd dir="ltr">${averagePrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}</dd></div>
+                        <div className="flex justify-between gap-2"><dt>{t('batch4.k632')}</dt><dd dir="ltr">${estimatedCost.toLocaleString(undefined, { maximumFractionDigits: 2 })}</dd></div>
+                        {stockExceeded && <div role="status">{t('factory_modals.inv_qty_limit')}</div>}
+                    </dl>
+                ) : (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                        <label className="block min-w-0 space-y-2">
+                            <span className={factoryFieldLabel}>{t('batch4.k629')}</span>
+                            <input type="number" inputMode="decimal" min="0" step="any" className={numberFieldClass} value={amount} onChange={event => setAmount(event.target.value)} required />
+                        </label>
+                        <ModalModernSelect label={t('batch4.k634')} value={source} onChange={setSource} icon={Globe} disabled={busy}
+                            options={Array.from(new Set([...sources, source]), option => ({ value: option, label: option }))} />
+                        {showRegion && (
+                            <ModalModernSelect label={t('batch4.k638')} value={region} onChange={setRegion} icon={MapPin} disabled={busy}
+                                options={Array.from(new Set([...regions, region]), option => ({ value: option, label: option }))} />
                         )}
                     </div>
+                )}
 
-                    {txType === 'OUT' && (
-                        <div className="bg-orange-50/50 rounded-[2rem] border-2 border-dashed border-orange-100 p-6 animate-fade-in space-y-4">
-                            <div className="flex items-center gap-2 mb-2">
-                                <Calculator size={18} className="text-orange-600" />
-                                <h5 className="text-xs font-black text-orange-800 uppercase tracking-widest">{t('batch4.k630')}</h5>
-                            </div>
+                <label className="block space-y-2">
+                    <span className={factoryFieldLabel}>{t(isOutgoing ? 'factory_modals.inv_notes_prod' : 'factory_modals.inv_notes_purch')}</span>
+                    <textarea className={factoryFieldInput + ' min-h-24 resize-none py-3'} value={notes} onChange={event => setNotes(event.target.value)}
+                        placeholder={t(isOutgoing ? 'factory_modals.inv_ph_prod' : 'factory_modals.inv_ph_purch')} />
+                </label>
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="bg-white p-4 rounded-2xl shadow-sm border border-orange-50 flex flex-col items-center">
-                                    <span className="text-[10px] font-black text-gray-400 mb-1 uppercase">{t('batch4.k631')}</span>
-                                    <div className="flex items-center gap-1">
-                                        <span className="text-lg font-black text-gray-800 font-mono">${unitPriceAnalysis.avgUnitPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
-                                        <Tag size={12} className="text-gray-300" />
-                                    </div>
-                                </div>
-                                <div className="bg-white p-4 rounded-2xl shadow-sm border border-orange-50 flex flex-col items-center">
-                                    <span className="text-[10px] font-black text-gray-400 mb-1 uppercase">{t('batch4.k632')}</span>
-                                    <div className="flex items-center gap-1">
-                                        <span className="text-lg font-black text-orange-600 font-mono">${unitPriceAnalysis.totalEstimatedCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
-                                        <DollarSign size={14} className="text-orange-300" />
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="flex items-start gap-2 bg-white/50 p-3 rounded-xl">
-                                <Info size={14} className="text-orange-400 mt-0.5 shrink-0" />
-                                <p className="text-[10px] text-orange-700 font-bold leading-relaxed">{t('batch4.k633')}</p>
-                            </div>
-                        </div>
-                    )}
-
-                    {txType === 'IN' && (
-                        <div className="space-y-6 animate-fade-in">
-                            <ModalModernSelect label={t('batch4.k634')} value={source} options={[{ value: `🇮🇶 ${t('factory_modals.iraq')}`, label: t('batch4.k635') }, { value: `🇹🇷 ${t('factory_modals.turkey')}`, label: t('batch4.k636') }, { value: `🇮🇷 ${t('factory_modals.iran')}`, label: t('batch4.k637') }]} onChange={setSource} icon={Globe} />
-                            {materialType === 'SAND_ADHESIVE' && <ModalModernSelect label={t('batch4.k638')} value={region} options={[{ value: t('factory_modals.derbendikhan'), label: t('batch4.k639') }, { value: t('factory_modals.erbil'), label: t('batch4.k640') }]} onChange={setRegion} icon={MapPin} />}
-                        </div>
-                    )}
-
-                    <div className="space-y-2">
-                        <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mr-1">{txType === 'OUT' ? t('factory_modals.inv_notes_prod') : t('factory_modals.inv_notes_purch')}</label>
-                        <textarea value={notes} onChange={e => setNotes(e.target.value)} className="w-full p-5 bg-white border-2 border-gray-100 rounded-2xl font-bold text-gray-700 focus:border-[#0e3c63] outline-none min-h-[100px]" placeholder={txType === 'OUT' ? t('factory_modals.inv_ph_prod') : t('factory_modals.inv_ph_purch')} />
-                    </div>
-                </div>
-
-                <div className="p-8 border-t bg-white flex gap-4 shrink-0 shadow-[0_-10px_30px_-15px_rgba(0,0,0,0.05)]">
-                    <Button
-                        type="submit"
-                        disabled={isStockLow}
-                        className={`flex-1 h-16 ${txType === 'IN' ? 'bg-[#0e3c63]' : (isStockLow ? 'bg-gray-400 cursor-not-allowed' : 'bg-orange-600')} text-white text-lg font-black rounded-2xl shadow-xl transition-all active:scale-95 flex items-center justify-center gap-2`}
-                    >
-                        {isEdit ? <Edit3 size={20} /> : <Save size={20} />} {isEdit ? t('factory_modals.inv_btn_save') : (txType === 'IN' ? t('factory_modals.inv_btn_in') : t('factory_modals.inv_btn_out'))}
-                    </Button>
-                    <Button type="button" onClick={onClose} variant="secondary" className="px-10 h-16 rounded-2xl font-bold">{t('batch4.k156')}</Button>
+                {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+                <div className="flex flex-wrap justify-end gap-2">
+                    <Button variant="secondary" disabled={busy} onClick={onClose}>{t('common.cancel')}</Button>
+                    <Button type="submit" disabled={busy || stockExceeded || !hasMaterial}>{t(busy ? 'common.saving' : 'common.save')}</Button>
                 </div>
             </form>
-        </div>
+        </InventoryDialog>
     );
-};
+}
