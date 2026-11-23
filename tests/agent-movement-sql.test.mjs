@@ -26,7 +26,7 @@ test('database corrections are atomic, reject stale data and enforce permissions
       INSERT INTO agent_details VALUES ('${agentId}', -200);
       INSERT INTO orders VALUES (1, '${agentId}', 100, 0, '[]', 'PENDING', NULL, '2026-11-01T00:00:00Z'), (2, '${agentId}', 100, 0, '[]', 'PENDING', NULL, '2026-11-02T00:00:00Z');
     `);
-    await db.exec(readFileSync(new URL('../supabase/migrations/20261123140910_agent_movement_corrections.sql', import.meta.url), 'utf8'));
+    await db.exec(readFileSync(new URL('../supabase/migrations/20261123143426_agent_movement_corrections.sql', import.meta.url), 'utf8'));
     let nextId = 1000;
     async function snapshot() {
       const balance = (await db.query('SELECT current_balance FROM agent_details')).rows[0].current_balance;

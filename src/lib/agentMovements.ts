@@ -47,11 +47,17 @@ function resolveAllocations(tx: AgentMovement, orders: MovementOrder[]): Allocat
     }
     return expected.map(allocation => {
         const order = orders.find(order => String(order.id) === String(allocation.orderId));
+        const distance = (payment: Payment) => Math.abs(new Date(payment.date).getTime() - new Date(tx.createdAt).getTime());
         const candidates = (order?.paymentHistory || []).filter(payment =>
             cents(payment.amountAdded) === cents(allocation.amount) &&
-            Math.abs(new Date(payment.date).getTime() - new Date(tx.createdAt).getTime()) <= 120_000
-        );
-        if (candidates.length !== 1) throw new Error('تعذر ربط الحركة القديمة بدفعتها بشكل مؤكد. راجع سجل دفعات الفاتورة قبل التصحيح.');
+            distance(payment) <= 120_000
+        ).sort((a, b) => distance(a) - distance(b));
+        // Old unified payments were logged immediately after their invoice updates.
+        // Distinguish successive equal amounts only when one match is close and clearly separated.
+        const closeMatchWindow = 10_000;
+        const isolatedCloseMatch = candidates.length > 1 && distance(candidates[0]) <= closeMatchWindow
+            && distance(candidates[1]) - distance(candidates[0]) > closeMatchWindow;
+        if (candidates.length !== 1 && !isolatedCloseMatch) throw new Error('تعذر ربط الحركة القديمة بدفعتها بشكل مؤكد. راجع سجل دفعات الفاتورة قبل التصحيح.');
         return { orderId: order!.id, paymentId: candidates[0].id, amount: allocation.amount };
     });
 }
