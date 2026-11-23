@@ -83,6 +83,17 @@ test('ambiguous old payments and altered allocations fail before any writes', ()
   assert.throws(() => plan({ transaction: structured, orders: [order(1, 100, 20, [payment(11, 20)])], remove: true }), /تغيّرت/);
 });
 
+test('successive legacy payments of the same amount match their own nearby timestamps', () => {
+  const first = tx(30, 'تسديد موحد $30 - توزعت على 1 فاتورة: #1 ($30)');
+  const second = { ...first, id: 101, createdAt: '2026-11-23T10:00:52.000Z' };
+  const orders = [order(1, 100, 60, [
+    { ...payment(11, 30), date: '2026-11-23T09:59:59.000Z' },
+    { ...payment(12, 30), date: '2026-11-23T10:00:50.000Z' }
+  ])];
+  assert.equal(plan({ transaction: first, orders, remove: true }).orderChanges[0].payment_history[0].id, 12);
+  assert.equal(plan({ transaction: second, orders, remove: true }).orderChanges[0].payment_history[0].id, 11);
+});
+
 test('locked entries, invoice charges, wrong agents and nonfinite amounts cannot be corrected', () => {
   for (const transaction of [tx(30, '', { locked: true }), tx(-30, 'شراء طلبية #1'), tx(30, 'تعديل قيمة الطلب #1 (نقصان)'), tx(30, 'تعديل دفعات الطلب #1'), tx(30, '', { agentId: 'other' })]) {
     assert.throws(() => plan({ transaction, amount: 10 }));
