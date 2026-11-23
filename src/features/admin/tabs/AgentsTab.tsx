@@ -11,6 +11,7 @@ import {
 import { UserAvatar, Badge, Button, Card, Input, PhoneInput, DateRangePicker } from '../../../components/ui';
 import { AvatarUploader } from '../../../components/profile/AvatarUploader';
 import { formatDate, formatTime } from '../../../lib/dateUtils';
+import { canCorrectMovement, getMovementMode, getMovementNote } from '../../../lib/agentMovements';
 import { supabase } from '../../../lib/supabase';
 import { AgentType, UserRole, User as UserType, ProductionStatus, PaymentStatus, UserRoleLabels, Order, ProductionStatusLabels } from '../../../types';
 import { PaginationControl } from '../../../components/shared/PaginationControl';
@@ -161,8 +162,8 @@ export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, i
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(10);
     const [searchTerm, setSearchTerm] = useState('');
-    const [fromDate, setFromDate] = useState<Date | undefined>();
-    const [toDate, setToDate] = useState<Date | undefined>();
+    const [fromDate, setFromDate] = useState('');
+    const [toDate, setToDate] = useState('');
     const [walletTypeFilter, setWalletTypeFilter] = useState('ALL');
     const [showThumbprintModal, setShowThumbprintModal] = useState(false);
     const [agentDetailTab, setAgentDetailTab] = useState<'statement' | 'orders'>('statement');
@@ -224,7 +225,7 @@ export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, i
 
 
     // Wallet & Action Modals
-    const [walletModal, setWalletModal] = useState<{ isOpen: boolean, agent: UserType | null, mode: 'deposit' | 'withdraw' | 'settlement', amount: string, notes: string, editId?: string }>({
+    const [walletModal, setWalletModal] = useState<{ isOpen: boolean, agent: UserType | null, mode: 'deposit' | 'withdraw' | 'settlement' | 'invoice', amount: string, notes: string, editId?: string | number }>({
         isOpen: false, agent: null, mode: 'deposit', amount: '', notes: ''
     });
     const [lossModal, setLossModal] = useState<{ isOpen: boolean, agent: UserType | null, amount: string, notes: string }>({
@@ -240,7 +241,7 @@ export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, i
     const [deleteConfirmModal, setDeleteConfirmModal] = useState<{ isOpen: boolean, agent: UserType | null }>({
         isOpen: false, agent: null
     });
-    const [deleteWalletTxModal, setDeleteWalletTxModal] = useState<{ isOpen: boolean, txId: number | null }>({
+    const [deleteWalletTxModal, setDeleteWalletTxModal] = useState<{ isOpen: boolean, txId: number | string | null }>({
         isOpen: false, txId: null
     });
 
@@ -530,7 +531,7 @@ export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, i
     const filteredTransactions = useMemo(() => {
         if (!agentTransactionsWithBalance) return [];
         return agentTransactionsWithBalance.filter((t: any) => {
-            const matchesSearch = t.description.toLowerCase().includes(searchTerm.toLowerCase()) || t.amount.toString().includes(searchTerm);
+            const matchesSearch = t.description.toLowerCase().includes(searchTerm.toLowerCase()) || t.amount.toString().includes(searchTerm) || String(t.id).includes(searchTerm.replace(/^#/, ''));
             
             let matchesType = true;
             if (walletTypeFilter === 'ORDERS') matchesType = !!t.linkedOrderId || t.description.includes('#');
@@ -702,47 +703,6 @@ export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, i
         setAgentOrderPaymentModal({ order: updated || null, amount: '', editingPaymentId: null, editAmount: '' });
     };
 
-    const payOldestAgentDebts = async (agent: UserType, amount: number) => {
-        const openOrders = db.orders
-            .filter(o => String(o.agentId) === String(agent.id))
-            .filter(o => Math.max((o.totalAmount || 0) - (o.paidAmount || 0), 0) > 0)
-            .sort((a, b) => {
-                const dateDiff = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-                if (dateDiff !== 0) return dateDiff;
-                return Number(a.id) - Number(b.id);
-            });
-
-        const totalDebt = openOrders.reduce((sum, order) => sum + Math.max((order.totalAmount || 0) - (order.paidAmount || 0), 0), 0);
-        let remaining = amount;
-        let paid = 0;
-        const allocations: { id: Order['id']; amount: number }[] = [];
-        for (const order of openOrders) {
-            if (remaining <= 0) break;
-            const orderDebt = Math.max((order.totalAmount || 0) - (order.paidAmount || 0), 0);
-            const applied = Math.min(remaining, orderDebt);
-            await db.updateOrder(currentUser!.id, order.id, toOrderUpdatePayload(order), applied, order.discountValue || 0, order.discountType || 'FIXED', { recordPaymentTransaction: false });
-            remaining -= applied;
-            paid += applied;
-            allocations.push({ id: order.id, amount: applied });
-        }
-
-        return {
-            paid: Math.min(paid, totalDebt),
-            remainder: remaining,
-            invoices: allocations.length,
-            allocations
-        };
-    };
-
-    const buildUnifiedAgentPaymentDescription = (amount: number, result: Awaited<ReturnType<typeof payOldestAgentDebts>>, note: string) => {
-        const allocationText = result.allocations.length > 0
-            ? `توزعت على ${result.allocations.length} فاتورة: ${result.allocations.map(a => `#${a.id} ($${a.amount.toLocaleString()})`).join('، ')}`
-            : 'لا توجد فواتير مفتوحة';
-        const remainderText = result.remainder > 0 ? ` | رصيد مقدم: $${result.remainder.toLocaleString()}` : '';
-        const noteText = note.trim() ? ` | ملاحظة: ${note.trim()}` : '';
-        return `تسديد موحد $${amount.toLocaleString()} - ${allocationText}${remainderText}${noteText}`;
-    };
-
     const handleAgentInvoicePayment = async (e: React.FormEvent) => {
         e.preventDefault();
         const order = agentOrderPaymentModal.order;
@@ -834,73 +794,27 @@ export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, i
     const handleWalletSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (isSubmitting) return;
-        if (!walletModal.agent) return;
+        if (!walletModal.agent || !currentUser || !canEdit) return;
 
         const amount = Number(walletModal.amount);
-        if (isNaN(amount) || amount <= 0) { error(t('batch4.txt_fq1w8p_6980')); return; }
+        if (!Number.isFinite(amount) || amount <= 0) { error(t('batch4.txt_fq1w8p_6980')); return; }
 
         setIsSubmitting(true);
         try {
-            const isPositive = walletModal.mode === 'deposit' || walletModal.mode === 'settlement';
+            const isPositive = walletModal.mode !== 'withdraw';
             const cleanAmount = isPositive ? amount : -amount;
 
             let defaultNotes = '';
             if (walletModal.mode === 'settlement') defaultNotes = 'تسديد / إضافة رصيد';
             else if (walletModal.mode === 'deposit') defaultNotes = t('batch4.txt_py85ni_6980');
-            else defaultNotes = t('batch4.txt_ie40oz_6980');
+            else if (walletModal.mode === 'withdraw') defaultNotes = t('batch4.txt_ie40oz_6980');
 
             const finalNotes = walletModal.notes || defaultNotes;
 
-            if (walletModal.editId) {
-                const oldTx = agentTransactions?.find((t: any) => t.id === walletModal.editId);
-                if (oldTx) {
-                    const difference = cleanAmount - oldTx.amount;
-                    if (difference !== 0) {
-                        const newBal = (walletModal.agent.agentDetails?.currentBalance || 0) + difference;
-                        await supabase.from('agent_details').update({ current_balance: newBal }).eq('id', walletModal.agent.id);
-                    }
-                    
-                    let updatedNotes = finalNotes;
-                    const byMatch = oldTx.description.match(/\| بواسطة: (.*?)( \| عُدلت|$)/);
-                    const originalCreator = byMatch ? byMatch[1] : null;
-                    const currentUserName = currentUser?.fullName || 'النظام';
-                    
-                    let creatorSuffix = originalCreator ? ` | بواسطة: ${originalCreator}` : '';
-                    if (originalCreator && originalCreator.trim() !== currentUserName.trim()) {
-                        creatorSuffix += ` | عُدلت بواسطة: ${currentUserName}`;
-                    } else if (!originalCreator) {
-                        creatorSuffix = ` | عُدلت بواسطة: ${currentUserName}`;
-                    }
-                    updatedNotes = `${finalNotes}${creatorSuffix}`;
-
-                    await supabase.from('wallet_transactions').update({
-                        amount: cleanAmount,
-                        description: updatedNotes
-                    }).eq('id', walletModal.editId);
-                    
-                    db.fetchWalletTransactions();
-                    db.fetchUsers();
-                    success('تم تعديل الحركة بنجاح');
-                }
-            } else {
-                if (walletModal.mode === 'settlement') {
-                    const result = await payOldestAgentDebts(walletModal.agent, amount);
-                    if (result.remainder > 0) {
-                        await db.addBalance(currentUser!.id, walletModal.agent.id, result.remainder, walletModal.notes || 'رصيد مقدم على حساب الوكيل', { recordTransaction: false });
-                    }
-                    await db.addAgentLedgerTransaction(
-                        currentUser!.id,
-                        walletModal.agent.id,
-                        amount,
-                        buildUnifiedAgentPaymentDescription(amount, result, walletModal.notes)
-                    );
-                } else {
-                    await db.addBalance(currentUser!.id, walletModal.agent.id, cleanAmount, finalNotes);
-                }
-                const successMsg = walletModal.mode === 'settlement' ? 'تم تنفيذ التسديد / إضافة الرصيد بنجاح' : 
-                                   walletModal.mode === 'deposit' ? t('batch4.txt_p3jm8r_6981') : t('batch4.txt_1cfjfs_6981');
-                success(successMsg);
-            }
+            await db.saveAgentMovement(currentUser!.id, walletModal.agent.id, {
+                transactionId: walletModal.editId, amount: cleanAmount, notes: finalNotes, mode: walletModal.mode
+            });
+            success(walletModal.editId !== undefined ? 'تم تعديل الحركة ودفعات الفواتير بنجاح' : 'تم تسجيل الحركة بنجاح');
 
             // Re-select the agent to update the view instantly
             // We use db.users because 'agents' prop might be stale in this closure
@@ -910,9 +824,17 @@ export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, i
             setWalletModal({ ...walletModal, isOpen: false, amount: '', notes: '' });
         } catch (err: any) {
             console.error('Wallet Error:', err);
-            error(t('batch4.k528'), t('batch4.txt_yw51se_6981'));
+            error(err.message || 'تعذر حفظ الحركة');
         } finally {
             setIsSubmitting(false);
+        }
+    };
+
+    const handleMovementLock = async (transactionId: string | number, locked: boolean) => {
+        try {
+            await db.setAgentMovementLocked(transactionId, locked);
+        } catch (err: any) {
+            error(err.message || 'تعذر تغيير قفل الحركة');
         }
     };
 
@@ -966,8 +888,9 @@ export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, i
         if (!walletModal.isOpen || !walletModal.agent?.agentDetails) return 0;
         const current = walletModal.agent.agentDetails.currentBalance || 0;
         const change = Number(walletModal.amount) || 0;
-        return (walletModal.mode === 'deposit' || walletModal.mode === 'settlement') ? current + change : current - change;
-    }, [walletModal]);
+        const original = agentTransactions?.find((tx: any) => String(tx.id) === String(walletModal.editId));
+        return current + (walletModal.mode === 'withdraw' ? -change : change) - (original?.amount || 0);
+    }, [walletModal, agentTransactions]);
 
     return (
         <div className="space-y-6">
@@ -1367,7 +1290,8 @@ export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, i
                                     <table className="w-full text-right text-sm">
                                         <thead className="bg-white text-gray-400 font-black text-[10px] uppercase tracking-[0.2em] border-b">
                                             <tr>
-                                                <th className="p-6 pr-10">{t('batch4.k273')}</th>
+                                                <th className="p-6 pr-10">رقم الحركة</th>
+                                                <th className="p-6">{t('batch4.k273')}</th>
                                                 <th className="p-6">{t('batch4.k274')}</th>
                                                 <th className="p-6">{t('batch4.k275')}</th>
                                                 <th className="p-6 text-left">{t('batch4.k276')}</th>
@@ -1377,13 +1301,11 @@ export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, i
                                         </thead>
                                         <tbody className="divide-y divide-gray-50 bg-white">
                                             {currentTransactions.map((tx: any) => {
-                                                const isLinked = !!tx.linkedOrderId;
-                                                const isLocked = tx.locked || isLinked;
-                                                const isAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPER_ADMIN';
-                                                const isSuperAdmin = currentUser?.role === 'SUPER_ADMIN';
+                                                const isLocked = !canCorrectMovement(tx);
                                                 return (
                                                 <tr key={tx.id} className={`hover:bg-blue-50/30 transition-all group ${isLocked ? 'opacity-80' : ''}`}>
-                                                    <td className="p-6 pr-10">
+                                                    <td className="p-6 pr-10 font-mono font-black text-[#0e3c63]" dir="ltr">#{tx.id}</td>
+                                                    <td className="p-6">
                                                         <div className="flex flex-col font-mono">
                                                             <span className="font-black text-gray-800 text-sm">{formatDate(tx.createdAt)}</span>
                                                             <span className="text-[10px] text-gray-400 mt-1.5 flex items-center gap-1.5"><Clock size={12} /> {formatTime(tx.createdAt)}</span>
@@ -1405,57 +1327,23 @@ export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, i
                                                     <td className="p-6 text-center">
                                                         <div className="flex items-center justify-center gap-1.5">
                                                             <button onClick={() => { const ord = db.orders.find(o => tx.description.includes(o.id.toString())); if (ord) onViewOrder(ord); }} className="p-2 rounded-lg text-gray-300 hover:text-[#0e3c63] hover:bg-blue-50 transition-all disabled:opacity-20" disabled={!tx.description.includes('#')} title="عرض الطلب"><Eye size={16} /></button>
-                                                            {isLinked ? (
-                                                                /* Auto-locked: linked to order — cannot unlock */
-                                                                <div className="flex items-center justify-center p-2" title="مقفلة تلقائياً (مرتبطة بطلب)">
-                                                                    <Lock size={16} className="text-blue-400" />
-                                                                </div>
-                                                            ) : isLocked ? (
-                                                                /* Manually locked — super admin double-click to unlock */
-                                                                <button
-                                                                    onDoubleClick={() => {
-                                                                        if (isSuperAdmin) {
-                                                                            db.toggleLockWalletTransaction(tx.id, false);
-                                                                        }
-                                                                    }}
-                                                                    className={`p-2 rounded-lg transition-all ${isSuperAdmin ? 'text-amber-500 hover:bg-amber-50 cursor-pointer' : 'text-gray-300 cursor-not-allowed opacity-50'}`}
-                                                                    title={isSuperAdmin ? 'انقر مرتين لفتح القفل' : 'المدير العام (Super Admin) فقط يمكنه الفتح'}
-                                                                >
-                                                                    <Lock size={16} />
-                                                                </button>
-                                                            ) : (
-                                                                /* Unlocked — show lock + delete */
+                                                            {canEdit && canCorrectMovement(tx) ? (
                                                                 <>
+                                                                    <button onClick={() => handleMovementLock(tx.id, true)} className="p-2 rounded-lg text-gray-300 hover:text-amber-500 hover:bg-amber-50" title="قفل الحركة"><Unlock size={16} /></button>
                                                                     <button
-                                                                        onClick={() => db.toggleLockWalletTransaction(tx.id, true)}
-                                                                        className="p-2 rounded-lg text-gray-300 hover:text-amber-500 hover:bg-amber-50 transition-all"
-                                                                        title="قفل الحركة"
-                                                                    >
-                                                                        <Unlock size={16} />
-                                                                    </button>
-                                                                    {!tx.description.includes('#') && (
-                                                                        <>
-                                                                    <button
-                                                                        onClick={() => {
-                                                                            let cleanNotes = tx.description.split(' | بواسطة:')[0].split(' | عُدلت بواسطة:')[0];
-                                                                            setWalletModal({ isOpen: true, agent: agents.find((a: any) => a.id == tx.agentId), mode: tx.amount > 0 ? (tx.description.includes('تسديد') ? 'settlement' : 'deposit') : 'withdraw', amount: Math.abs(tx.amount).toString(), notes: cleanNotes, editId: tx.id });
-                                                                        }}
-                                                                        className="p-2 rounded-lg text-gray-300 hover:text-blue-500 hover:bg-blue-50 transition-all"
-                                                                        title="تعديل الحركة"
-                                                                    >
-                                                                        <Edit3 size={16} />
-                                                                    </button>
+                                                                        onClick={() => setWalletModal({ isOpen: true, agent: displayAgent, mode: getMovementMode(tx), amount: Math.abs(tx.amount).toString(), notes: getMovementNote(tx), editId: tx.id })}
+                                                                        className="p-2 rounded-lg text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-all"
+                                                                        title="تعديل الحركة" aria-label="تعديل الحركة"
+                                                                    ><Edit3 size={16} /></button>
                                                                     <button
                                                                         onClick={() => setDeleteWalletTxModal({ isOpen: true, txId: tx.id })}
-                                                                        className="p-2 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all"
-                                                                        title="حذف الحركة"
-                                                                    >
-                                                                    <Trash2 size={16} />
-                                                                        </button>
-                                                                        </>
-                                                                    )}
+                                                                        className="p-2 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all"
+                                                                        title="حذف الحركة" aria-label="حذف الحركة"
+                                                                    ><Trash2 size={16} /></button>
                                                                 </>
-                                                            )}
+                                                            ) : tx.locked && canCorrectMovement({ ...tx, locked: false }) ? (
+                                                                <button onDoubleClick={() => { if (isSuperAdmin && canEdit) void handleMovementLock(tx.id, false); }} className="p-2 text-amber-500" title={isSuperAdmin ? 'انقر مرتين لفتح القفل' : 'المدير العام فقط يمكنه فتح القفل'}><Lock size={16} /></button>
+                                                            ) : isLocked ? <span className="p-2" title="حركة مرتبطة بقيمة الفاتورة"><Lock size={16} className="text-gray-300" /></span> : null}
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -1472,7 +1360,7 @@ export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, i
                                     rowsPerPage={rowsPerPage}
                                     setPage={setPage}
                                     setRowsPerPage={setRowsPerPage}
-                                    totalItems={agentTransactions.filter((tx: any) => tx.description.toLowerCase().includes(searchTerm) || tx.amount.toString().includes(searchTerm)).length}
+                                    totalItems={filteredTransactions.length}
                                 />
                             </div>
                         </>
@@ -2157,7 +2045,7 @@ export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, i
                                     {walletModal.mode === 'deposit' ? <TrendingUp size={48} /> : walletModal.mode === 'settlement' ? <Landmark size={48} /> : <TrendingDown size={48} />}
                                 </div>
                                 <div>
-                                    <h3 className="text-2xl font-black text-gray-800">{walletModal.mode === 'deposit' ? t('agents.register_new_payment') : walletModal.mode === 'settlement' ? 'تسديد / إضافة رصيد' : t('agents.register_financial')}</h3>
+                                    <h3 className="text-2xl font-black text-gray-800">{walletModal.editId !== undefined ? 'تعديل الحركة #' + walletModal.editId : walletModal.mode === 'deposit' ? t('agents.register_new_payment') : walletModal.mode === 'settlement' ? 'تسديد / إضافة رصيد' : t('agents.register_financial')}</h3>
                                     <p className="text-sm font-bold text-gray-500 mt-1">تعديل رصيد الوكيل: {walletModal.agent.fullName}</p>
                                 </div>
                             </div>
@@ -2165,7 +2053,7 @@ export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, i
                                 <div className="bg-gray-50 p-8 rounded-[2.5rem] border-2 border-dashed border-gray-200">
                                     <label className="block text-xs font-black text-gray-400 uppercase text-center mb-4 tracking-widest">{t('batch4.k304')}</label>
                                     <div className="relative">
-                                        <input type="number" className="w-full text-5xl font-black font-mono text-center bg-transparent outline-none text-[#0e3c63] placeholder:text-gray-200" placeholder="0" value={walletModal.amount} onChange={e => setWalletModal({ ...walletModal, amount: e.target.value })} autoFocus required />
+                                        <input type="number" min="0.01" step="0.01" dir="ltr" className="w-full text-5xl font-black font-mono text-center bg-transparent outline-none text-[#0e3c63] placeholder:text-gray-200" placeholder="0" value={walletModal.amount} onChange={e => setWalletModal({ ...walletModal, amount: e.target.value })} autoFocus required />
                                     </div>
                                 </div>
 
@@ -2257,27 +2145,27 @@ export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, i
                                         <AlertOctagon size={42} className="text-white animate-pulse" />
                                     </div>
                                     <h3 className="text-2xl font-black mb-2">تأكيد حذف الحركة</h3>
-                                    <p className="text-red-100 text-sm font-bold opacity-80">هل أنت متأكد من حذف هذه الحركة؟ سيتم تحديث رصيد الوكيل تلقائياً.</p>
+                                    <p className="text-red-100 text-sm font-bold opacity-80">هل أنت متأكد من حذف هذه الحركة؟ سيتم تصحيح رصيد الوكيل وإلغاء دفعاتها من الفواتير تلقائياً.</p>
                                 </div>
                             </div>
                             <div className="p-8 space-y-8">
                                 <div className="space-y-3">
                                     <Button
+                                        disabled={isSubmitting}
                                         onClick={async () => {
-                                            const tx = agentTransactions.find((t: any) => t.id === deleteWalletTxModal.txId);
+                                            if (isSubmitting || !currentUser || !canEdit) return;
+                                            const tx = agentTransactions.find((tx: any) => String(tx.id) === String(deleteWalletTxModal.txId));
                                             if (!tx) return;
+                                            setIsSubmitting(true);
                                             try {
-                                                const agent = agents.find((a: any) => a.id == tx.agentId);
-                                                if (agent?.agentDetails) {
-                                                    const newBal = agent.agentDetails.currentBalance - tx.amount;
-                                                    await supabase.from('agent_details').update({ current_balance: newBal }).eq('id', agent.id);
-                                                    agent.agentDetails.currentBalance = newBal;
-                                                }
-                                                await supabase.from('wallet_transactions').delete().eq('id', tx.id);
-                                                db.fetchWalletTransactions();
-                                                db.fetchUsers();
+                                                await db.saveAgentMovement(currentUser.id, tx.agentId, { transactionId: tx.id, remove: true });
+                                                success('تم حذف الحركة وتصحيح دفعات الفواتير');
                                                 setDeleteWalletTxModal({ isOpen: false, txId: null });
-                                            } catch (e) { console.error(e); }
+                                            } catch (err: any) {
+                                                error(err.message || 'تعذر حذف الحركة');
+                                            } finally {
+                                                setIsSubmitting(false);
+                                            }
                                         }}
                                         className="w-full h-16 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-black text-sm flex items-center justify-center gap-3 shadow-lg transition-all active:scale-95 border-b-4 border-red-800"
                                     >

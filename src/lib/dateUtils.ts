@@ -1,5 +1,5 @@
 export const TIMEZONE = 'Asia/Baghdad';
-export const LOCALE = 'ar-IQ';
+export const LOCALE = 'ar-IQ-u-nu-latn';
 
 /**
  * Formats a date string, number, or Date object into a localized date string.

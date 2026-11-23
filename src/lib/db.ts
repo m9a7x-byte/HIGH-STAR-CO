@@ -9,6 +9,8 @@ import { calculateLineTotal, calculateOrderTotals } from './orderMoney';
 import { snapshotProductUnits, validateProductQuantities, isPieceProduct, getProductFamily, normalizePaintColor } from './productFamilies';
 import { legacyFactoryMaterials } from './factoryMaterials';
 import type { FactoryMaterial } from './factoryMaterials';
+import { planAgentMovement } from './agentMovements';
+import type { MovementMode } from './agentMovements';
 
 type Listener = () => void;
 
@@ -623,6 +625,8 @@ class SupabaseService {
       this.walletTransactions = data.map(t => ({
         ...t,
         agentId: t.agent_id,
+        linkedOrderId: t.linked_order_id,
+        paymentDetails: t.payment_details,
         createdAt: t.created_at
       }));
       this.notify();
@@ -1119,6 +1123,57 @@ class SupabaseService {
     this.notify();
   }
 
+  async saveAgentMovement(userId: User['id'], agentId: User['id'], input: {
+    transactionId?: string | number; amount?: number; notes?: string; mode?: MovementMode; remove?: boolean;
+  }) {
+    const user = this.users.find(user => String(user.id) === String(userId));
+    if (!user) throw new Error('بيانات المستخدم غير موجودة');
+    const [agentResult, ordersResult, transactionResult] = await Promise.all([
+      supabase.from('agent_details').select('current_balance').eq('id', agentId).single(),
+      this.fetchAgentMovementOrders(agentId),
+      input.transactionId !== undefined
+        ? supabase.from('wallet_transactions').select('*').eq('id', input.transactionId).eq('agent_id', agentId).single()
+        : Promise.resolve({ data: null, error: null })
+    ]);
+    for (const result of [agentResult, ordersResult, transactionResult]) if (result.error) throw result.error;
+    const rawTx = transactionResult.data;
+    const plan = planAgentMovement({
+      agentId, user, amount: input.amount, mode: input.mode, note: input.notes, remove: input.remove,
+      now: new Date().toISOString(), paymentId: (() => { let id = Date.now(); return () => ++id; })(),
+      transaction: rawTx ? { ...rawTx, agentId: rawTx.agent_id, createdAt: rawTx.created_at, linkedOrderId: rawTx.linked_order_id, paymentDetails: rawTx.payment_details } : undefined,
+      orders: (ordersResult.data || []).map(order => ({
+        id: order.id, agentId: order.agent_id, totalAmount: Number(order.total_amount), paidAmount: Number(order.paid_amount),
+        paymentHistory: order.payment_history || [], paymentStatus: order.payment_status, createdAt: order.created_at, paidAt: order.paid_at
+      }))
+    });
+    const { error } = await supabase.rpc('save_agent_movement', {
+      p_agent_id: agentId, p_expected_balance: agentResult.data.current_balance,
+      p_expected_transaction: rawTx, p_next_transaction: plan.next, p_order_changes: plan.orderChanges
+    });
+    if (error) throw error;
+    await Promise.all([this.fetchUsers(), this.fetchOrders(), this.fetchWalletTransactions()]);
+    this.notify();
+  }
+
+  private async fetchAgentMovementOrders(agentId: User['id']) {
+    const orders: any[] = [];
+    const pageSize = 500;
+    for (let offset = 0; ; offset += pageSize) {
+      const result = await supabase.from('orders')
+        .select('id,agent_id,total_amount,paid_amount,payment_history,payment_status,created_at,paid_at')
+        .eq('agent_id', agentId).order('id').range(offset, offset + pageSize - 1);
+      if (result.error) return { data: null, error: result.error };
+      orders.push(...result.data);
+      if (result.data.length < pageSize) return { data: orders, error: null };
+    }
+  }
+
+  async setAgentMovementLocked(transactionId: string | number, locked: boolean) {
+    const { error } = await supabase.rpc('set_agent_movement_locked', { p_transaction_id: String(transactionId), p_locked: locked });
+    if (error) throw error;
+    await this.fetchWalletTransactions();
+  }
+
   async addAgentLedgerTransaction(userId: any, agentId: any, amount: number, description: string, type: 'DEPOSIT' | 'ADJUSTMENT' = 'DEPOSIT') {
     const agent = this.users.find(u => u.id == agentId);
     if (!agent) throw new Error('وكيل غير موجود');
@@ -1157,6 +1212,19 @@ class SupabaseService {
 
     const agent = this.users.find(u => u.id == existingOrder.agentId);
     if (!agent || !agent.agentDetails) throw new Error('بيانات الوكيل غير موجودة');
+
+    const changedPaymentIds = (existingOrder.paymentHistory || []).filter(payment => {
+      const next = paymentHistory.find(next => String(next.id) === String(payment.id));
+      return !next || Number(next.amountAdded) !== Number(payment.amountAdded);
+    }).map(payment => String(payment.id));
+    if (changedPaymentIds.length) {
+      const { data, error } = await supabase.from('wallet_transactions').select('id,payment_details').eq('agent_id', existingOrder.agentId);
+      if (error) throw error;
+      const linked = data?.find(tx => tx.payment_details?.allocations?.some((allocation: { orderId: string | number; paymentId: string | number }) =>
+        String(allocation.orderId) === String(orderId) && changedPaymentIds.includes(String(allocation.paymentId))
+      ));
+      if (linked) throw new Error(`هذه الدفعة مرتبطة بالحركة #${linked.id}. عدّل الحركة من كشف حساب الوكيل لتصحيح توزيعها مع الرصيد.`);
+    }
 
     const normalizedHistory = paymentHistory
       .filter(pay => Number(pay.amountAdded) > 0)
