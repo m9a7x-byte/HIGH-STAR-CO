@@ -118,18 +118,22 @@ export const AdminDashboard = ({ activeTab, setActiveTab }: AdminDashboardProps)
 
     const hasPermission = (p: any) => (employees.find(e => e.id === user?.id) || user)?.permissions?.includes(p) || false;
 
-    const handleUpdateStatus = () => {
+    const handleUpdateStatus = async () => {
         if (confirmStatus && hasPermission('EDIT_PRODUCTION')) {
-            db.updateOrderStatus(user!.id, confirmStatus.id, confirmStatus.type, confirmStatus.val);
-            toast.success(t('batch4.k149')); setConfirmStatus(null);
+            try {
+                await db.updateOrderStatus(user!.id, confirmStatus.id, confirmStatus.type, confirmStatus.val);
+                toast.success(t('batch4.k149')); setConfirmStatus(null);
+            } catch (err: any) { toast.error(err.message || 'تعذر تغيير حالة الطلب'); }
         }
     };
 
-    const handleDeleteOrder = (refund: boolean) => {
+    const handleDeleteOrder = async (refund: boolean) => {
         if (deleteOrderConfirm && hasPermission('DELETE_ORDERS')) {
-            db.deleteOrder(user!.id, deleteOrderConfirm.id, refund);
-            toast.success(refund ? 'تم الحذف وإرجاع المبلغ للمحفظة' : 'تم الحذف النهائي للطلب');
-            setDeleteOrderConfirm(null);
+            try {
+                await db.deleteOrder(user!.id, deleteOrderConfirm.id, refund);
+                toast.success('تم حذف الطلب غير المرحّل');
+                setDeleteOrderConfirm(null);
+            } catch (err: any) { toast.error(err.message || 'تعذر حذف الطلب'); }
         }
     };
 
@@ -207,11 +211,8 @@ export const AdminDashboard = ({ activeTab, setActiveTab }: AdminDashboardProps)
                                         </div>
                                     </div>
                                     <div className="space-y-3">
-                                        <Button onClick={() => handleDeleteOrder(true)} className="w-full h-16 bg-amber-500 hover:bg-amber-600 text-white rounded-2xl font-black text-sm flex items-center justify-center gap-3 shadow-lg border-b-4 border-amber-700">
-                                            <RefreshCcw size={20} /> حذف مع إرجاع الواصل (${(deleteOrderConfirm.paidAmount || 0).toLocaleString()}) للرصيد
-                                        </Button>
                                         <Button onClick={() => handleDeleteOrder(false)} className="w-full h-16 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-black text-sm flex items-center justify-center gap-3 shadow-lg border-b-4 border-red-800">
-                                            <XCircle size={20} /> حذف نهائي (بدون إرجاع مبالغ)
+                                            <XCircle size={20} /> حذف الطلب غير المرحّل
                                         </Button>
                                         <button onClick={() => setDeleteOrderConfirm(null)} className="w-full h-14 bg-gray-50 text-gray-500 hover:bg-gray-100 rounded-2xl font-black text-sm transition-all border border-gray-200 mt-2">{t('batch4.k156')}</button>
                                     </div>
@@ -375,7 +376,7 @@ export const AdminDashboard = ({ activeTab, setActiveTab }: AdminDashboardProps)
             {activeTab === 'reports' && hasPermission('VIEW_REPORTS') && <ReportsTab orders={orders} products={products} agents={agents} isDateInRange={isDateInRange} onNavigateToOrders={() => setActiveTab('orders')} onNavigateToAgent={(id: any) => { setSelectedAgent(agents.find(a => a.id === id) || null); setActiveTab('agents'); }} onViewOrder={setViewingOrder} />}
             {activeTab === 'profit_calculator' && <ProfitCalculatorTab orders={orders} isDateInRange={isDateInRange} />}
             {activeTab === 'catalog' && hasPermission('VIEW_CATALOG') && <CatalogTab categories={categories} products={products} orders={orders} canEdit={hasPermission('EDIT_CATALOG')} onViewOrder={setViewingOrder} onDeleteProduct={(id: number) => db.deleteProduct(user!.id, id)} />}
-            {activeTab === 'agents' && hasPermission('VIEW_AGENTS') && <AgentsTab agents={agents} selectedAgent={selectedAgent} agentTransactions={allTransactions.filter(t => String(t.agentId) === String(selectedAgent?.id))} canEdit={hasPermission('EDIT_AGENTS')} isSuperAdmin={user?.role === UserRole.SUPER_ADMIN} onSelectAgent={setSelectedAgent} onViewOrder={setViewingOrder} />}
+            {activeTab === 'agents' && hasPermission('VIEW_AGENTS') && <AgentsTab agents={agents} selectedAgent={selectedAgent} agentTransactions={allTransactions.filter(t => String(t.agentId) === String(selectedAgent?.id))} canEdit={hasPermission('EDIT_AGENTS')} canChangeOrderStatus={hasPermission('EDIT_PRODUCTION')} canEditOrders={hasPermission('EDIT_ORDERS')} isSuperAdmin={user?.role === UserRole.SUPER_ADMIN} onSelectAgent={setSelectedAgent} onViewOrder={setViewingOrder} />}
             {activeTab === 'staff' && hasPermission('MANAGE_STAFF') && <StaffTab employees={employees} selectedEmployee={selectedEmployee} onSelectEmployee={setSelectedEmployee} isSuperAdmin={user?.role === UserRole.SUPER_ADMIN} onNavigateOrder={(id: any) => setActiveTab('orders')} />}
             {activeTab === 'activity_log' && hasPermission('VIEW_LOGS') && <ActivityLogTab employees={employees} agents={agents} onNavigateUser={(u: any) => { if (u.role === UserRole.AGENT) { setSelectedAgent(u); setActiveTab('agents'); } else { setSelectedEmployee(u); setActiveTab('staff'); } }} onNavigateOrder={(id: any) => setActiveTab('orders')} />}
             {activeTab === 'settings' && hasPermission('VIEW_SETTINGS') && <SettingsTab settings={settings} onUpdateSettings={(key: any, val: any, title: any, msg: any, icon: any, color: any) => { if (msg) setSettingsConfirm({ key, val, title, message: msg, icon, color }); else db.updateVehicleConfig(user!.id, { ...settings, [key]: val }); }} />}

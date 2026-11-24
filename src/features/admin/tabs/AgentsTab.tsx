@@ -6,7 +6,7 @@ import {
     FileText, Search, Filter, Eye, Globe, History, UserPlus, X, Info, Receipt,
     ShieldAlert, Landmark, Snowflake, ListOrdered, Save, ArrowUpRight, ArrowDownLeft,
     Check, ChevronDown, Award, User, Trash2, AlertOctagon, XCircle, Copy, Hash, Fingerprint, Activity, Clock, Monitor, Shield, Edit3, Smartphone, Laptop, CreditCard, UserCheck, CheckCircle,
-    Users, Sparkles, Phone, Key, Lock, Unlock, Mail, AlertCircle, ShieldX
+    Users, Sparkles, Phone, Key, Lock, Unlock, Mail, AlertCircle, ShieldX, RotateCcw
 } from 'lucide-react';
 import { UserAvatar, Badge, Button, Card, Input, PhoneInput, DateRangePicker } from '../../../components/ui';
 import { AvatarUploader } from '../../../components/profile/AvatarUploader';
@@ -130,7 +130,7 @@ const isAgentDebtMovement = (tx: any) => {
     );
 };
 
-export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, isSuperAdmin, onSelectAgent, onViewOrder }: any) => {
+export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, canChangeOrderStatus = false, canEditOrders = false, isSuperAdmin, onSelectAgent, onViewOrder }: any) => {
     const { t } = useTranslation();
     
     const translateDesc = (desc: string) => {
@@ -172,6 +172,26 @@ export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, i
     const [agentOrderRowsPerPage, setAgentOrderRowsPerPage] = useState(10);
     const [agentOrderPaymentModal, setAgentOrderPaymentModal] = useState<{ order: Order | null, amount: string, editingPaymentId: number | null, editAmount: string }>({ order: null, amount: '', editingPaymentId: null, editAmount: '' });
     const [agentOrderEditModal, setAgentOrderEditModal] = useState<{ order: Order | null, items: any[], discountValue: number, discountType: 'FIXED' | 'PERCENT' }>({ order: null, items: [], discountValue: 0, discountType: 'FIXED' });
+
+    const [orderStatusModal, setOrderStatusModal] = useState<{ order: Order; nextStatus: ProductionStatus } | null>(null);
+    const [savingOrderStatus, setSavingOrderStatus] = useState(false);
+    const orderStatusSubmitting = useRef(false);
+    const handleChangeOrderStatus = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!orderStatusModal || !currentUser || !canChangeOrderStatus || orderStatusSubmitting.current) return;
+        const { order, nextStatus } = orderStatusModal;
+        if (nextStatus === order.productionStatus) return;
+        orderStatusSubmitting.current = true;
+        setSavingOrderStatus(true);
+        try {
+            await db.updateOrderStatus(currentUser.id, order.id, 'production', nextStatus, {
+                productionStatus: order.productionStatus, totalAmount: order.totalAmount
+            });
+            setOrderStatusModal(null);
+            success('تم تغيير حالة الطلب وتحديث حساب الوكيل');
+        } catch (err: any) { error(err.message || 'تعذر تغيير حالة الطلب'); }
+        finally { orderStatusSubmitting.current = false; setSavingOrderStatus(false); }
+    };
 
     // --- REAL-TIME DATA SYNC ---
     // Ensure the detailed view always shows the freshest data from the 'agents' prop (which comes from db.users)
@@ -1413,18 +1433,18 @@ export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, i
                                                         <td className="p-6">
                                                             <div className="flex flex-col gap-2 items-start">
                                                                 <Badge color={order.productionStatus === ProductionStatus.COMPLETED ? 'blue' : 'gray'}>{ProductionStatusLabels[order.productionStatus]}</Badge>
-                                                                <Badge color={remaining <= 0 ? 'green' : 'yellow'}>{remaining <= 0 ? 'مسدد' : 'دين'}</Badge>
+                                                                <Badge color={order.productionStatus !== ProductionStatus.COMPLETED ? 'gray' : remaining <= 0 ? 'green' : 'yellow'}>{order.productionStatus !== ProductionStatus.COMPLETED ? 'غير مفوتر' : remaining <= 0 ? 'مسدد' : 'دين'}</Badge>
                                                             </div>
                                                         </td>
                                                         <td className="p-6 text-left font-mono font-black text-[#0e3c63]" dir="ltr">${(order.totalAmount || 0).toLocaleString()}</td>
                                                         <td className="p-6 text-left font-mono font-black text-emerald-600" dir="ltr">${(order.paidAmount || 0).toLocaleString()}</td>
                                                         <td className="p-6 text-left font-mono font-black text-amber-600" dir="ltr">${remaining.toLocaleString()}</td>
                                                         <td className="p-6 text-center">
-                                                            <div className="flex items-center justify-center gap-1.5">
+                                                            <div className="flex items-center justify-center gap-2 rounded-2xl border border-gray-100 bg-gray-50/70 p-2 w-fit mx-auto">
                                                                 <button onClick={() => onViewOrder(order)} className="p-2 rounded-lg text-gray-400 hover:text-[#0e3c63] hover:bg-blue-50 transition-all" title="عرض الطلب"><Eye size={16} /></button>
                                                                 {canEdit && remaining > 0 && <button onClick={() => setAgentOrderPaymentModal({ order, amount: '', editingPaymentId: null, editAmount: '' })} className="p-2 rounded-lg text-emerald-600 hover:bg-emerald-50 transition-all" title="إضافة دفعة"><CreditCard size={16} /></button>}
-                                                                {canEdit && <button onClick={() => openAgentOrderEditModal(order)} className="p-2 rounded-lg text-blue-500 hover:bg-blue-50 transition-all" title="تعديل الطلب"><Edit3 size={16} /></button>}
-                                                                {canEdit && <button onClick={() => { db.deleteOrder(currentUser!.id, order.id, false); success('تم حذف الطلب'); }} className="p-2 rounded-lg text-red-500 hover:bg-red-50 transition-all" title="حذف الطلب"><Trash2 size={16} /></button>}
+                                                                {canEditOrders && order.productionStatus !== ProductionStatus.COMPLETED && <button onClick={() => openAgentOrderEditModal(order)} className="p-2 rounded-lg text-blue-500 hover:bg-blue-50 transition-all" title="تعديل الطلب"><Edit3 size={16} /></button>}
+                                                                {canChangeOrderStatus && <button type="button" onClick={() => setOrderStatusModal({ order, nextStatus: order.productionStatus })} className="p-2 rounded-lg text-amber-700 hover:bg-amber-100 transition-all" title="تغيير حالة الطلب" aria-label="تغيير حالة الطلب"><RotateCcw size={17} /></button>}
                                                             </div>
                                                         </td>
                                                     </tr>
@@ -1447,6 +1467,39 @@ export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, i
                     </div>
                 </div>
             )}
+
+            {orderStatusModal && (() => {
+                const { order, nextStatus } = orderStatusModal;
+                const reversing = order.productionStatus === ProductionStatus.COMPLETED && nextStatus !== ProductionStatus.COMPLETED;
+                const completing = order.productionStatus !== ProductionStatus.COMPLETED && nextStatus === ProductionStatus.COMPLETED;
+                const amount = Number(order.totalAmount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                return (
+                    <div className="fixed inset-0 bg-[#0e3c63]/40 backdrop-blur-md z-[650] flex items-center justify-center p-4 !mt-0">
+                        <form onSubmit={handleChangeOrderStatus} aria-label="تغيير حالة الطلب" role="dialog" aria-modal="true" className="w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden">
+                            <div className="bg-[#0e3c63] text-white p-6 flex items-center justify-between gap-4">
+                                <div className="flex items-center gap-3"><RotateCcw size={24} /><div><h3 className="font-black text-xl">تغيير حالة الطلب <span className="font-mono" dir="ltr">#{order.id}</span></h3><p className="text-blue-100 text-xs mt-1">{order.agentName}</p></div></div>
+                                <button type="button" onClick={() => setOrderStatusModal(null)} disabled={savingOrderStatus} aria-label="إغلاق تغيير الحالة" className="p-2 rounded-xl hover:bg-white/10 disabled:opacity-50"><X size={20} /></button>
+                            </div>
+                            <div className="p-6 space-y-5">
+                                <p className="text-sm text-gray-500">الحالة الحالية: <strong className="text-gray-800">{ProductionStatusLabels[order.productionStatus]}</strong></p>
+                                <label className="block font-bold text-sm text-gray-700">الحالة الجديدة
+                                    <select aria-label="الحالة الجديدة" value={nextStatus} disabled={savingOrderStatus} onChange={e => setOrderStatusModal({ order, nextStatus: e.target.value as ProductionStatus })} className="mt-2 w-full h-12 rounded-xl border border-gray-200 bg-gray-50 px-3 outline-none focus:border-[#0e3c63]">
+                                        {Object.values(ProductionStatus).map(status => <option key={status} value={status}>{ProductionStatusLabels[status]}</option>)}
+                                    </select>
+                                </label>
+                                <div className="rounded-2xl bg-amber-50 border border-amber-100 p-4 text-sm leading-7 text-amber-900" role="status">
+                                    {reversing ? <><strong className="block">إلغاء احتساب قيمة الطلب</strong>سيُلغى احتساب <span className="font-mono font-bold" dir="ltr">$ {amount}</span> من حساب الوكيل، ويعود الطلب إلى الحالة المختارة.</> : completing ? <><strong className="block">احتساب قيمة الطلب</strong>سيُحتسب <span className="font-mono font-bold" dir="ltr">$ {amount}</span> على حساب الوكيل عند تأكيد التجهيز.</> : 'تغيير الحالة لا يغيّر رصيد الوكيل بين حالات ما قبل التجهيز.'}
+                                    <p className="mt-2 text-xs text-gray-600">يبقى الطلب محفوظاً وتبقى الدفعات المسجلة كما هي.</p>
+                                </div>
+                                <div className="flex gap-3 pt-1">
+                                    <button type="submit" disabled={savingOrderStatus || nextStatus === order.productionStatus} className="flex-1 bg-[#0e3c63] text-white font-bold py-3 rounded-xl disabled:opacity-40">{savingOrderStatus ? 'جارٍ الحفظ...' : 'تأكيد تغيير الحالة'}</button>
+                                    <button type="button" disabled={savingOrderStatus} onClick={() => setOrderStatusModal(null)} className="px-6 py-3 rounded-xl bg-gray-100 font-bold text-gray-600 disabled:opacity-40">إلغاء</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                );
+            })()}
 
             {/* --- NEW TABBED AGENT MODAL --- */}
             {showAgentModal && (

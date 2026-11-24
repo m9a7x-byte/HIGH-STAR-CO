@@ -150,12 +150,14 @@ export const OrdersTab = ({ orders, onViewOrder, onDeleteOrder, isDateInRange, o
         };
     }, [searchDateFilteredOrders]);
 
-    const handleConfirmProductionMove = () => {
+    const handleConfirmProductionMove = async () => {
         if (productionConfirmationOrder && currentUser) {
             // DIRECT UPDATE: Calling db directly to avoid triggering the parent's second confirmation modal
-            db.updateOrderStatus(currentUser.id, productionConfirmationOrder.id, 'production', ProductionStatus.WAITING);
-            setProductionConfirmationOrder(null);
-            toast.success('تم ترحيل الطلب للإنتاج بنجاح');
+            try {
+                await db.updateOrderStatus(currentUser.id, productionConfirmationOrder.id, 'production', ProductionStatus.WAITING);
+                setProductionConfirmationOrder(null);
+                toast.success('تم ترحيل الطلب للإنتاج بنجاح');
+            } catch (err: any) { toast.error(err.message || 'تعذر ترحيل الطلب للإنتاج'); }
         }
     };
 
@@ -832,7 +834,7 @@ export const OrdersTab = ({ orders, onViewOrder, onDeleteOrder, isDateInRange, o
                                                     </Tooltip>
                                                     );
                                                 })()}
-                                                {userPermissions.includes('DELETE_ORDERS') && (o.productionStatus !== ProductionStatus.COMPLETED || unlockedOrders.has(o.id)) && (
+                                                {userPermissions.includes('DELETE_ORDERS') && [ProductionStatus.PENDING_PAYMENT, ProductionStatus.PENDING_TRANSFER].includes(o.productionStatus) && !o.paidAmount && !o.paymentHistory?.length && (
                                                     <Tooltip content="حذف الطلب">
                                                         <button onClick={() => handleClickDelete(o)} className="w-10 h-10 flex items-center justify-center text-red-500 bg-white border border-gray-100 rounded-xl hover:bg-red-50 shadow-sm transition-all" aria-label="حذف الطلب">
                                                             <Trash2 size={20} />

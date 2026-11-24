@@ -97,7 +97,7 @@ export const ProductionTab = ({ productionQueue, canEdit, onUpdateStatus, onView
         db.updateOrderEstimate(user!.id, orderId, days);
     };
 
-    const handleConfirmAction = () => {
+    const handleConfirmAction = async () => {
         if (!confirmModal) return;
         const { order, action } = confirmModal;
 
@@ -108,7 +108,12 @@ export const ProductionTab = ({ productionQueue, canEdit, onUpdateStatus, onView
         if (action === 'RETURN') newStatus = ProductionStatus.WAITING;
 
         // Directly call database update to bypass parent's confirmation logic
-        db.updateOrderStatus(user!.id, order.id, 'production', newStatus);
+        try {
+            await db.updateOrderStatus(user!.id, order.id, 'production', newStatus);
+        } catch (err: any) {
+            toast.error(err.message || 'تعذر تغيير حالة الطلب');
+            return;
+        }
         setConfirmModal(null);
 
         // Toast feedback

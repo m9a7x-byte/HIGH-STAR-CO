@@ -1273,80 +1273,26 @@ class SupabaseService {
     this.notify();
   }
 
-  updateOrderStatus(userId: any, orderId: any, type: 'payment' | 'production', newVal: string) {
-    // Optimistic update
-    const originalOrders = [...this.orders];
+  async updateOrderStatus(userId: User['id'], orderId: Order['id'], type: 'payment' | 'production', newVal: string,
+    expectedOrder?: Pick<Order, 'productionStatus' | 'totalAmount'>) {
+    const order = this.orders.find(order => String(order.id) === String(orderId));
+    if (!order) throw new Error('الطلب غير موجود');
     if (type === 'production') {
-      const shouldLockAgentEdit = newVal !== ProductionStatus.PENDING_TRANSFER && newVal !== ProductionStatus.PENDING_PAYMENT;
-      this.orders = this.orders.map(o => o.id == orderId ? { ...o, productionStatus: newVal as any, ...(shouldLockAgentEdit ? { agentEditUnlocked: false } : {}) } : o);
+      const expected = expectedOrder || order;
+      const { error } = await supabase.rpc('change_order_production_status', {
+        p_order_id: orderId, p_expected_status: expected.productionStatus,
+        p_expected_total: expected.totalAmount, p_new_status: newVal
+      });
+      if (error) throw error;
+      await Promise.all([this.fetchOrders(), this.fetchUsers(), this.fetchWalletTransactions()]);
     } else {
-      this.orders = this.orders.map(o => o.id == orderId ? { ...o, paymentStatus: newVal as any } : o);
+      const { data, error } = await supabase.from('orders').update({ payment_status: newVal }).eq('id', orderId).select('id').maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error('تعذر تحديث حالة الدفع');
+      await this.fetchOrders();
+      this.logActivity(userId, 'تحديث حالة', 'ORDERS', 'تحديث حالة دفع الطلب #' + orderId, order.paymentStatus, newVal);
     }
     this.notify();
-
-    // Real update - async
-    (async () => {
-      try {
-        const shouldLockAgentEdit = type === 'production' && newVal !== ProductionStatus.PENDING_TRANSFER && newVal !== ProductionStatus.PENDING_PAYMENT;
-        const updateData = type === 'production'
-          ? { production_status: newVal, ...(newVal === ProductionStatus.WAITING ? { moved_to_production_at: new Date().toISOString() } : {}), ...(shouldLockAgentEdit ? { agent_edit_unlocked: false } : {}) }
-          : { payment_status: newVal };
-
-        const { error } = await supabase.from('orders').update(updateData).eq('id', orderId);
-        if (error) throw error;
-        
-        const targetOrder = originalOrders.find(o => o.id == orderId);
-        const oldStatus = targetOrder?.[type === 'production' ? 'productionStatus' : 'paymentStatus'];
-
-        if (type === 'production' && targetOrder) {
-            const isNowCompleted = newVal === ProductionStatus.COMPLETED;
-            const wasCompleted = oldStatus === ProductionStatus.COMPLETED;
-
-            if (isNowCompleted && !wasCompleted) {
-                const agent = this.users.find(u => u.id == targetOrder.agentId);
-                if (agent && agent.agentDetails) {
-                    const { data: existingTx } = await supabase.from('wallet_transactions')
-                        .select('id').eq('agent_id', agent.id).eq('description', `شراء طلبية #${orderId}`);
-                        
-                    if (!existingTx || existingTx.length === 0) {
-                        const newBalance = agent.agentDetails.currentBalance - targetOrder.totalAmount;
-                        await supabase.from('agent_details').update({ current_balance: newBalance }).eq('id', agent.id);
-                        if (agent.agentDetails) agent.agentDetails.currentBalance = newBalance;
-                        
-                        await supabase.from('wallet_transactions').insert({
-                            agent_id: agent.id,
-                            amount: -targetOrder.totalAmount,
-                            type: 'PAYMENT',
-                            description: `شراء طلبية #${orderId}`
-                        });
-                        this.fetchWalletTransactions();
-                    }
-                }
-            } else if (!isNowCompleted && wasCompleted) {
-                const agent = this.users.find(u => u.id == targetOrder.agentId);
-                if (agent && agent.agentDetails) {
-                    const { data: existingTx } = await supabase.from('wallet_transactions')
-                        .select('id').eq('agent_id', agent.id).eq('description', `شراء طلبية #${orderId}`);
-                    
-                    if (existingTx && existingTx.length > 0) {
-                        const newBalance = agent.agentDetails.currentBalance + targetOrder.totalAmount;
-                        await supabase.from('agent_details').update({ current_balance: newBalance }).eq('id', agent.id);
-                        if (agent.agentDetails) agent.agentDetails.currentBalance = newBalance;
-                        
-                        await supabase.from('wallet_transactions').delete().eq('agent_id', agent.id).eq('description', `شراء طلبية #${orderId}`);
-                        this.fetchWalletTransactions();
-                    }
-                }
-            }
-        }
-
-        this.logActivity(userId, 'تحديث حالة', 'SYSTEM', `تحديث حالة ${type} لطلب #${orderId}`, oldStatus as string, newVal);
-      } catch (err) {
-        console.error('Update status failed, reverting:', err);
-        this.orders = originalOrders;
-        this.notify();
-      }
-    })();
   }
   updateOrderEstimate(userId: any, orderId: any, days: number) {
     const originalOrders = [...this.orders];
@@ -1365,21 +1311,18 @@ class SupabaseService {
     })();
   }
 
-  deleteOrder(userId: any, orderId: any, refund: boolean) {
-    const originalOrders = [...this.orders];
-    this.orders = this.orders.filter(o => o.id != orderId);
+  async deleteOrder(userId: User['id'], orderId: Order['id'], _refund: boolean) {
+    const order = this.orders.find(order => String(order.id) === String(orderId));
+    if (!order) throw new Error('الطلب غير موجود');
+    if (!this.isOrderBeforeProduction(order) || order.paidAmount > 0 || order.paymentHistory?.length) {
+      throw new Error('لا يمكن حذف طلب مرحّل للإنتاج أو مرتبط بحركة مالية. استخدم تغيير حالة الطلب.');
+    }
+    const { data, error } = await supabase.from('orders').delete().eq('id', orderId).select('id').maybeSingle();
+    if (error) throw error;
+    if (!data) throw new Error('تعذر حذف الطلب');
+    this.orders = this.orders.filter(order => String(order.id) !== String(orderId));
+    this.logActivity(userId, 'حذف طلب', 'ORDERS', 'حذف الطلب غير المرحّل #' + orderId);
     this.notify();
-
-    (async () => {
-      try {
-        const { error } = await supabase.from('orders').delete().eq('id', orderId);
-        if (error) throw error;
-      } catch (err) {
-        console.error('Delete order failed, reverting:', err);
-        this.orders = originalOrders;
-        this.notify();
-      }
-    })();
   }
 
   markOrderAsSeen(orderId: any) {
