@@ -5,7 +5,7 @@ import ts from 'typescript';
 import * as movements from '../src/lib/agentMovements.ts';
 import * as dates from '../src/lib/dateUtils.ts';
 
-function harness({ canEdit = true, fail = false } = {}) {
+function harness({ canEdit = true, fail = false, orders = [], canChangeOrderStatus = true, failStatus = false } = {}) {
   let cursor = 0;
   const state = [];
   const react = {
@@ -20,7 +20,7 @@ function harness({ canEdit = true, fail = false } = {}) {
   const agent = { id: 'agent', fullName: 'وكيل', email: 'agent@example.test', agentDetails: { currentBalance: -50, permissions: {} } };
   const calls = [];
   const errors = [];
-  const db = { users: [agent], orders: [], async saveAgentMovement(...args) { calls.push(args); if (fail) throw new Error('تعذر الحفظ'); }, getLogs: () => [] };
+  const db = { users: [agent], orders, async updateOrderStatus(...args) { calls.push(args); if (failStatus) throw new Error("تعذر تغيير الحالة"); }, async saveAgentMovement(...args) { calls.push(args); if (fail) throw new Error('تعذر الحفظ'); }, getLogs: () => [] };
   const enums = new Proxy({}, { get: (_, key) => key });
   const dependencies = {
     react: { ...react, default: react },
@@ -28,7 +28,7 @@ function harness({ canEdit = true, fail = false } = {}) {
     '../../../lib/db': { db }, '../../../lib/agentMovements': movements, '../../../lib/dateUtils': dates,
     '../../../context/AuthContext': { useAuth: () => ({ user: { id: 'admin', fullName: 'محاسب', role: 'ADMIN' } }) },
     '../../../context/ToastContext': { useToast: () => ({ success: () => {}, error: message => errors.push(message), info: () => {} }) },
-    '../../../types': { AgentType: enums, UserRole: enums, ProductionStatus: enums, PaymentStatus: enums, UserRoleLabels: enums, ProductionStatusLabels: enums }
+    '../../../types': { AgentType: enums, UserRole: enums, ProductionStatus: { PENDING_PAYMENT: "PENDING_PAYMENT", PENDING_TRANSFER: "PENDING_TRANSFER", WAITING: "WAITING", IN_PROGRESS: "IN_PROGRESS", COMPLETED: "COMPLETED" }, PaymentStatus: enums, UserRoleLabels: enums, ProductionStatusLabels: enums }
   };
   const fallback = new Proxy({}, { get: (_, key) => key });
   const { outputText } = ts.transpileModule(readFileSync(new URL('../src/features/admin/tabs/AgentsTab.tsx', import.meta.url), 'utf8'), {
@@ -37,7 +37,7 @@ function harness({ canEdit = true, fail = false } = {}) {
   const exports = {};
   new Function('require', 'exports', outputText)(name => dependencies[name] || fallback, exports);
   const props = {
-    agents: [agent], selectedAgent: agent, canEdit, isSuperAdmin: false, onSelectAgent: () => {}, onViewOrder: () => {},
+    agents: [agent], selectedAgent: agent, canEdit, canChangeOrderStatus, canEditOrders: canEdit, isSuperAdmin: false, onSelectAgent: () => {}, onViewOrder: () => {},
     agentTransactions: [
       { id: 101, agentId: 'agent', amount: 150, type: 'DEPOSIT', description: 'تسديد موحد $150 - توزعت على 2 فاتورة: #1 ($100)، #2 ($50)', createdAt: '2026-11-23T10:00:00Z' },
       { id: 102, agentId: 'agent', amount: 50, type: 'DEPOSIT', description: 'إيداع سابق', createdAt: '2026-11-23T11:00:00Z' },
@@ -88,4 +88,44 @@ test('a viewer cannot see edit and delete controls', () => {
   const tree = harness({ canEdit: false }).render();
   assert.equal(control(tree, 'تعديل الحركة'), undefined);
   assert.equal(control(tree, 'حذف الحركة'), undefined);
+});
+
+
+const testOrder = status => ({ id: 34, agentId: 'agent', agentName: 'BOTAN ZAXO', productionStatus: status, totalAmount: 11376.96, paidAmount: 0, createdAt: '2026-11-24T08:00:00Z', items: [] });
+function orderTab(app) {
+  nodes(app.render()).find(node => node.type === 'button' && text(node).startsWith('الطلبات')).props.onClick();
+  return app.render();
+}
+test('agent order actions remove direct deletion and lock editing of completed orders', () => {
+  const app = harness({ orders: [testOrder('COMPLETED')] }); const tree = orderTab(app);
+  assert.equal(control(tree, 'حذف الطلب'), undefined);
+  assert.equal(control(tree, 'تعديل الطلب'), undefined);
+  assert.ok(control(tree, 'تغيير حالة الطلب'));
+  assert.ok(control(tree, 'عرض الطلب'));
+});
+test('status dialog lists every system status and previews reversing the charge without deleting the order', async () => {
+  const app = harness({ orders: [testOrder('COMPLETED')] });
+  control(orderTab(app), 'تغيير حالة الطلب').props.onClick();
+  let tree = app.render(); const select = nodes(tree).find(node => node.type === 'select' && node.props['aria-label'] === 'الحالة الجديدة');
+  assert.ok(select, 'status selector must be present');
+  assert.deepEqual(nodes(select).filter(node => node.type === 'option').map(node => node.props.value), ['PENDING_PAYMENT','PENDING_TRANSFER','WAITING','IN_PROGRESS','COMPLETED']);
+  select.props.onChange({ target: { value: 'PENDING_TRANSFER' } }); tree = app.render();
+  assert.ok(text(tree).includes('11,376.96'));
+  assert.ok(text(tree).includes('إلغاء احتساب قيمة الطلب'));
+  assert.deepEqual(app.calls, []);
+  await nodes(tree).find(node => node.type === 'form' && node.props['aria-label'] === 'تغيير حالة الطلب').props.onSubmit({ preventDefault() {} });
+  assert.deepEqual(app.calls[0], ['admin',34,'production','PENDING_TRANSFER',{ productionStatus: 'COMPLETED', totalAmount: 11376.96 }]);
+  assert.equal(nodes(app.render()).some(node => node.props.role === 'dialog' && node.props['aria-label'] === 'تغيير حالة الطلب'), false);
+});
+test('status save failure preserves the dialog and reports the real error', async () => {
+  const app = harness({ orders: [testOrder('COMPLETED')], failStatus: true });
+  control(orderTab(app), 'تغيير حالة الطلب').props.onClick();
+  nodes(app.render()).find(node => node.type === 'select' && node.props['aria-label'] === 'الحالة الجديدة').props.onChange({target:{value:'WAITING'}});
+  await nodes(app.render()).find(node => node.type === 'form' && node.props['aria-label'] === 'تغيير حالة الطلب').props.onSubmit({ preventDefault() {} });
+  assert.equal(app.errors[0], 'تعذر تغيير الحالة');
+  assert.ok(nodes(app.render()).find(node => node.props.role === 'dialog' && node.props['aria-label'] === 'تغيير حالة الطلب'));
+});
+test('agent editing permission alone cannot change order production status', () => {
+  const app = harness({ orders: [testOrder('COMPLETED')], canChangeOrderStatus: false });
+  assert.equal(control(orderTab(app), 'تغيير حالة الطلب'), undefined);
 });
