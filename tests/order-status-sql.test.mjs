@@ -5,7 +5,7 @@ import { PGlite } from '@electric-sql/pglite';
 
 const agent = '00000000-0000-0000-0000-000000000001';
 const admin = '00000000-0000-0000-0000-000000000002';
-const migration = readFileSync(new URL('../supabase/migrations/20261124124727_safe_order_status_transitions.sql', import.meta.url), 'utf8');
+const migration = readFileSync(new URL('../supabase/migrations/20261124125814_safe_order_status_transitions.sql', import.meta.url), 'utf8');
 async function fixture() {
   const db = new PGlite();
   await db.exec(`
@@ -77,3 +77,4 @@ test('database protects completed, production and paid orders from deletion but 
     await db.exec("UPDATE orders SET paid_amount=0 WHERE id=35; DELETE FROM orders WHERE id=35");assert.equal((await state(db)).orders.length,1);
   }finally{await db.close();}
 });
+
