@@ -1,0 +1,67 @@
+import React, { useState } from 'react';
+import { createRoot } from 'react-dom/client';
+import '../../src/i18n';
+import '../../src/index.css';
+import { db } from '../../src/lib/db';
+import { ROLE_PERMISSIONS } from '../../src/lib/permissions';
+import { AdminDashboard } from '../../src/features/admin/AdminDashboard';
+import { AgentDashboard } from '../../src/features/agent/AgentDashboard';
+import { FactoryDashboard } from '../../src/features/factory/FactoryDashboard';
+import { ProfileTab } from '../../src/features/shared/ProfileTab';
+import { NotificationBell } from '../../src/components/shared/NotificationBell';
+import { LanguageProvider } from '../../src/context/LanguageContext';
+import { ToastProvider } from '../../src/context/ToastContext';
+
+const pages = import.meta.glob('../../src/pages/*.tsx', { eager: true });
+const now = new Date().toISOString();
+const permissions = [...new Set(Object.values(ROLE_PERMISSIONS || {}).flatMap(r => r.permissions || []))];
+const allPermissions = ['VIEW_PRODUCTION','EDIT_PRODUCTION','VIEW_ORDERS','ADD_ORDERS','EDIT_ORDERS','DELETE_ORDERS','UNLOCK_ORDERS','VIEW_CATALOG','ADD_CATALOG','EDIT_CATALOG','DELETE_CATALOG','VIEW_AGENTS','ADD_AGENTS','EDIT_AGENTS','DELETE_AGENTS','VIEW_SALES','VIEW_REPORTS','VIEW_LOGS','VIEW_PRESENCE','MANAGE_STAFF','ACCESS_FACTORY','VIEW_SAFE','ADD_SAFE_TX','EDIT_SAFE_TX','DELETE_SAFE_TX','VIEW_SETTINGS','EDIT_SETTINGS',...permissions];
+for (const area of ['INV','EXP','SUP','LOG']) for (const action of ['VIEW','ADD','EDIT','DELETE','LOCK']) allPermissions.push(`${action}_FACTORY_${area}`);
+const admin = { id: 'fixture-admin', fullName: 'مدير اختبار', email: 'admin@example.invalid', role: 'SUPER_ADMIN', status: 'active', permissions: allPermissions, phone: '07700000000', province: 'بغداد', address: 'عنوان اختبار', presence: { isOnline: true, lastSeen: now } };
+const agent = { ...admin, id: 'fixture-agent', fullName: 'وكيل اختبار', email: 'agent@example.invalid', role: 'AGENT', agentDetails: { type: 'عادي', currentBalance: -5176.96, isFrozen: false, permissions: { canShowFinance: true, showFinance: true, canSeePrices: true, showPrices: true, canOrder: true, canShowQueue: true, showProductionQueue: true, canShowHistory: true } } };
+db.users = [admin, agent, { ...admin, id: 'fixture-staff', fullName: 'موظف اختبار', role: 'ADMIN', email: 'staff@example.invalid' }];
+db.categories = [{ id: 1, name: 'فلين', type: 'STYROFOAM', order: 1 }, { id: 2, name: 'أصباغ', type: 'PAINT', order: 2 }, { id: 3, name: 'لاصق', type: 'ADHESIVE', order: 3 }];
+db.products = db.categories.map((c, i) => ({ id: i + 1, code: `TEST-${i + 1}`, name: `منتج اختبار ${i + 1}`, category: c.name, dimensions: '10x10', isActive: true, pricePerCarton: 20, pricePerMeter: 2, metersPerCarton: 10, volumePerCarton: 0.1, saleMode: 'CARTON', inventory: 100, prices: { 'عادي': { pricePerCarton: 20, pricePerMeter: 2 }, VIP: { pricePerCarton: 18, pricePerMeter: 1.8 } } }));
+const item = { id: 1, productId: 1, productCode: 'TEST-1', productName: 'منتج اختبار', productDimensions: '10x10', productSaleMode: 'CARTON', productMetersPerCarton: 10, quantityCartons: 5, quantityMeters: 0, unitPriceCarton: 20, unitPriceMeter: 2, totalPrice: 100 };
+db.orders = ['PENDING_TRANSFER','WAITING','IN_PROGRESS','COMPLETED','PENDING_PAYMENT'].map((productionStatus, i) => ({ id: 34 + i, agentId: agent.id, agentName: agent.fullName, agentProvince: 'بغداد', totalAmount: i === 3 ? 11376.96 : 100, subTotalAmount: i === 3 ? 11376.96 : 100, paidAmount: 0, discountValue: 0, discountType: 'FIXED', productionStatus, paymentStatus: 'PENDING', items: [{ ...item }], paymentHistory: [], totalVolume: 0.5, createdAt: now, agentEditUnlocked: true, estimatedDays: 2, movedToProductionAt: now, hasSpecialRequest: false }));
+db.walletTransactions = [
+  { id: 79, agentId: agent.id, amount: 6200, type: 'DEPOSIT', description: 'تسديد موحد $6,200', createdAt: now },
+  { id: 92, agentId: agent.id, amount: -11376.96, type: 'PAYMENT', description: 'شراء طلبية #37', linkedOrderId: 37, createdAt: now },
+  { id: 93, agentId: agent.id, amount: -44219.58, type: 'PAYMENT', description: 'شراء طلبية #21', createdAt: now },
+  { id: 100, agentId: agent.id, amount: 44219.58, type: 'ADJUSTMENT', description: 'إلغاء احتساب الطلب الملغي #21', locked: true, createdAt: now, paymentDetails: { mode: 'deposit', note: '', allocations: [], reversal: { kind: 'order_charge_reversal', transactionId: 93, orderId: 21 } } }
+];
+db.suppliers = [{ id: 'supplier-test', name: 'مورد اختبار', phone: '07700000001', current_balance: 0 }];
+db.factoryTransactions = [{ id: 1, category: 'DAILY_EXPENSE', transactionType: 'OUT', amount: 10, date: now, description: 'مصروف اختبار', withdrawnBy: admin.fullName, notes: 'اختبار', isLocked: false }, { id: 2, category: 'INVENTORY', transactionType: 'IN', materialType: 'EPS', quantity: 10, amount: 100, date: now, description: 'مخزون اختبار', notes: 'اختبار', isLocked: false }];
+db.auditLogs = [{ id: 1, userId: admin.id, userName: admin.fullName, action: 'تحديث', context: 'ORDERS', details: 'الطلب #34', timestamp: now }];
+db.notifications = [{ id: 'notice-test', userId: admin.id, title: 'إشعار اختبار', message: 'رسالة اختبار', isRead: true, type: 'info', createdAt: now, actionUrl: '/test' }];
+db.factoryMaterialsStatus = 'ready';
+db.vehicleConfig = { ...db.vehicleConfig, maintenanceMode: false, isSystemClosed: false, showProductionQueueToAgents: true, showPricesToAgents: true };
+window.__testCalls = [];
+for (const name of Object.getOwnPropertyNames(Object.getPrototypeOf(db))) {
+  if (/^(add|update|delete|remove|create|save|set|send|verify|mark|upload|fetch|ensure|restore|login|logout|init)/.test(name)) db[name] = async (...args) => { window.__testCalls.push({ name, args }); return { id: 99, success: true, user: admin }; };
+}
+window.__fixtureDb = db;
+
+class Boundary extends React.Component {
+  state = { error: null };
+  static getDerivedStateFromError(error) { return { error }; }
+  render() { return this.state.error ? <pre data-testid="runtime-error">{String(this.state.error.stack)}</pre> : this.props.children; }
+}
+function Fixture() {
+  const params = new URLSearchParams(location.search);
+  const [tab, setTab] = useState(params.get('tab') || 'overview');
+  const view = params.get('view') || 'admin';
+  const name = params.get('page') || 'StaffLoginPage';
+  const module = pages[`../../src/pages/${name}.tsx`];
+  const PublicPage = module?.[name] || module?.default;
+  return <LanguageProvider><ToastProvider><Boundary><main data-testid="page-content">
+    {view === 'admin' && <AdminDashboard activeTab={tab} setActiveTab={setTab} />}
+    {view === 'agent' && <AgentDashboard />}
+    {view === 'factory' && <FactoryDashboard />}
+    {view === 'profile' && <ProfileTab onBack={() => {}} />}
+    {view === 'notifications' && <div className="p-20 bg-blue-900"><NotificationBell /></div>}
+    {view === 'public' && PublicPage && <PublicPage onBack={() => {}} onSuccess={() => {}} onNavigate={() => {}} onLogin={() => {}} onSwitchToAgent={() => {}} onForgotPassword={() => {}} title="اختبار" message="اختبار" />}
+  </main></Boundary></ToastProvider></LanguageProvider>;
+}
+createRoot(document.getElementById('root')).render(<Fixture />);
+

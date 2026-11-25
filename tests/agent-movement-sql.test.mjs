@@ -93,6 +93,18 @@ test('database corrections are atomic, reject stale data and enforce permissions
       await assert.rejects(db.exec(query), /قيد عكسي/);
     }
     assert.equal((await db.query('SELECT count(*) AS count FROM wallet_transactions')).rows[0].count, 2);
+    await db.exec(readFileSync(new URL('../supabase/migrations/20261125074134_atomic_agent_loss.sql', import.meta.url), 'utf8'));
+    await db.query('SELECT public.record_agent_loss($1,$2,$3,$4,$5)', [agentId, -200, 10, 'خصم', false]);
+    assert.equal(Number((await snapshot()).balance), -190);
+    await db.query('SELECT public.record_agent_loss($1,$2,$3,$4,$5)', [agentId, -190, 20, 'ترجيع', true]);
+    assert.equal(Number((await snapshot()).balance), -190);
+    const refundEntries = (await db.query('SELECT amount FROM wallet_transactions ORDER BY id DESC LIMIT 2')).rows;
+    assert.equal(refundEntries.reduce((sum, row) => sum + Number(row.amount), 0), 0);
+    await assert.rejects(db.query('SELECT public.record_agent_loss($1,$2,$3,$4,$5)', [agentId, -200, 10, '', false]), /تغيّر/);
+    await db.exec("CREATE FUNCTION fail_audit() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN RAISE EXCEPTION 'audit failure'; END$$; CREATE TRIGGER fail_audit BEFORE INSERT ON audit_logs FOR EACH ROW EXECUTE FUNCTION fail_audit();");
+    const countBefore = (await db.query('SELECT count(*) AS n FROM wallet_transactions')).rows[0].n;
+    await assert.rejects(db.query('SELECT public.record_agent_loss($1,$2,$3,$4,$5)', [agentId, -190, 10, '', true]), /audit failure/);
+    assert.equal((await db.query('SELECT count(*) AS n FROM wallet_transactions')).rows[0].n, countBefore);
   } finally {
     await db.close();
   }
