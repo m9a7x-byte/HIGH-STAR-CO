@@ -1,7 +1,34 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { formatDate, formatTime, formatDateTime } from '../src/lib/dateUtils.ts';
-import { planAgentMovement, getMovementMode, getMovementNote, canCorrectMovement } from '../src/lib/agentMovements.ts';
+import { planAgentMovement, getMovementMode, getMovementNote, canCorrectMovement, summarizeAgentLedger, statementWithBalances, getMovementOrderIds } from '../src/lib/agentMovements.ts';
+
+test('cancelled purchase reversal reduces purchases and never becomes a customer payment', () => {
+  const entries = [tx(6200, 'تسديد موحد $6,200'), tx(-11376.96, 'شراء طلبية #34', { id: 92 }), tx(-44219.58, 'شراء طلبية #21', { id: 93 }), tx(44219.58, 'عكس', { id: 100, paymentDetails: { reversal: { kind: 'order_charge_reversal', transactionId: 93, orderId: 21 } } })];
+  assert.deepEqual(summarizeAgentLedger(entries, -5176.96), { debt: 11376.96, paid: 6200, net: -5176.96, debtCount: 1, paidCount: 1, totalCount: 4 });
+  assert.equal(canCorrectMovement(entries[3]), false);
+  assert.equal(summarizeAgentLedger([...entries.slice(0, 3), { ...entries[3], amount: 100 }], -49296.54).debt, 55596.54);
+});
+
+test('positive price corrections reduce purchase totals, statement uses cents and preserves opening balance', () => {
+  const entries = [tx('-100', 'شراء طلبية #34', { id: 1 }), tx('20.10', 'تعديل قيمة الطلب #34', { id: 2 }), tx('10.01', 'إيداع', { id: 3 })];
+  assert.equal(summarizeAgentLedger(entries, -64.89).debt, 79.9);
+  assert.deepEqual(statementWithBalances(entries, -64.89).map(t => t.balanceAfter), [-64.89, -74.9, -95]);
+});
+
+test('order relationships use exact invoice ids and ignore arbitrary numbers in notes', () => {
+  assert.deepEqual(getMovementOrderIds(tx(-10, 'شراء طلبية #21')), ['21']);
+  assert.deepEqual(getMovementOrderIds(tx(10, 'مراجعة #21')), []);
+  assert.deepEqual(getMovementOrderIds(tx(10, 'تسديد موحد $10 - توزعت على 2 فاتورة: #21 ($5)، #34 ($5)')), ['21', '34']);
+});
+
+test('new invoice receipt targets its invoice atomically without repricing it', () => {
+  const result = plan({ mode: 'invoice', orderId: 2, amount: 30, orders: [order(1, 100), order(2, 100)] });
+  assert.equal(result.orderChanges.length, 1);
+  assert.equal(result.orderChanges[0].id, 2);
+  assert.equal(result.orderChanges[0].paid_amount, 30);
+  assert.throws(() => plan({ mode: 'invoice', orderId: 3, amount: 30, orders: [order(1, 100)] }));
+});
 
 const now = '2026-11-23T10:00:00.000Z';
 const user = { id: 'admin', fullName: 'محاسب' };
