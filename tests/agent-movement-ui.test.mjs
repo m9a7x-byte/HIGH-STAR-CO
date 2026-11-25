@@ -129,3 +129,24 @@ test('agent editing permission alone cannot change order production status', () 
   const app = harness({ orders: [testOrder('COMPLETED')], canChangeOrderStatus: false });
   assert.equal(control(orderTab(app), 'تغيير حالة الطلب'), undefined);
 });
+
+test('statement opens the exact order of this agent, never a partial id or another agent order', () => {
+  const app = harness({ orders: [{ ...testOrder('WAITING'), id: 2 }, { ...testOrder('WAITING'), id: 21, agentId: 'other' }, { ...testOrder('WAITING'), id: 21 }] });
+  const viewed = []; app.props.onViewOrder = order => viewed.push(order.id);
+  app.props.agentTransactions = [{ id: 93, agentId: 'agent', amount: -100, description: 'شراء طلبية #21', createdAt: '2026-11-24T08:00:00Z' }];
+  control(app.render(), 'عرض الطلب').props.onClick();
+  assert.deepEqual(viewed, [21]);
+  app.props.agentTransactions[0].description = 'شراء طلبية #999';
+  assert.equal(control(app.render(), 'عرض الطلب').props.disabled, true);
+});
+
+test('invoice receipt saves through the atomic movement service with the exact order id', async () => {
+  const app = harness({ orders: [testOrder('COMPLETED')] });
+  control(orderTab(app), 'إضافة دفعة').props.onClick();
+  let tree = app.render();
+  nodes(tree).find(node => node.type === 'input' && node.props.type === 'number').props.onChange({ target: { value: '30' } });
+  tree = app.render();
+  await nodes(tree).find(node => node.type === 'form').props.onSubmit({ preventDefault() {} });
+  assert.deepEqual(app.calls[0], ['admin', 'agent', { mode: 'invoice', orderId: 34, amount: 30 }]);
+  assert.deepEqual(app.errors, []);
+});

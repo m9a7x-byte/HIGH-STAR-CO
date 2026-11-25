@@ -1,10 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { formatDate, formatTime, formatDateTime } from '../src/lib/dateUtils.ts';
-import { planAgentMovement, getMovementMode, getMovementNote, canCorrectMovement, summarizeAgentLedger, statementWithBalances, getMovementOrderIds } from '../src/lib/agentMovements.ts';
+import { planAgentMovement, getMovementMode, getMovementNote, canCorrectMovement, summarizeAgentLedger, statementWithBalances, getMovementOrderIds, movementOwnsPayment, ledgerFinancialTotals, isAgentCashMovement, isRecognizedOrder } from '../src/lib/agentMovements.ts';
+
+test('sales, safe and reports distinguish cash from order reversals and only recognize completed sales', () => {
+  const receipt = tx(6200, 'تسديد', { id: 79 });
+  const purchase = tx(-44219.58, 'شراء طلبية #21', { id: 93, type: 'PAYMENT' });
+  const correction = tx(44219.58, 'عكس', { id: 100, type: 'ADJUSTMENT', paymentDetails: { reversal: { kind: 'order_charge_reversal', transactionId: 93, orderId: 21 } } });
+  assert.deepEqual(ledgerFinancialTotals([receipt, purchase, correction, tx(-11376.96, 'شراء طلبية #34', { type: 'PAYMENT' })]), { received: 6200, billed: 11376.96, net: -5176.96 });
+  assert.equal(isAgentCashMovement(correction), false);
+  assert.equal(isAgentCashMovement({ ...correction, type: 'DEPOSIT' }), false);
+  assert.equal(isAgentCashMovement(receipt), true);
+  for (const productionStatus of ['WAITING', 'IN_PROGRESS', 'PENDING_TRANSFER']) assert.equal(isRecognizedOrder({ productionStatus }), false);
+  assert.equal(isRecognizedOrder({ productionStatus: 'COMPLETED', paymentStatus: 'PENDING' }), true);
+  assert.equal(isRecognizedOrder({ productionStatus: 'COMPLETED', paymentStatus: 'CANCELLED' }), false);
+});
 
 test('cancelled purchase reversal reduces purchases and never becomes a customer payment', () => {
-  const entries = [tx(6200, 'تسديد موحد $6,200'), tx(-11376.96, 'شراء طلبية #34', { id: 92 }), tx(-44219.58, 'شراء طلبية #21', { id: 93 }), tx(44219.58, 'عكس', { id: 100, paymentDetails: { reversal: { kind: 'order_charge_reversal', transactionId: 93, orderId: 21 } } })];
+  const entries = [tx(6200, 'تسديد موحد $6,200', { id: 79 }), tx(-11376.96, 'شراء طلبية #34', { id: 92 }), tx(-44219.58, 'شراء طلبية #21', { id: 93 }), tx(44219.58, 'عكس', { id: 100, paymentDetails: { reversal: { kind: 'order_charge_reversal', transactionId: 93, orderId: 21 } } })];
   assert.deepEqual(summarizeAgentLedger(entries, -5176.96), { debt: 11376.96, paid: 6200, net: -5176.96, debtCount: 1, paidCount: 1, totalCount: 4 });
   assert.equal(canCorrectMovement(entries[3]), false);
   assert.equal(summarizeAgentLedger([...entries.slice(0, 3), { ...entries[3], amount: 100 }], -49296.54).debt, 55596.54);
@@ -74,6 +87,9 @@ test('decreasing a legacy distributed payment reverses its allocations before re
   assert.deepEqual(result.orderChanges.map(o => o.paid_amount), [80, 20]);
   assert.equal(result.orderChanges[1].payment_history[0].id, 23);
   assert.equal(getMovementNote(transaction), 'تصحيح');
+  const originalOrders = [order(1, 100, 100, [payment(11, 100)]), order(2, 100, 70, [payment(22, 50), payment(23, 20)])];
+  assert.equal(movementOwnsPayment(transaction, originalOrders[1], 22, originalOrders), true);
+  assert.equal(movementOwnsPayment(transaction, originalOrders[1], 23, originalOrders), false);
 });
 
 test('deleting a structured payment removes its invoice portions and advance credit exactly once', () => {
