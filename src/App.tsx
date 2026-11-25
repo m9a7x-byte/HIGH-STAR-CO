@@ -295,7 +295,7 @@ export const App = () => {
       </Layout>
       <OfflineOverlay />
       <UpdateNotification />
-      <ToastContainer />
+      <ToastContainer offsetMobileNavigation={user.role === UserRole.AGENT && !isProfileView} />
     </>
   );
 };

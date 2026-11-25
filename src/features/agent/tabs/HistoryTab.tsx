@@ -137,16 +137,18 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ myOrders, onViewOrder, o
     };
 
     return (
-        <div className="space-y-6 animate-fade-in">
+        <div className="space-y-3 lg:space-y-6 animate-fade-in">
 
             {/* Unified Container: Filters + Stats */}
-            <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+            <div className="bg-white p-3 lg:p-6 rounded-2xl lg:rounded-3xl shadow-sm border border-gray-100">
 
                 {/* Header: Title + Filters */}
-                <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center bg-gray-50 p-5 rounded-2xl border border-gray-100 mb-6">
+                <div className="flex flex-col lg:flex-row gap-3 lg:gap-4 justify-between items-start lg:items-center lg:bg-gray-50 lg:p-5 lg:rounded-2xl lg:border lg:border-gray-100 lg:mb-6">
                     <div className="flex items-center gap-3">
-                        <ListOrdered size={28} className="text-[#0e3c63]" />
-                        <h2 className="text-2xl font-black text-gray-800 whitespace-nowrap">{t('agent.order_history')}</h2>
+                        <ListOrdered size={28} className="hidden lg:block text-[#0e3c63]" />
+                        <h2 className="text-lg lg:text-2xl font-black text-gray-800">
+                            <span className="lg:hidden">{t('agent_dashboard.mobile_orders')}</span><span className="hidden lg:inline">{t('agent.order_history')}</span>
+                        </h2>
                         <span className="bg-[#0e3c63] text-white text-xs font-bold px-2.5 py-1 rounded-full">{filteredOrders.length}</span>
                         {isFiltered && (
                             <button
@@ -159,26 +161,56 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ myOrders, onViewOrder, o
                         )}
                     </div>
 
-                    <div className="flex flex-col lg:flex-row items-center gap-4 w-full lg:w-auto">
+                    <div className="flex flex-col lg:flex-row items-center gap-2 lg:gap-4 w-full lg:w-auto">
                         <div className="relative flex-1 w-full lg:w-40 group">
                             <input
-                                className="w-full pl-4 pr-10 h-[50px] bg-white border border-gray-200 rounded-[1.5rem] outline-none text-sm transition-all focus:border-[#0e3c63] focus:ring-4 focus:ring-[#0e3c63]/5 shadow-sm group-hover:border-gray-300 font-medium"
+                                className="w-full pe-4 ps-10 h-11 lg:h-[50px] bg-white border border-gray-200 rounded-xl lg:rounded-[1.5rem] outline-none text-sm transition-all focus:border-[#0e3c63] focus:ring-4 focus:ring-[#0e3c63]/5 shadow-sm group-hover:border-gray-300 font-medium"
+                                aria-label={t('agent.by_order_number')}
                                 placeholder={t('agent.by_order_number')}
                                 value={historySearch}
                                 onChange={(e) => { setHistorySearch(e.target.value); setHistoryPage(0); }}
                             />
-                            <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#0e3c63] transition-colors" size={20} />
+                            <Search className="absolute start-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#0e3c63] transition-colors" size={20} aria-hidden="true" />
                         </div>
 
-                        <MonthYearPicker
-                            selectedDate={historyDate}
-                            onChange={(date) => { setHistoryDate(date); setHistoryPage(0); }}
-                        />
+                        <div className="w-full grid grid-cols-2 gap-2 lg:hidden">
+                            <label className="min-w-0 text-xs font-bold text-slate-600">
+                                {t('agent.status_col')}
+                                <select value={statusFilterType && selectedStatus ? `${statusFilterType}:${selectedStatus}` : ''} onChange={event => {
+                                    const [type, status] = event.target.value.split(':');
+                                    setStatusFilterType(type === 'PAYMENT' || type === 'PRODUCTION' ? type : null);
+                                    setSelectedStatus(status || null);
+                                    setHistoryPage(0);
+                                }} className="mt-1 block h-11 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-2 text-sm text-slate-800">
+                                    <option value="">{t('common.all')}</option>
+                                    <optgroup label={t('agent_dashboard.mobile_production_status')}>
+                                        {Object.entries(ProductionStatusLabels).map(([status, label]) => <option key={status} value={`PRODUCTION:${status}`}>{label}</option>)}
+                                    </optgroup>
+                                    <optgroup label={t('agent_dashboard.mobile_payment_status')}>
+                                        {Object.entries(PaymentStatusLabels).map(([status, label]) => <option key={status} value={`PAYMENT:${status}`}>{label}</option>)}
+                                    </optgroup>
+                                </select>
+                            </label>
+                            <label className="min-w-0 text-xs font-bold text-slate-600">
+                                {t('agent.date')}
+                                <span className="relative mt-1 block">
+                                    <input type="month" dir="ltr" value={historyDate ? `${historyDate.getFullYear()}-${String(historyDate.getMonth() + 1).padStart(2, '0')}` : ''} onChange={event => {
+                                        const [year, month] = event.target.value.split('-').map(Number);
+                                        setHistoryDate(year && month ? new Date(year, month - 1, 1) : null);
+                                        setHistoryPage(0);
+                                    }} className={`block h-11 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-2 text-sm ${historyDate ? 'text-slate-800' : 'text-transparent focus:text-slate-800'} peer`} />
+                                    {!historyDate && <span aria-hidden="true" className="pointer-events-none absolute inset-y-px end-8 start-2 flex items-center rounded-lg bg-white text-sm font-medium text-slate-700 peer-focus:hidden">{t('common.all')}</span>}
+                                </span>
+                            </label>
+                        </div>
+                        <div className="hidden lg:block">
+                            <MonthYearPicker selectedDate={historyDate} onChange={(date) => { setHistoryDate(date); setHistoryPage(0); }} />
+                        </div>
                     </div>
                 </div>
 
                 {/* Stats Cards (Now Inside the Filter Container) */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 bg-gray-50 p-4 rounded-2xl border border-gray-200">
+                <div className="hidden lg:grid lg:grid-cols-2 gap-4 bg-gray-50 p-4 rounded-2xl border border-gray-200">
                     {/* Production Status */}
                     <div>
                         <h4 className="font-bold text-gray-700 mb-4 flex items-center gap-2 text-sm border-b border-gray-200 pb-2">
@@ -245,7 +277,49 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ myOrders, onViewOrder, o
                 </div>
             </div>
 
-            {/* 2. Order List */}
+            <div className="lg:hidden overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                <table aria-label={t('agent_dashboard.mobile_orders')} className="w-full table-fixed text-start text-sm [&_td]:align-top">
+                    <thead className="bg-slate-50 text-xs text-slate-600">
+                        <tr>
+                            <th scope="col" className="w-[27%] px-2 py-3 text-start">{t('agent.order_col')}</th>
+                            <th scope="col" className="w-[30%] px-1 py-3 text-start">{t('agent.status_col')}</th>
+                            <th scope="col" className="w-[26%] px-1 py-3 text-end">{t('agent.col_amount')}</th>
+                            <th scope="col" className="px-1 py-3 text-center">{t('common.edit')}</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 border-t border-slate-100">
+                        {(isLoading || currentHistory.length === 0) && <tr><td colSpan={4} className="p-6 text-center text-slate-500" role="status">{isLoading ? t('common.loading') : t('batch3.txt_7mnhul_7062')}</td></tr>}
+                        {!isLoading && currentHistory.map(order => (
+                            <tr key={order.id}>
+                                <td className="px-2 py-2.5 text-start">
+                                    <button type="button" onClick={() => onViewOrder(order)} aria-label={`${t('agent.view_order')} #${order.id}`} className="inline-flex min-h-7 items-center gap-1 font-black text-[#0e3c63] underline decoration-slate-300 underline-offset-4">
+                                        <bdi>#{order.id}</bdi>{order.hasSpecialRequest && <Sparkles size={12} className="text-amber-600" aria-hidden="true" />}
+                                    </button>
+                                    <p className="text-xs text-slate-600"><bdi>{formatDate(order.createdAt)}</bdi></p>
+                                </td>
+                                <td className="px-1 py-3 text-start">
+                                    <span className="block font-bold leading-snug text-slate-800">{ProductionStatusLabels[order.productionStatus]}</span>
+                                    <span className={`mt-1 block text-xs leading-snug ${order.paymentStatus === PaymentStatus.PAID ? 'text-emerald-700' : 'text-slate-600'}`}>{PaymentStatusLabels[order.paymentStatus]}</span>
+                                    {Boolean(order.estimatedDays) && <span className="mt-1 block text-xs text-slate-600">{order.estimatedDays} {t('agent.days')}</span>}
+                                </td>
+                                <td className="px-1 py-3 break-words text-end text-xs font-bold tabular-nums text-slate-900">
+                                    <bdi dir="ltr">${order.totalAmount.toLocaleString()}</bdi>
+                                </td>
+                                <td className="px-1 py-2 text-center">
+                                    {canAgentEditOrder(order) && (
+                                        <button type="button" onClick={() => onEditOrder(order)} aria-label={`${t('agent_dashboard.mobile_edit_order')} #${order.id}`} className="inline-flex h-11 w-11 max-w-full items-center justify-center rounded-lg focus-visible:outline-2 focus-visible:outline-amber-700">
+                                            <span className="inline-flex size-7 items-center justify-center rounded-md bg-amber-50 text-amber-800"><Edit size={14} aria-hidden="true" /></span>
+                                        </button>
+                                    )}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+
+            <div className="hidden lg:block space-y-6">
+            {/* Desktop order list */}
             {isLoading ? (
                 // Skeleton Loading
                 <div className="space-y-4">
@@ -270,7 +344,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ myOrders, onViewOrder, o
                 currentHistory.map(o => (
                     <Card key={o.id} className="p-4 md:p-6 hover:border-blue-300 transition-colors">
                         {/* Desktop Layout */}
-                        <div className="hidden md:flex justify-between items-center gap-6">
+                        <div className="flex justify-between items-center gap-6">
                             <div className="flex items-center gap-6">
                                 <div className="relative">
                                     <div className="bg-blue-50 w-16 h-16 rounded-2xl flex items-center justify-center text-[#0e3c63] font-bold font-mono text-lg border border-blue-100">#{o.id}</div>
@@ -316,49 +390,11 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ myOrders, onViewOrder, o
                             </div>
                         </div>
 
-                        {/* Mobile Layout - Compact Single Row Style */}
-                        <div className="flex md:hidden items-center justify-between gap-3">
-                            {/* Order ID + Special Badge */}
-                            <div className="relative shrink-0">
-                                <div className="bg-blue-50 w-12 h-12 rounded-xl flex items-center justify-center text-[#0e3c63] font-bold font-mono text-sm border border-blue-100">#{o.id}</div>
-                                {o.hasSpecialRequest && (
-                                    <div className="absolute -top-1 -right-1 bg-amber-500 text-white p-1 rounded-full shadow-sm border-2 border-white z-10">
-                                        <Sparkles size={10} className="fill-current" />
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Date + Amount + Badges in a compact format */}
-                            <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-1">
-                                    <span className="text-xs text-gray-500 font-mono">{formatDate(o.createdAt)}</span>
-                                    <span className="font-bold text-lg text-gray-900">${o.totalAmount.toLocaleString()}</span>
-                                </div>
-                                <div className="flex items-center gap-2 flex-wrap">
-                                    <Badge color={getPaymentStatusColor(o.paymentStatus)} className="text-[10px] px-2 py-0.5">{PaymentStatusLabels[o.paymentStatus]}</Badge>
-                                    <Badge color={o.productionStatus === ProductionStatus.COMPLETED ? 'blue' : 'gray'} className="text-[10px] px-2 py-0.5">{ProductionStatusLabels[o.productionStatus]}</Badge>
-                                    {o.estimatedDays && (
-                                        <span className="text-[10px] text-gray-400 flex items-center gap-0.5">
-                                            <Clock size={10} />{o.estimatedDays} {t('agent.days')}</span>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Action Buttons */}
-                            <div className="flex items-center gap-1 shrink-0">
-                                {canAgentEditOrder(o) && (
-                                    <button onClick={() => onEditOrder(o)} className="p-2 text-amber-600 hover:bg-amber-50 rounded-xl">
-                                        <Edit size={19} />
-                                    </button>
-                                )}
-                                <button onClick={() => onViewOrder(o)} className="p-2 text-[#0e3c63] hover:bg-blue-50 rounded-xl">
-                                    <Eye size={20} />
-                                </button>
-                            </div>
-                        </div>
                     </Card>
                 ))
             )}
+
+            </div>
 
             {/* 3. Pagination */}
             <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">

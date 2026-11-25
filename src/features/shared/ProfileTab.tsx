@@ -1,7 +1,7 @@
 import i18n from 'i18next';
 const t = i18n.t.bind(i18n);
-import React, { useState } from 'react';
-import { Save, User, Mail, Lock, Camera, Phone, Key, Shield, AlertTriangle, Edit3, X, Fingerprint, Globe, ShieldCheck, Bell, BellOff, Smartphone } from 'lucide-react';
+import React, { useId, useState } from 'react';
+import { Save, User, Mail, Lock, Key, Shield, AlertTriangle, Edit3, X, Fingerprint, Globe, ShieldCheck, Bell, BellOff, Smartphone, ChevronRight } from 'lucide-react';
 import { AvatarUploader } from '../../components/profile/AvatarUploader';
 import { supabase } from '../../lib/supabase';
 import { Card, Button, Input } from '../../components/ui';
@@ -91,6 +91,10 @@ interface ProfileTabProps {
 
 export const ProfileTab: React.FC<ProfileTabProps> = ({ onBack }) => {
     const { user, updateUser } = useAuth();
+    const fieldId = useId();
+    const isAgent = user?.role === 'AGENT';
+    const formCardPadding = isAgent ? 'p-4 lg:p-8' : 'p-8';
+    const sectionSpacing = isAgent ? 'space-y-4 lg:space-y-8' : 'space-y-8';
     const { toast: _toast } = useToast(); // Prevent lint usage
     const toast = useToast();
     const [isLoading, setIsLoading] = useState(false);
@@ -292,38 +296,43 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onBack }) => {
     };
 
     return (
-        <div className="max-w-4xl mx-auto p-6 space-y-8 animate-fade-in" dir="rtl">
-            <div className="flex items-center justify-between mb-8">
+        <div className={`max-w-4xl mx-auto animate-fade-in ${sectionSpacing} ${isAgent ? 'lg:p-6' : 'p-6'}`} dir="rtl">
+            <div className={`flex items-center justify-between gap-2 ${isAgent ? 'lg:mb-8' : 'mb-8'}`}>
                 <div>
-                    <h1 className="text-3xl font-black text-gray-800 mb-2">{t('batch4.k780')}</h1>
-                    <p className="text-gray-500 font-bold">{t('batch4.k781')}</p>
+                    <h1 className={`font-black text-gray-800 ${isAgent ? 'text-xl lg:text-3xl lg:mb-2' : 'text-3xl mb-2'}`}>
+                        {isAgent ? <><span className="lg:hidden">{t('common.edit_account')}</span><span className="hidden lg:inline">{t('batch4.k780')}</span></> : t('batch4.k780')}
+                    </h1>
+                    <p className={`text-gray-500 font-bold ${isAgent ? 'hidden lg:block' : ''}`}>{t('batch4.k781')}</p>
                 </div>
                 {onBack && (
-                    <button onClick={onBack} className="text-gray-400 hover:text-gray-600 font-bold transition-colors">{t('profile_tab.close')}</button>
+                    <button type="button" onClick={onBack} className={`font-bold transition-colors ${isAgent ? 'inline-flex min-h-11 shrink-0 items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 text-sm text-[#0e3c63] lg:min-h-0 lg:border-0 lg:bg-transparent lg:p-0 lg:text-base lg:text-gray-400' : 'text-gray-400 hover:text-gray-600'}`}>
+                        {isAgent ? <><ChevronRight size={16} className="lg:hidden" aria-hidden="true" /><span className="lg:hidden">{t('common.back')}</span><span className="hidden lg:inline">{t('profile_tab.close')}</span></> : t('profile_tab.close')}
+                    </button>
                 )}
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className={`grid grid-cols-1 lg:grid-cols-3 ${isAgent ? 'gap-4 lg:gap-8' : 'gap-8'}`}>
 
                 {/* Left Side: Avatar & Preview */}
-                <div className="lg:col-span-1 space-y-6">
-                    <Card className="p-8 text-center relative overflow-hidden">
-                        <div className="absolute top-0 left-0 w-full h-24 bg-gradient-to-br from-[#0e3c63] to-[#1a4d7a]"></div>
-                        <div className="relative z-10 pt-4">
+                <div className={`min-w-0 lg:col-span-1 ${isAgent ? 'lg:space-y-6' : 'space-y-6'}`}>
+                    <Card className={`text-center relative overflow-hidden ${formCardPadding}`}>
+                        <div className={`absolute top-0 left-0 w-full bg-gradient-to-br from-[#0e3c63] to-[#1a4d7a] ${isAgent ? 'h-14 lg:h-24' : 'h-24'}`}></div>
+                        <div className={`relative z-10 ${isAgent ? 'lg:pt-4' : 'pt-4'}`}>
 
                             <AvatarUploader
                                 userName={user?.fullName || 'User'}
                                 currentAvatarPath={user?.avatar_path}
                                 currentAvatarUrl={user?.imageUrl}
                                 onUploadSuccess={handleAvatarUploadSuccess}
+                                compactOnMobile={isAgent}
                             />
 
-                            <h3 className="mt-6 font-black text-xl text-gray-800">{formData.fullName}</h3>
-                            <p className="text-gray-400 text-xs font-mono mt-1">{formData.email}</p>
+                            <h3 className={`font-black text-xl text-gray-800 ${isAgent ? 'mt-2 lg:mt-6' : 'mt-6'}`}>{formData.fullName}</h3>
+                            <p className="break-words text-gray-400 text-xs font-mono mt-1"><bdi>{formData.email}</bdi></p>
                         </div>
 
                         {/* Status Badges */}
-                        <div className="mt-8 pt-6 border-t border-gray-50 text-right space-y-4">
+                        <div className={`mt-8 pt-6 border-t border-gray-50 text-right space-y-4 ${isAgent ? 'hidden lg:block' : ''}`}>
                             <div className="flex items-center gap-3 text-gray-500">
                                 <Fingerprint size={16} className="text-[#0e3c63] opacity-40" />
                                 <div className="flex flex-col">
@@ -343,7 +352,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onBack }) => {
                         </div>
                     </Card>
 
-                    <div className="bg-blue-50 p-6 rounded-[2rem] border border-blue-100 flex gap-4">
+                    <div className={`bg-blue-50 p-6 rounded-[2rem] border border-blue-100 gap-4 ${isAgent ? 'hidden lg:flex' : 'flex'}`}>
                         <ShieldCheck size={24} className="text-blue-500 shrink-0 mt-1" />
                         <p className="text-[11px] text-blue-800 font-bold leading-relaxed">
                             {t('profile_tab.email_warning')}
@@ -352,19 +361,20 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onBack }) => {
                 </div>
 
                 {/* Right Side: Form */}
-                <div className="lg:col-span-2 space-y-8">
-                    <form onSubmit={handleSubmit} className="space-y-8">
+                <div className={`min-w-0 lg:col-span-2 ${sectionSpacing}`}>
+                    <form onSubmit={handleSubmit} className={sectionSpacing}>
                         {/* Public Info Card */}
-                        <Card className="p-8 border-t-4 border-[#0e3c63] shadow-lg overflow-visible">
-                            <h3 className="text-xl font-black text-gray-800 mb-6 flex items-center gap-2">
+                        <Card className={`border-t-4 border-[#0e3c63] shadow-lg overflow-visible ${formCardPadding}`}>
+                            <h3 className={`text-xl font-black text-gray-800 flex items-center gap-2 ${isAgent ? 'mb-4 lg:mb-6' : 'mb-6'}`}>
                                 <User className="text-[#0e3c63]" size={24} /> {t("profile_tab.personal_info")}
                             </h3>
 
-                            <div className="grid grid-cols-1 gap-6">
+                            <div className={`grid grid-cols-1 ${isAgent ? 'gap-4 lg:gap-6' : 'gap-6'}`}>
                                 <div className="space-y-2">
-                                    <label className="block text-xs font-black text-gray-500 mr-1">{t('batch4.k563')}</label>
+                                    <label htmlFor={`${fieldId}-name`} className="block text-xs font-black text-gray-500 mr-1">{t('batch4.k563')}</label>
                                     <div className="relative">
                                         <input
+                                            id={`${fieldId}-name`}
                                             type="text"
                                             value={formData.fullName}
                                             onChange={e => setFormData({ ...formData, fullName: e.target.value })}
@@ -393,8 +403,9 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onBack }) => {
                                             />
                                         </div>
                                         <div className="space-y-2">
-                                            <label className="block text-xs font-black text-gray-500 mr-1">{t('batch4.k284')}</label>
+                                            <label htmlFor={`${fieldId}-address`} className="block text-xs font-black text-gray-500 mr-1">{t('batch4.k284')}</label>
                                             <input
+                                                id={`${fieldId}-address`}
                                                 type="text"
                                                 value={formData.address}
                                                 onChange={e => setFormData(prev => ({ ...prev, address: e.target.value }))}
@@ -407,18 +418,24 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onBack }) => {
                             </div>
                         </Card>
 
+                        {isAgent && !isEditingEmail && !isEditingPassword && (
+                            <Button type="submit" disabled={isLoading} className="w-full h-12 lg:hidden">
+                                <Save size={19} aria-hidden="true" /> {t(isLoading ? 'batch4.k787' : 'batch4.k788')}
+                            </Button>
+                        )}
+
                         {/* Security Card */}
-                        <Card className="p-8 border-t-4 border-amber-500 shadow-lg relative overflow-hidden">
+                        <Card className={`border-t-4 border-amber-500 shadow-lg relative overflow-hidden ${formCardPadding}`}>
                             <div className="absolute top-0 left-0 w-32 h-32 bg-amber-50 rounded-full blur-[50px] -ml-16 -mt-16 opacity-50"></div>
 
                             <h3 className="text-xl font-black text-gray-800 mb-6 flex items-center gap-2 relative z-10">
                                 <Shield className="text-amber-500" size={24} /> {t("profile_tab.account_security")}
                             </h3>
 
-                            <div className="space-y-8 relative z-10">
+                            <div className={`relative z-10 ${sectionSpacing}`}>
                                 {/* Email */}
-                                <div className="bg-gray-50/50 p-6 rounded-3xl border border-gray-100">
-                                    <div className="flex items-start justify-between mb-4">
+                                <div className={`bg-gray-50/50 rounded-3xl border border-gray-100 ${isAgent ? 'p-3 lg:p-6' : 'p-6'}`}>
+                                    <div className="flex items-start justify-between gap-2 mb-4">
                                         <div>
                                             <h4 className="font-bold text-gray-800 text-lg flex items-center gap-2">
                                                 <Mail size={18} className="text-gray-400" /> {t("profile_tab.email")}
@@ -433,7 +450,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onBack }) => {
                                                 setIsEditingEmail(!isEditingEmail);
                                                 if (isEditingEmail) setFormData(prev => ({ ...prev, email: user?.email || '' }));
                                             }}
-                                            className={`rounded-xl px-4 h-10 font-bold border-2 ${isEditingEmail ? 'bg-red-50 text-red-600 border-red-100' : 'bg-white text-gray-600 border-gray-200'}`}
+                                            className={`shrink-0 rounded-xl px-4 h-10 font-bold border-2 ${isEditingEmail ? 'bg-red-50 text-red-600 border-red-100' : 'bg-white text-gray-600 border-gray-200'}`}
                                         >
                                             {isEditingEmail ? <><X size={16} />{t('batch4.k156')}</> : <><Edit3 size={16} />{t('batch4.k138')}</>}
                                         </Button>
@@ -452,7 +469,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onBack }) => {
                                                 }`}
                                         />
                                         {isEditingEmail && (
-                                            <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center gap-2 text-xs font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded-lg">
+                                            <div className={`flex w-fit items-center gap-2 text-xs font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded-lg ${isAgent ? 'mt-2 lg:mt-0 lg:absolute lg:left-4 lg:top-1/2 lg:-translate-y-1/2' : 'absolute left-4 top-1/2 -translate-y-1/2'}`}>
                                                 <AlertTriangle size={12} /> {t("profile_tab.requires_confirmation")}
                                             </div>
                                         )}
@@ -492,8 +509,8 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onBack }) => {
                                 </div>
 
                                 {/* Password */}
-                                <div className="bg-gray-50/50 p-6 rounded-3xl border border-gray-100">
-                                    <div className="flex items-start justify-between mb-4">
+                                <div className={`bg-gray-50/50 rounded-3xl border border-gray-100 ${isAgent ? 'p-3 lg:p-6' : 'p-6'}`}>
+                                    <div className="flex items-start justify-between gap-2 mb-4">
                                         <div>
                                             <h4 className="font-bold text-gray-800 text-lg flex items-center gap-2">
                                                 <Key size={18} className="text-gray-400" /> {t("profile_tab.password")}
@@ -508,7 +525,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onBack }) => {
                                                 setIsEditingPassword(!isEditingPassword);
                                                 if (isEditingPassword) setFormData(prev => ({ ...prev, currentPassword: '', newPassword: '', confirmPassword: '' }));
                                             }}
-                                            className={`rounded-xl px-4 h-10 font-bold border-2 ${isEditingPassword ? 'bg-red-50 text-red-600 border-red-100' : 'bg-white text-gray-600 border-gray-200'}`}
+                                            className={`shrink-0 rounded-xl px-4 h-10 font-bold border-2 ${isEditingPassword ? 'bg-red-50 text-red-600 border-red-100' : 'bg-white text-gray-600 border-gray-200'}`}
                                         >
                                             {isEditingPassword ? <><X size={16} />{t('batch4.k156')}</> : <><Edit3 size={16} />{t('batch4.k138')}</>}
                                         </Button>
@@ -567,7 +584,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onBack }) => {
                             </div>
                         </Card>
 
-                        <Card className="p-8 border-t-4 border-emerald-500 shadow-lg relative overflow-hidden">
+                        <Card className={`border-t-4 border-emerald-500 shadow-lg relative overflow-hidden ${formCardPadding}`}>
                             <div className="absolute top-0 left-0 w-32 h-32 bg-emerald-50 rounded-full blur-[50px] -ml-16 -mt-16 opacity-60"></div>
 
                             <div className="relative z-10 flex flex-col md:flex-row md:items-start justify-between gap-6">
@@ -638,7 +655,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onBack }) => {
                         <Button
                             type="submit"
                             disabled={isLoading}
-                            className="w-full h-16 bg-[#0e3c63] hover:bg-[#1a4d7a] text-white text-xl font-black rounded-2xl shadow-2xl transition-transform active:scale-[0.99] flex items-center justify-center gap-3"
+                            className={`w-full h-16 bg-[#0e3c63] hover:bg-[#1a4d7a] text-white text-xl font-black rounded-2xl shadow-2xl transition-transform active:scale-[0.99] items-center justify-center gap-3 ${isAgent && !isEditingEmail && !isEditingPassword ? 'hidden lg:flex' : 'flex'}`}
                         >
                             {isLoading ? (
                                 <>

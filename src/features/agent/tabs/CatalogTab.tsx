@@ -192,7 +192,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
     const allowSpecial = user?.agentDetails?.permissions.allowSpecialRequests ?? false;
 
     return (
-        <div className="space-y-8 animate-fade-in">
+        <div className="space-y-4 lg:space-y-8 animate-fade-in">
             {maintenanceMode ? (
                 <div className="bg-red-50 border-2 border-red-100 rounded-[2.5rem] p-12 text-center flex flex-col items-center justify-center min-h-[400px]">
                     <div className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center text-red-500 mb-6 shadow-inner">
@@ -230,7 +230,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
                         </div>
                     )}
 
-                    <ProductFamilySelector value={mainType} onChange={setMainType} />
+                    <ProductFamilySelector value={mainType} onChange={setMainType} compactOnMobile />
 
                     <div className="bg-white p-2 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col gap-4">
                         <div className="relative mx-4 mt-4">
@@ -277,7 +277,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
                         )}
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 pb-20">
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-8 lg:pb-20">
                         {/* Special Order Card - Repeater Support */}
                         {mainType === 'STYROFOAM' && !searchTerm && allowSpecial && (
                             <div
@@ -350,7 +350,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
                                         {isUnitProduct ? (
                                             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-2 flex items-center h-16 transition-all"><span className="text-gray-400 font-bold text-xs px-3">{isPiece ? 'عدد القطع' : isPaint ? 'سطلة' : t('batch3.txt_hoh391_5353')}</span><div className="w-px h-6 bg-gray-200"></div><input aria-label={isPiece ? `عدد قطع ${p.code}` : undefined} type="number" min="0" step={isPiece ? "1" : undefined} placeholder="0" className="w-full h-full text-center text-2xl font-black text-gray-800 bg-transparent outline-none placeholder:text-gray-200" value={inCart?.c || ''} onChange={(e) => { const count = Number(e.target.value); if (isPiece && !Number.isInteger(count)) return; setCart(prev => ({ ...prev, [p.id]: { ...prev[p.id], m: 0, c: Math.max(0, count) } })); }} /></div>
                                         ) : (
-                                            <div className="grid grid-cols-2 gap-1.5 h-full"><div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-2 flex flex-col justify-center items-center h-20 relative overflow-hidden"><input type="number" min="0" placeholder="0" className="w-full text-center text-xl font-black text-gray-800 bg-transparent outline-none placeholder:text-gray-200 relative z-10" value={inCart?.c || ''} onChange={(e) => setCart(prev => ({ ...prev, [p.id]: { ...prev[p.id], c: Number(e.target.value) } }))} /><span className="text-[10px] font-bold text-gray-400 mt-1 uppercase tracking-wide">{t('batch3.txt_zrhwww_5353')}</span><div className="absolute top-0 right-0 w-8 h-8 bg-blue-50 rounded-bl-full -mr-4 -mt-4 opacity-50"></div></div><div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-2 flex flex-col justify-center items-center h-20 transition-all"><input type="number" min="0" placeholder="0" className="w-full text-center text-xl font-black text-gray-800 bg-transparent outline-none placeholder:text-gray-200" value={inCart?.m || ''} onChange={(e) => setCart(prev => ({ ...prev, [p.id]: { ...prev[p.id], m: Number(e.target.value) } }))} /><span className="text-[10px] font-bold text-gray-400 mt-1 uppercase tracking-wide">{t('batch3.txt_pxkoh8_5353')}</span></div></div>
+                                            <div className="grid grid-cols-2 gap-1.5 h-full"><div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-2 flex flex-col justify-center items-center h-20 relative overflow-hidden"><input type="number" min="0" placeholder="0" className="w-full text-center text-xl font-black text-gray-800 bg-transparent outline-none placeholder:text-gray-200 relative z-10" aria-label={`${t('agent_dashboard.carton')} ${p.code}`} value={inCart?.c || ''} onChange={(e) => setCart(prev => ({ ...prev, [p.id]: { ...prev[p.id], c: Number(e.target.value) } }))} /><span className="text-[10px] font-bold text-gray-400 mt-1 uppercase tracking-wide">{t('batch3.txt_zrhwww_5353')}</span><div className="absolute top-0 right-0 w-8 h-8 bg-blue-50 rounded-bl-full -mr-4 -mt-4 opacity-50"></div></div><div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-2 flex flex-col justify-center items-center h-20 transition-all"><input type="number" min="0" placeholder="0" className="w-full text-center text-xl font-black text-gray-800 bg-transparent outline-none placeholder:text-gray-200" aria-label={`${t('common.meter')} ${p.code}`} value={inCart?.m || ''} onChange={(e) => setCart(prev => ({ ...prev, [p.id]: { ...prev[p.id], m: Number(e.target.value) } }))} /><span className="text-[10px] font-bold text-gray-400 mt-1 uppercase tracking-wide">{t('batch3.txt_pxkoh8_5353')}</span></div></div>
                                         )}
                                     </div>
                                     <div className="flex justify-between items-end border-t border-dashed border-gray-200 pt-4">

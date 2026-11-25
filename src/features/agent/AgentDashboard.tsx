@@ -1,11 +1,10 @@
 import { calculateLineTotal, calculateOrderTotals } from '../../lib/orderMoney';
-import { snapshotProductUnits } from '../../lib/productFamilies';
-import { getCatalogCartCounts } from '../../lib/productFamilies';
+import { getCatalogCartCounts, getProductUnit, snapshotProductUnits } from '../../lib/productFamilies';
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { MobileBottomNavigation, AgentNavItem } from './components/MobileBottomNavigation';
 import { useTranslation } from 'react-i18next';
-import { ShoppingCart, ListOrdered, FileText, Wallet, Lock, Snowflake, AlertCircle, Box, Layers, Sparkles, Info, Truck, X } from 'lucide-react';
+import { ShoppingCart, ListOrdered, FileText, Wallet, Lock, Snowflake, AlertCircle, Box, Layers, Sparkles, X, ChevronLeft, Edit3 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { db } from '../../lib/db';
@@ -22,6 +21,9 @@ import { HistoryTab } from './tabs/HistoryTab';
 import { QueueTab } from './tabs/QueueTab';
 import { FinanceTab } from './tabs/FinanceTab';
 import { usePresence } from '../../hooks/usePresence';
+import { ProfileTab } from '../shared/ProfileTab';
+
+const scrollToPageStart = () => requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'instant' }));
 
 type AgentCartEntry = {
     m: number;
@@ -46,7 +48,7 @@ export const AgentDashboard = () => {
     const [isOrderSubmitting, setIsOrderSubmitting] = useState(false);
     const orderSubmitBusy = useRef(false);
     const [mobileCartActive, setMobileCartActive] = useState(false);
-    const cartPanelRef = useRef<HTMLDivElement>(null);
+    const [editingAccount, setEditingAccount] = useState(false);
 
     // Internal Presence Tracking for Agent Tabs
     usePresence(activeTab);
@@ -62,7 +64,6 @@ export const AgentDashboard = () => {
 
     const [products, setProducts] = useState(db.products);
     const [myOrders, setMyOrders] = useState(db.getOrders(user!.id, UserRole.AGENT));
-    const [productionQueue, setProductionQueue] = useState(db.getProductionQueue());
     const [myTransactions, setMyTransactions] = useState(db.getTransactions(user!.id));
     const [userBalance, setUserBalance] = useState(user?.agentDetails?.currentBalance || 0);
 
@@ -95,7 +96,6 @@ export const AgentDashboard = () => {
         if (remainingLockedIds.length !== lockedAgentEditOrderIds.length) {
             setLockedAgentEditOrderIds(remainingLockedIds);
         }
-        setProductionQueue(db.getProductionQueue());
         setMyTransactions(db.getTransactions(user!.id));
 
         const updatedUser = db.users.find(u => u.id === user!.id);
@@ -181,7 +181,8 @@ export const AgentDashboard = () => {
     const cartStats = useMemo(() => {
         return getCatalogCartCounts(cart, products, db.categories);
     }, [cart, products]);
-    const cartItemCount = (Object.values(cart) as AgentCartEntry[]).filter(item => item.c > 0 || item.m > 0).length;
+    const cartItems = Object.entries<AgentCartEntry>(cart).filter(([, item]) => item.c > 0 || item.m > 0);
+    const cartItemCount = cartItems.length;
 
     const cartTotal = useMemo(() => {
         const lines = Object.entries(cart).map(([pid, quantity]) => {
@@ -288,7 +289,9 @@ export const AgentDashboard = () => {
 
         setCart(nextCart);
         setEditingAgentOrder(order);
+        setMobileCartActive(false);
         setActiveTab('catalog');
+        if (window.matchMedia('(width < 1024px)').matches) scrollToPageStart();
         toast.info('تعديل الطلب مفتوح', `تقدر تعدل الطلب #${order.id} من السلة الحالية.`);
     };
 
@@ -325,11 +328,22 @@ export const AgentDashboard = () => {
                 toast.success(t('agent_dashboard.order_sent'), t('agent_dashboard.order_sent_msg'));
             }
             setCart({});
+            setMobileCartActive(false);
             if (effectiveUser?.agentDetails?.permissions.showHistory) setActiveTab('history');
         } catch (e: any) {
             toast.error(t('agent_dashboard.order_send_failed'), e.message);
         } finally { orderSubmitBusy.current = false; setIsOrderSubmitting(false); }
     };
+
+    const canShowQueue = showQueueGlobal && effectiveUser?.agentDetails?.permissions?.showProductionQueue === true;
+    const canShowHistory = effectiveUser?.agentDetails?.permissions?.showHistory ?? true;
+    const canShowFinance = effectiveUser?.agentDetails?.permissions?.showFinance ?? true;
+
+    useEffect(() => {
+        if (activeTab === 'queue' && !canShowQueue) setActiveTab('catalog');
+        if (activeTab === 'finance' && !canShowFinance) setActiveTab('catalog');
+        if (activeTab === 'history' && !canShowHistory) setActiveTab('catalog');
+    }, [activeTab, canShowQueue, canShowHistory, canShowFinance]);
 
     if (latestUser?.agentDetails?.isFrozen) {
         return (
@@ -345,29 +359,24 @@ export const AgentDashboard = () => {
         );
     }
 
-    const canShowQueue = showQueueGlobal && (effectiveUser?.agentDetails?.permissions.showProductionQueue ?? true);
-    const canShowHistory = effectiveUser?.agentDetails?.permissions.showHistory ?? true;
-    const canShowFinance = effectiveUser?.agentDetails?.permissions.showFinance ?? true;
-
-    // Redirect if permission for active tab is revoked live
-    useEffect(() => {
-        if (activeTab === 'queue' && !canShowQueue) setActiveTab('catalog');
-        if (activeTab === 'finance' && !canShowFinance) setActiveTab('catalog');
-        if (activeTab === 'history' && !canShowHistory) setActiveTab('catalog');
-    }, [activeTab, canShowQueue, canShowHistory, canShowFinance]);
-
     const navigateMobile = (item: AgentNavItem) => {
+        setEditingAccount(false);
         setMobileCartActive(item === 'cart');
         setActiveTab(item === 'cart' ? 'catalog' : item);
-        requestAnimationFrame(() => item === 'cart' ? cartPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }) : window.scrollTo({ top: 0, behavior: 'smooth' }));
+        scrollToPageStart();
     };
+    const toggleAccountEditor = (open: boolean) => {
+        setEditingAccount(open);
+        scrollToPageStart();
+    };
+    const showingMobileCart = activeTab === 'catalog' && mobileCartActive;
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 pb-[calc(6rem+env(safe-area-inset-bottom))] lg:pb-0">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 lg:gap-8 pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:pb-0">
             {viewingOrder && <InvoiceModal order={viewingOrder} onClose={() => setViewingOrder(null)} allowPrint={true} />}
 
-            <div className="lg:col-span-1 space-y-6 order-2 lg:order-1">
-                <div className="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden">
+            <div className={`min-w-0 lg:col-span-1 space-y-6 order-2 lg:order-1 ${showingMobileCart ? 'block' : 'hidden lg:block'}`}>
+                <div className="hidden lg:block bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden">
                     <div className="p-8 bg-[#0e3c63] text-white text-center">
                         <UserAvatar name={effectiveUser?.fullName || 'User'} avatarPath={effectiveUser?.avatar_path} avatarUrl={effectiveUser?.avatar_url} size="xl" className="mx-auto mb-4 border-4 border-white/30 shadow-lg" />
                         <h3 className="font-bold text-xl">{effectiveUser?.fullName}</h3>
@@ -389,13 +398,13 @@ export const AgentDashboard = () => {
                             { id: 'queue', label: t('agent_dashboard.production_schedule'), icon: ListOrdered, hidden: !canShowQueue },
                             { id: 'finance', label: t('agent_dashboard.account_statement'), icon: Wallet, hidden: !canShowFinance },
                         ].filter(i => !i.hidden).map(item => (
-                            <button key={item.id} onClick={() => setActiveTab(item.id)} className={`w-full flex items-center gap-4 p-4 rounded-xl text-base font-bold transition-all ${activeTab === item.id ? 'bg-blue-50 text-[#0e3c63] shadow-inner' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'}`}><item.icon size={20} /> {item.label}</button>
+                            <button key={item.id} onClick={() => { setEditingAccount(false); setMobileCartActive(false); setActiveTab(item.id); }} className={`w-full flex items-center gap-4 p-4 rounded-xl text-base font-bold transition-all ${activeTab === item.id ? 'bg-blue-50 text-[#0e3c63] shadow-inner' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'}`}><item.icon size={20} /> {item.label}</button>
                         ))}
                     </nav>
                 </div>
 
                 {activeTab === 'catalog' && (
-                    <div ref={cartPanelRef} className="bg-white p-6 rounded-3xl shadow-xl border border-gray-100 lg:sticky lg:top-24 scroll-mt-24">
+                    <div className="bg-white p-4 lg:p-6 rounded-3xl shadow-sm lg:shadow-xl border border-gray-100 lg:sticky lg:top-24">
                         {editingAgentOrder && (
                             <div className="mb-5 p-4 rounded-2xl bg-amber-50 border border-amber-100 text-amber-800 flex flex-col gap-3">
                                 <div>
@@ -411,6 +420,32 @@ export const AgentDashboard = () => {
                         <div className="flex justify-between items-center mb-6">
                             <h3 className="font-bold text-gray-800 flex items-center gap-2 text-lg"><ShoppingCart size={20} /> {t('agent_dashboard.cart')}</h3>
                             {maintenanceMode ? <Badge color="red">{t('common.stopped')}</Badge> : <span className="bg-red-500 text-white text-sm font-bold rounded-full w-8 h-8 flex items-center justify-center">{cartItemCount}</span>}
+                        </div>
+
+                        <div className="lg:hidden mb-5">
+                            {cartItems.length > 0 ? (
+                                <ul className="divide-y divide-slate-100 border-y border-slate-100">
+                                    {cartItems.map(([id, item]) => {
+                                        const product = products.find(product => String(product.id) === id);
+                                        const name = item.isSpecial ? item.specialNote || t('agent_dashboard.special_order_pricing') : product?.name || item.productCode || `#${id}`;
+                                        return (
+                                            <li key={id} className="flex items-center justify-between gap-3 py-3 text-sm">
+                                                <div className="min-w-0 break-words font-bold text-slate-800">
+                                                    {name}
+                                                    {product?.code && <bdi className="block text-xs font-medium text-slate-500">{product.code}</bdi>}
+                                                </div>
+                                                <div className="shrink-0 text-end text-xs font-semibold text-slate-700">
+                                                    {item.c > 0 && <p>{item.c} {getProductUnit(product, db.categories, item.productSaleMode)}</p>}
+                                                    {item.m > 0 && <p>{item.m} {t('common.meter')}</p>}
+                                                </div>
+                                            </li>
+                                        );
+                                    })}
+                                </ul>
+                            ) : <p className="py-3 text-sm text-slate-500">{t('agent_dashboard.mobile_empty_cart')}</p>}
+                            <button type="button" onClick={() => navigateMobile('catalog')} className="mt-2 inline-flex min-h-11 items-center gap-1 text-sm font-bold text-[#0e3c63]">
+                                {t('agent_dashboard.mobile_products')} <ChevronLeft size={16} className="ltr:rotate-180" aria-hidden="true" />
+                            </button>
                         </div>
 
                         <div className="space-y-2 mb-6">
@@ -478,17 +513,45 @@ export const AgentDashboard = () => {
                 )}
             </div>
 
-            <div className="lg:col-span-3 order-1 lg:order-2">
+            <div className={`min-w-0 lg:col-span-3 order-1 lg:order-2 ${showingMobileCart ? 'hidden lg:block' : ''}`}>
                 {activeTab === 'catalog' && (
                     <CatalogTab
                         products={products} cart={cart} setCart={setCart} activeCat={activeCat} setActiveCat={setActiveCat} searchTerm={searchTerm} setSearchTerm={setSearchTerm} user={effectiveUser} maintenanceMode={maintenanceMode} maintenanceMessage={maintenanceMessage} editingOrderId={editingAgentOrder?.id ?? null} onCancelEdit={cancelAgentOrderEdit}
                     />
                 )}
                 {activeTab === 'history' && canShowHistory && <HistoryTab myOrders={myOrders} onViewOrder={setViewingOrder} onEditOrder={handleStartEditOrder} lockedAgentEditOrderIds={lockedAgentEditOrderIds} />}
-                {activeTab === 'queue' && canShowQueue && <QueueTab productionQueue={productionQueue} user={effectiveUser} />}
-                {activeTab === 'finance' && canShowFinance && <FinanceTab myTransactions={myTransactions} currentBalance={userBalance} isDebt={isDebt} onViewOrder={setViewingOrder} />}
+                {activeTab === 'queue' && canShowQueue && <QueueTab key={effectiveUser?.id} />}
+                {activeTab === 'finance' && canShowFinance && (
+                    <>
+                    {editingAccount && <div className="lg:hidden"><ProfileTab onBack={() => toggleAccountEditor(false)} /></div>}
+                    <div className={`space-y-4 lg:space-y-0 ${editingAccount ? 'hidden lg:block' : ''}`}>
+                        {effectiveUser && (
+                            <section aria-labelledby="mobile-agent-account" className="lg:hidden rounded-2xl bg-[#0e3c63] p-4 text-white shadow-sm">
+                                <div className="flex items-center gap-3">
+                                    <UserAvatar name={effectiveUser.fullName} avatarPath={effectiveUser.avatar_path} avatarUrl={effectiveUser.avatar_url || effectiveUser.imageUrl} size="lg" className="border-white/30" />
+                                    <div className="min-w-0">
+                                        <h2 id="mobile-agent-account" className="text-xs font-semibold text-sky-100">{t('agent_dashboard.mobile_account')}</h2>
+                                        <p className="break-words text-base font-extrabold">{effectiveUser.fullName}</p>
+                                        <p className="text-sm text-sky-100">{[effectiveUser.province, effectiveUser.agentDetails?.type].filter(Boolean).join(' · ')}</p>
+                                    </div>
+                                </div>
+                                <div className="mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-white/20 pt-3">
+                                    <div>
+                                        <p className="text-xs font-semibold text-sky-100">{isDebt ? t('agent_dashboard.debt_balance') : t('agent_dashboard.credit_balance')}</p>
+                                        <bdi dir="ltr" className="mt-1 block text-xl font-black tabular-nums">${Math.abs(userBalance).toLocaleString('en-US')}</bdi>
+                                    </div>
+                                    <button type="button" onClick={() => toggleAccountEditor(true)} className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-white/25 bg-white/10 px-2.5 text-xs font-bold text-white hover:bg-white/20">
+                                        <Edit3 size={15} aria-hidden="true" /> {t('common.edit_account')}
+                                    </button>
+                                </div>
+                            </section>
+                        )}
+                        <FinanceTab myTransactions={myTransactions} currentBalance={userBalance} isDebt={isDebt} onViewOrder={setViewingOrder} />
+                    </div>
+                    </>
+                )}
             </div>
-            <MobileBottomNavigation activeItem={mobileCartActive && activeTab === 'catalog' ? 'cart' : activeTab} cartCount={cartItemCount} canShowHistory={canShowHistory} canShowQueue={canShowQueue} canShowFinance={canShowFinance} onNavigate={navigateMobile} />
+            <MobileBottomNavigation activeItem={showingMobileCart ? 'cart' : activeTab} cartCount={cartItemCount} canShowHistory={canShowHistory} canShowQueue={canShowQueue} canShowFinance={canShowFinance} onNavigate={navigateMobile} />
         </div>
     );
 };

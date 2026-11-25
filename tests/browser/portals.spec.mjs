@@ -68,6 +68,157 @@ test('agent statement agrees with admin: reversal is distinct from the preserved
   await page.screenshot({ path: 'test-results/agent-statement-verified.png', fullPage: true });
 });
 
+test('agent can see and paginate the shared production queue without any personal orders', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/tests/browser/index.html?view=agent&role=agent&noPersonalOrders');
+  await page.getByRole('button', { name: 'الإنتاج', exact: true }).click();
+  await expect(page.getByRole('cell', { name: /#500/ })).toBeVisible();
+  await expect(page.getByRole('cell', { name: /وكيل آخر/ })).toHaveCount(10);
+  await page.getByRole('button', { name: '2', exact: true }).click();
+  await expect(page.getByRole('cell', { name: /#510/ })).toBeVisible();
+  await expect(page.getByRole('cell', { name: /#500/ })).toHaveCount(0);
+});
+
+test('mobile agent tabs open at the top, count distinct products and keep the profile in My account', async ({ page }) => {
+  const nav = page.getByRole('navigation', { name: 'تنقّل الوكيل' });
+  const profile = page.getByText('كركوك تجريبي', { exact: true });
+  const checkWidth = async () => {
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(await page.evaluate(() => window.innerWidth));
+  };
+  const navigateFromBottom = async (label) => {
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+    const button = nav.getByRole('button', { name: label });
+    await button.click();
+    await expect(button).toHaveAttribute('aria-current', 'page');
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+    await checkWidth();
+  };
+
+  await page.setViewportSize({ width: 390, height: 780 });
+  await page.goto('/tests/browser/index.html?view=agent&role=agent&mobilePreview');
+  await expect(profile).toBeHidden();
+  await expect(nav.getByRole('button', { name: /عدد الأصناف: 0/ })).toBeVisible();
+  const amount = code => page.getByRole('spinbutton', { name: `كرتون ${code}`, exact: true });
+  await amount('TEST-1').fill('20');
+  await amount('TEST-4').fill('1');
+  await amount('TEST-5').fill('6');
+  await expect(nav.getByRole('button', { name: /عدد الأصناف: 3/ })).toBeVisible();
+  await amount('TEST-1').fill('25');
+  await expect(nav.getByRole('button', { name: /عدد الأصناف: 3/ })).toBeVisible();
+  await amount('TEST-5').fill('0');
+  await expect(nav.getByRole('button', { name: /عدد الأصناف: 2/ })).toBeVisible();
+  await amount('TEST-5').fill('6');
+
+  await navigateFromBottom(/عدد الأصناف: 3/);
+  await expect(page.getByText('25 كارتون', { exact: true })).toBeVisible();
+  await expect(page.getByRole('group', { name: 'قسم المنتجات' })).toBeHidden();
+  await expect(profile).toBeHidden();
+  await page.screenshot({ path: 'test-results/mobile-agent-cart.png', animations: 'disabled' });
+
+  await navigateFromBottom('طلباتي');
+  const orders = page.getByRole('table', { name: 'طلباتي' });
+  await expect(orders.getByRole('button', { name: 'معاينة الطلب #34', exact: true })).toBeVisible();
+  await expect(profile).toBeHidden();
+  await page.screenshot({ path: 'test-results/mobile-agent-orders.png', animations: 'disabled' });
+
+  await navigateFromBottom('الإنتاج');
+  const queue = page.getByRole('table', { name: 'جدول الإنتاج' });
+  await expect(queue.getByRole('cell', { name: /#500/ })).toBeVisible();
+  await expect(profile).toBeHidden();
+  await page.screenshot({ path: 'test-results/mobile-agent-production.png', animations: 'disabled' });
+
+  await navigateFromBottom('حسابي');
+  const account = page.getByRole('region', { name: 'حسابي' });
+  await expect(account.getByText('كركوك تجريبي', { exact: true })).toBeVisible();
+  await expect(account.getByText('$5,176.96', { exact: true })).toBeVisible();
+  await expect(page.getByRole('table', { name: 'كشف الحساب' }).getByText('#79', { exact: true })).toBeVisible();
+  await page.screenshot({ path: 'test-results/mobile-agent-account.png', animations: 'disabled' });
+
+  await page.setViewportSize({ width: 390, height: 700 });
+  await navigateFromBottom('المنتجات');
+  await expect(page.getByRole('group', { name: 'قسم المنتجات' })).toBeInViewport();
+  await expect(profile).toBeHidden();
+
+  await page.setViewportSize({ width: 320, height: 640 });
+  for (const [label, table] of [['طلباتي', 'طلباتي'], ['الإنتاج', 'جدول الإنتاج'], ['حسابي', 'كشف الحساب']]) {
+    await nav.getByRole('button', { name: label, exact: true }).click();
+    await expect(page.getByRole('table', { name: table })).toBeVisible();
+    await checkWidth();
+  }
+
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await expect(nav).toBeHidden();
+  await expect(page.getByRole('button', { name: 'طلباتي السابقة', exact: true })).toBeVisible();
+  await expect(profile.filter({ visible: true })).toHaveCount(1);
+});
+
+test('mobile order editing has its own aligned column and a compact button', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.goto('/tests/browser/index.html?view=agent&role=agent&mobilePreview');
+  await page.getByRole('navigation', { name: 'تنقّل الوكيل' }).getByRole('button', { name: 'طلباتي' }).click();
+  const orders = page.getByRole('table', { name: 'طلباتي' });
+  const row = orders.getByRole('row').filter({ has: page.getByRole('button', { name: 'معاينة الطلب #34' }) });
+  const edit = row.getByRole('button', { name: 'تعديل الطلب #34' });
+  await expect(orders.getByRole('columnheader', { name: 'تعديل', exact: true })).toBeVisible();
+  await expect(edit).toBeVisible();
+  expect(await edit.locator('svg').evaluate(svg => svg.getBoundingClientRect().width)).toBe(14);
+  expect((await edit.boundingBox()).height).toBeGreaterThanOrEqual(44);
+  const amount = row.getByRole('cell', { name: '$100', exact: true });
+  const amountHeader = orders.getByRole('columnheader', { name: 'المبلغ' });
+  expect(await amount.evaluate(cell => getComputedStyle(cell).textAlign)).toBe(await amountHeader.evaluate(cell => getComputedStyle(cell).textAlign));
+  expect(await amount.evaluate(cell => getComputedStyle(cell).direction)).toBe('rtl');
+  await edit.click();
+  await expect(page.getByText('أنت حالياً تعدل الطلب #34', { exact: true })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+});
+
+test('agent can edit their mobile profile from My account and return with their cart', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 780 });
+  await page.goto('/tests/browser/index.html?view=agent&role=agent&mobilePreview');
+  await page.getByRole('spinbutton', { name: 'كرتون TEST-1' }).fill('20');
+  const nav = page.getByRole('navigation', { name: 'تنقّل الوكيل' });
+  await nav.getByRole('button', { name: 'حسابي', exact: true }).click();
+  await page.getByRole('button', { name: 'تعديل الحساب', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'تعديل الحساب', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'إشعارات هذا الجهاز', exact: true })).toBeAttached();
+  await expect(page.getByRole('table', { name: 'كشف الحساب' })).toBeHidden();
+  const fullName = page.getByLabel(ar.batch4.k563, { exact: true });
+  await expect(fullName).toHaveValue('كركوك تجريبي');
+  await page.screenshot({ path: 'test-results/mobile-agent-profile-edit.png', animations: 'disabled' });
+  await fullName.fill('كركوك تجريبي محدّث');
+  await page.getByRole('button', { name: ar.batch4.k788, exact: true }).click();
+  const saved = page.getByRole('alert').filter({ hasText: ar.profile_tab.updated });
+  await expect(saved).toBeVisible();
+  expect((await saved.boundingBox()).y + (await saved.boundingBox()).height).toBeLessThan((await nav.boundingBox()).y);
+  await page.getByRole('button', { name: 'رجوع', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'حسابي' }).getByText('كركوك تجريبي محدّث')).toBeVisible();
+  await expect(nav.getByRole('button', { name: /عدد الأصناف: 1/ })).toBeVisible();
+});
+
+test('mobile notifications fit the viewport, scroll inside and return focus when closed', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.goto('/tests/browser/index.html?view=agent&role=agent&mobilePreview');
+  const bell = page.getByRole('button', { name: 'الإشعارات', exact: true });
+  await bell.click();
+  const notifications = page.getByRole('region', { name: 'الإشعارات' });
+  const close = notifications.getByRole('button', { name: 'إغلاق', exact: true });
+  await expect(close).toBeFocused();
+  const box = await notifications.boundingBox();
+  expect(box.x).toBeGreaterThan(0);
+  expect(box.x + box.width).toBeLessThan(320);
+  expect(box.y + box.height).toBeLessThan(640);
+  const list = notifications.locator('.overflow-y-auto');
+  expect(await list.evaluate(el => el.scrollHeight > el.clientHeight)).toBe(true);
+  await page.screenshot({ path: 'test-results/mobile-agent-notifications.png', animations: 'disabled' });
+  await page.keyboard.press('Escape');
+  await expect(notifications).toBeHidden();
+  await expect(bell).toBeFocused();
+  await bell.click();
+  await close.click();
+  await expect(bell).toHaveAttribute('aria-expanded', 'false');
+});
+
 test('agent order status, invoice payment and movement correction windows open from their real actions', async ({ page }) => {
   await page.goto('/tests/browser/index.html?view=admin&tab=agents');
   await page.getByText('وكيل اختبار', { exact: true }).first().click();

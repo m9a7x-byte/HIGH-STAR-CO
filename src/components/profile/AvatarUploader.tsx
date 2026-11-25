@@ -15,9 +15,10 @@ interface AvatarUploaderProps {
     userName: string;
     onUploadSuccess: (path: string) => void;
     targetUserId?: string; // For admin uploads to other user's avatars
+    compactOnMobile?: boolean;
 }
 
-export const AvatarUploader: React.FC<AvatarUploaderProps> = ({ currentAvatarPath, currentAvatarUrl, userName, onUploadSuccess, targetUserId }) => {
+export const AvatarUploader: React.FC<AvatarUploaderProps> = ({ currentAvatarPath, currentAvatarUrl, userName, onUploadSuccess, targetUserId, compactOnMobile = false }) => {
     const { user } = useAuth();
     const { toast } = useToast();
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -109,7 +110,7 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({ currentAvatarPat
 
     return (
         <>
-            <div className="relative group cursor-pointer w-40 h-40 mx-auto" onClick={() => !isUploading && fileInputRef.current?.click()}>
+            <button type="button" aria-label={t('batch4.k105')} disabled={isUploading} className={`relative block group cursor-pointer mx-auto rounded-[2.5rem] focus-visible:outline-2 focus-visible:outline-[#0e3c63] ${compactOnMobile ? 'w-20 h-20 lg:w-40 lg:h-40' : 'w-40 h-40'}`} onClick={() => fileInputRef.current?.click()}>
                 {/* Image Container */}
                 <div className={`w-full h-full rounded-[2.5rem] overflow-hidden border-4 border-white shadow-xl transform transition-all group-hover:scale-105 bg-white relative
                     ${isUploading ? 'opacity-80' : ''}`}>
@@ -144,16 +145,16 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({ currentAvatarPat
                     {isUploading ? <RefreshCw size={18} className="animate-spin" /> : <Camera size={18} />}
                 </div>
 
-                <input
-                    type="file"
-                    ref={fileInputRef}
-                    className="hidden"
-                    accept="image/png, image/jpeg, image/jpg, image/webp"
-                    onChange={onFileSelect}
-                />
-            </div>
+            </button>
+            <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                accept="image/png, image/jpeg, image/jpg, image/webp"
+                onChange={onFileSelect}
+            />
 
-            <p className="text-[10px] text-gray-400 font-bold mt-4 text-center">
+            <p className={`text-[10px] text-gray-400 font-bold text-center ${compactOnMobile ? 'mt-3 lg:mt-4' : 'mt-4'}`}>
                 JPG, PNG, WebP (Max 2MB)
             </p>
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Bell, Check, X, Clock, Info, CheckCircle2, AlertCircle, AlertTriangle, Trash2, ExternalLink, Smartphone } from 'lucide-react';
 import { db } from '../../lib/db';
@@ -18,6 +18,15 @@ export const NotificationBell = () => {
     const [pushPermission, setPushPermission] = useState(getPushPermission());
     const [isEnablingPush, setIsEnablingPush] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const triggerRef = useRef<HTMLButtonElement>(null);
+    const closeRef = useRef<HTMLButtonElement>(null);
+    const panelId = useId();
+    const isAgent = user?.role === 'AGENT';
+
+    const closeAndFocus = () => {
+        setIsOpen(false);
+        triggerRef.current?.focus();
+    };
 
     const refreshData = useCallback(() => {
         setNotifications(db.notifications.filter(n => String(n.userId) === String(user?.id)));
@@ -38,6 +47,10 @@ export const NotificationBell = () => {
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+
+    useEffect(() => {
+        if (isOpen && closeRef.current?.getClientRects().length) closeRef.current.focus();
+    }, [isOpen]);
 
     const unreadCount = notifications.filter(n => !n.isRead).length;
 
@@ -86,11 +99,18 @@ export const NotificationBell = () => {
     };
 
     return (
-        <div className="relative z-50" ref={dropdownRef}>
+        <div className="relative z-50" ref={dropdownRef} onKeyDown={event => {
+            if (event.key === 'Escape' && isOpen) closeAndFocus();
+        }}>
             <button 
+                ref={triggerRef}
+                type="button"
                 onClick={() => setIsOpen(!isOpen)} 
                 className={`relative p-2.5 rounded-xl transition-all duration-300 active:scale-95 shadow-inner border ${isOpen ? 'bg-sky-500 text-white border-sky-400/50' : 'bg-white/5 text-white hover:bg-white/10 border-white/10'}`}
                 title={t('notifications.title')}
+                aria-label={t('notifications.title')}
+                aria-expanded={isOpen}
+                aria-controls={isOpen ? panelId : undefined}
             >
                 <Bell 
                     size={22} 
@@ -99,24 +119,27 @@ export const NotificationBell = () => {
                     fill={unreadCount > 0 ? "currentColor" : "none"}
                 />
                 {unreadCount > 0 && (
-                    <span className="absolute -top-2.5 -right-2.5 min-w-[22px] h-[22px] bg-red-500 text-white text-[11px] font-black rounded-full flex items-center justify-center border-[3px] border-[#0e3c63] shadow-lg px-1 z-10 transition-transform hover:scale-110">
+                    <span aria-hidden="true" className="absolute -top-2.5 -right-2.5 min-w-[22px] h-[22px] bg-red-500 text-white text-[11px] font-black rounded-full flex items-center justify-center border-[3px] border-[#0e3c63] shadow-lg px-1 z-10 transition-transform hover:scale-110">
                         {unreadCount > 9 ? '9+' : unreadCount}
                     </span>
                 )}
             </button>
 
             {isOpen && (
-                <div className="absolute left-0 mt-3 w-80 md:w-96 bg-white rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.2)] border border-gray-100 flex flex-col max-h-[85vh] animate-scale-in origin-top-left overflow-hidden">
-                    <div className="p-4 bg-gradient-to-r from-gray-50 to-white border-b border-gray-100 flex justify-between items-center shrink-0">
+                <>
+                {isAgent && <div aria-hidden="true" onClick={closeAndFocus} className="fixed inset-x-0 bottom-0 top-16 touch-none bg-slate-950/20 lg:hidden" />}
+                <section id={panelId} aria-labelledby={`${panelId}-heading`} className={`bg-white rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.2)] border border-gray-100 flex flex-col animate-scale-in origin-top-left overflow-hidden ${isAgent ? 'fixed inset-x-3 top-[4.5rem] max-h-[calc(100dvh-5.25rem-env(safe-area-inset-bottom))] lg:absolute lg:left-0 lg:right-auto lg:top-auto lg:mt-3 lg:w-96 lg:max-h-[85vh]' : 'absolute left-0 mt-3 w-80 md:w-96 max-h-[85vh]'}`}>
+                    <div className={`bg-gradient-to-r from-gray-50 to-white border-b border-gray-100 shrink-0 ${isAgent ? 'relative flex flex-col gap-2 p-3 lg:flex-row lg:items-center lg:justify-between lg:gap-0 lg:p-4' : 'p-4 flex justify-between items-center'}`}>
                         <div className="flex items-center gap-2">
-                            <h3 className="font-black text-gray-800 text-lg">{t('notifications.title')}</h3>
+                            <h3 id={`${panelId}-heading`} className="font-black text-gray-800 text-lg">{t('notifications.title')}</h3>
                             {unreadCount > 0 && <span className="bg-blue-100 text-[#0e3c63] text-[10px] font-black uppercase px-2 py-0.5 rounded-lg border border-blue-200">{unreadCount} {t('notifications.new')}</span>}
+                            {isAgent && <button ref={closeRef} type="button" onClick={closeAndFocus} aria-label={t('common.close')} className="ms-auto inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-[#0e3c63] lg:hidden"><X size={19} aria-hidden="true" /></button>}
                         </div>
-                        <div className="flex items-center gap-1.5">
+                        {notifications.length > 0 && <div className={`flex items-center gap-1.5 ${isAgent ? 'flex-wrap lg:flex-nowrap' : ''}`}>
                             {unreadCount > 0 && (
                                 <button 
                                     onClick={handleMarkAllAsRead} 
-                                    className="text-[10px] font-black text-gray-400 hover:text-[#0e3c63] flex items-center gap-1 transition-colors bg-gray-50 hover:bg-blue-50 px-2 py-1.5 rounded-lg border border-transparent shadow-sm"
+                                    className={`text-[10px] font-black text-gray-500 hover:text-[#0e3c63] flex items-center gap-1 transition-colors bg-gray-50 hover:bg-blue-50 px-2 py-1.5 rounded-lg border border-transparent shadow-sm ${isAgent ? 'min-h-11 lg:min-h-0' : ''}`}
                                 >
                                     <Check size={14} /> {t('notifications.mark_all_read')}
                                 </button>
@@ -124,12 +147,12 @@ export const NotificationBell = () => {
                             {notifications.length > 0 && (
                                 <button 
                                     onClick={handleDeleteAll} 
-                                    className="text-[10px] font-black text-gray-400 hover:text-red-600 flex items-center gap-1 transition-colors bg-gray-50 hover:bg-red-50 px-2 py-1.5 rounded-lg border border-transparent shadow-sm"
+                                    className={`text-[10px] font-black text-gray-500 hover:text-red-600 flex items-center gap-1 transition-colors bg-gray-50 hover:bg-red-50 px-2 py-1.5 rounded-lg border border-transparent shadow-sm ${isAgent ? 'min-h-11 lg:min-h-0' : ''}`}
                                 >
                                     <Trash2 size={14} /> {t('notifications.delete_all')}
                                 </button>
                             )}
-                        </div>
+                        </div>}
                     </div>
 
                     {isPushNotificationSupported() && pushPermission !== 'granted' && (
@@ -150,7 +173,7 @@ export const NotificationBell = () => {
                         </div>
                     )}
                     
-                    <div className="overflow-y-auto flex-1 custom-scrollbar">
+                    <div className="min-h-0 overflow-y-auto overscroll-contain flex-1 custom-scrollbar">
                         {notifications.length === 0 ? (
                             <div className="p-10 text-center flex flex-col items-center">
                                 <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-3">
@@ -216,8 +239,8 @@ export const NotificationBell = () => {
                                                     <img src={notif.imageUrl} alt={translatedTitle} className="w-full max-h-40 object-cover" />
                                                 </div>
                                             )}
-                                            <p className={`text-xs leading-relaxed mb-2 font-bold ${!notif.isRead ? 'text-gray-700' : 'text-gray-500'}`}>{translatedMessage}</p>
-                                            <div className="flex items-center justify-between gap-3">
+                                            <p className={`break-words text-xs leading-relaxed mb-2 font-bold ${!notif.isRead ? 'text-gray-700' : 'text-gray-500'}`}>{translatedMessage}</p>
+                                            <div className="flex flex-wrap items-center justify-between gap-3">
                                                 <div className="flex items-center gap-1 text-[10px] text-gray-400 font-bold">
                                                     <Clock size={12} />
                                                     <span>{formatTimestamp(notif.createdAt)}</span>
@@ -242,7 +265,8 @@ export const NotificationBell = () => {
                             </div>
                         )}
                     </div>
-                </div>
+                </section>
+                </>
             )}
         </div>
     );

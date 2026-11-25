@@ -1,11 +1,13 @@
 
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { X, CheckCircle2, AlertCircle, Info, AlertTriangle } from 'lucide-react';
 import { useToast, Toast, ToastType } from '../../context/ToastContext';
 import { db } from '../../lib/db';
 import { ToastPosition } from '../../types';
 
 const ToastItem: React.FC<{ toast: Toast }> = ({ toast }) => {
+  const { t } = useTranslation();
   const { removeToast } = useToast();
   const [isExiting, setIsExiting] = useState(false);
   const [progress, setProgress] = useState(100);
@@ -59,12 +61,14 @@ const ToastItem: React.FC<{ toast: Toast }> = ({ toast }) => {
       style={{ direction: 'rtl' }}
     >
       <div className="shrink-0 pt-0.5">{icons[toast.type]}</div>
-      <div className="flex-1">
+      <div className="min-w-0 flex-1 break-words">
         <h4 className="font-bold text-gray-800 text-sm">{toast.title}</h4>
         {toast.message && <p className="text-xs text-gray-500 mt-1 leading-relaxed">{toast.message}</p>}
       </div>
       <button 
+        type="button"
         onClick={handleDismiss} 
+        aria-label={t('common.close')}
         className="text-gray-400 hover:text-gray-600 transition-colors shrink-0"
       >
         <X size={16} />
@@ -87,7 +91,7 @@ const ToastItem: React.FC<{ toast: Toast }> = ({ toast }) => {
   );
 };
 
-export const ToastContainer = () => {
+export const ToastContainer = ({ offsetMobileNavigation = false }: { offsetMobileNavigation?: boolean }) => {
   const { toasts } = useToast();
   const [position, setPosition] = useState<ToastPosition>(db.vehicleConfig?.toastPosition || 'bottom-left');
 
@@ -101,6 +105,11 @@ export const ToastContainer = () => {
   }, []);
 
   const getPositionClasses = () => {
+      if (offsetMobileNavigation) {
+          const vertical = position.startsWith('bottom') ? 'bottom-[calc(4.75rem+env(safe-area-inset-bottom))] lg:bottom-6' : 'top-[calc(4.5rem+env(safe-area-inset-top))] lg:top-6';
+          const horizontal = position.endsWith('right') ? 'lg:left-auto lg:right-6 lg:items-end' : 'lg:right-auto lg:left-6 lg:items-start';
+          return `inset-x-3 lg:w-full ${vertical} ${horizontal}`;
+      }
       // Note: RTL Direction means 'right' is visually left in some contexts if not using absolute.
       // But fixed positioning ignores 'dir', it uses viewport.
       // We use standard CSS directions here.
@@ -114,7 +123,7 @@ export const ToastContainer = () => {
   };
 
   return (
-    <div className={`fixed z-[9999] flex flex-col gap-2 w-full max-w-sm pointer-events-none transition-all duration-300 ${getPositionClasses()}`}>
+    <div className={`fixed z-[9999] flex flex-col gap-2 max-w-sm pointer-events-none transition-all duration-300 ${offsetMobileNavigation ? 'w-auto' : 'w-full'} ${getPositionClasses()}`}>
       <div className="pointer-events-auto w-full">
         {toasts.map((toast) => (
           <ToastItem key={toast.id} toast={toast} />
