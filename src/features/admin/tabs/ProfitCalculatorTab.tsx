@@ -3,6 +3,7 @@ const t = i18n.t.bind(i18n);
 
 import React, { useState, useMemo } from 'react';
 import { Calculator, DollarSign, Plus, Trash2, TrendingUp, TrendingDown, ArrowLeft, RefreshCw, MinusCircle, Wallet } from 'lucide-react';
+import { isRecognizedOrder } from '../../../lib/agentMovements';
 import { Card, Button, Badge } from '../../../components/ui';
 
 interface ExpenseItem {
@@ -38,8 +39,8 @@ export const ProfitCalculatorTab = ({ orders, isDateInRange }: any) => {
         if (!calcFromDate && !calcToDate) return 0; // Don't calculate if no filter selected
         
         return orders
-            .filter((o: any) => isDateInRange(o.createdAt, calcFromDate, calcToDate))
-            .reduce((acc: number, o: any) => acc + o.totalAmount, 0);
+            .filter((o: any) => isRecognizedOrder(o) && isDateInRange(o.createdAt, calcFromDate, calcToDate))
+            .reduce((acc: number, o: any) => acc + Number(o.totalAmount || 0), 0);
     }, [orders, calcFromDate, calcToDate]);
 
     // Logic: Calculate Total Expenses

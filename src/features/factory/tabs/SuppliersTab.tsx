@@ -101,7 +101,7 @@ export const SuppliersTab = ({ refreshTrigger, onOpenModal }: SuppliersTabProps)
     const suppliers = useMemo(() => db.getSuppliers(), [refreshTrigger, localRefresh]);
 
     // حساب الرصيد الحقيقي لكل مورد من الحركات المالية
-    const supplierBalances = useMemo(() => {
+    const supplierBalances: Record<string, number> = useMemo(() => {
         const balances: Record<string, number> = {};
         const allTxs = db.getFactoryTransactions();
         suppliers.forEach(s => {

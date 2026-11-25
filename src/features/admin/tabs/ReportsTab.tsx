@@ -13,13 +13,14 @@ import {
 } from 'lucide-react';
 import { Card, Badge, DateRangePicker, Button } from '../../../components/ui';
 import { UserSelector } from '../../../components/shared/UserSelector';
+import { ledgerFinancialTotals, isRecognizedOrder, outstandingAgentDebt } from '../../../lib/agentMovements';
 import { db } from '../../../lib/db';
 import { formatDate } from '../../../lib/dateUtils';
 import { PaymentStatus, ProductionStatus, AgentType, Product, Order, OrderItem } from '../../../types';
 import { ADHESIVE_CATEGORY, STYROFOAM_CATEGORIES } from '../../../lib/constants';
 
 export const ReportsTab = ({ orders, products, agents, isDateInRange, onNavigateToOrders, onNavigateToAgent, onViewOrder }: any) => {
-    const [reportAgent, setReportAgent] = useState<'ALL' | number>('ALL');
+    const [reportAgent, setReportAgent] = useState<'ALL' | string | number>('ALL');
     const [reportFromDate, setReportFromDate] = useState('');
     const [reportToDate, setReportToDate] = useState('');
     const [isLoading, setIsLoading] = useState(true);
@@ -34,13 +35,14 @@ export const ReportsTab = ({ orders, products, agents, isDateInRange, onNavigate
         const filtered = orders.filter((o: any) => {
             const agentMatch = reportAgent === 'ALL' || o.agentId === reportAgent;
             const dateMatch = isDateInRange(o.createdAt, reportFromDate, reportToDate);
-            return agentMatch && dateMatch;
+            return agentMatch && dateMatch && isRecognizedOrder(o);
         });
 
         // 1. المبالغ والمعدلات
-        const totalRevenue = filtered.reduce((acc: number, o: any) => acc + o.totalAmount, 0);
-        const totalPaid = filtered.reduce((acc: number, o: any) => acc + o.paidAmount, 0);
-        const totalDebt = totalRevenue - totalPaid;
+        const totalRevenue = filtered.reduce((acc: number, o: any) => acc + Number(o.totalAmount || 0), 0);
+        const movements = db.walletTransactions.filter(tx => (reportAgent === 'ALL' || String(tx.agentId) === String(reportAgent)) && isDateInRange(tx.createdAt, reportFromDate, reportToDate));
+        const totalPaid = ledgerFinancialTotals(movements).received;
+        const totalDebt = outstandingAgentDebt(movements);
         const avgOrderValue = filtered.length > 0 ? totalRevenue / filtered.length : 0;
 
         // 2. تحليل عميق للمواد
@@ -109,7 +111,7 @@ export const ReportsTab = ({ orders, products, agents, isDateInRange, onNavigate
         const topAgents = Object.entries(agentPerf)
             .sort((a, b) => b[1].total - a[1].total)
             .slice(0, 5)
-            .map(([id, data]) => ({ id: Number(id), ...data }));
+            .map(([id, data]) => ({ id, ...data }));
 
         // تحليل المحافظات
         const provincePerf: Record<string, number> = {};
@@ -132,7 +134,7 @@ export const ReportsTab = ({ orders, products, agents, isDateInRange, onNavigate
             topFoam: Object.values(foamSales).sort((a, b) => b.cartons - a.cartons).slice(0, 5),
             topAdhesive: Object.values(adhesiveSales).sort((a, b) => b.bags - a.bags).slice(0, 5)
         };
-    }, [orders, reportAgent, reportFromDate, reportToDate, products, isDateInRange]);
+    }, [orders, db.walletTransactions, reportAgent, reportFromDate, reportToDate, products, isDateInRange]);
 
     const getRankStyle = (index: number) => {
         switch (index) {
@@ -159,7 +161,7 @@ export const ReportsTab = ({ orders, products, agents, isDateInRange, onNavigate
                     </div>
                     <div>
                         <h3 className="font-black text-2xl text-gray-800">{t('batch4.k425')}</h3>
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{t('batch4.k426')}</p>
+                        <p className="text-[10px] font-bold text-gray-400">الإيراد للطلبات المجهّزة، والواصل نقدي، وصافي الديون يشمل حركات الفترة والتسويات.</p>
                     </div>
                 </div>
                 <div className="flex flex-col md:flex-row items-center gap-4 w-full xl:w-auto">

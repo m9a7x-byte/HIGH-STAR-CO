@@ -24,7 +24,7 @@ export const ActivityLogTab: React.FC<ActivityLogTabProps> = ({ employees, agent
     const getContextLabel = (context: string): string => {
         const map: Record<string, string> = {
             ORDERS: t('activity.orders'),
-            PRODUCTION: t('activity.production'),
+            PRODUCTION: t('activity.production', 'الإنتاج'),
             CATALOG: t('activity.catalog'),
             AGENTS: t('activity.agents'),
             STAFF: t('activity.staff'),
@@ -246,7 +246,7 @@ export const ActivityLogTab: React.FC<ActivityLogTabProps> = ({ employees, agent
 
                                         // Helper Translation Map
                                         const translateMap: Record<string, string> = {
-                                            'production': t('activity.production'),
+                                            'production': t('activity.production', 'الإنتاج'),
                                             'payment': t('activity.finance'),
                                             'WAITING': t('activity.status_waiting'),
                                             'IN_PROGRESS': t('activity.status_in_progress'),

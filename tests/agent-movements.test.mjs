@@ -1,7 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { formatDate, formatTime, formatDateTime } from '../src/lib/dateUtils.ts';
-import { planAgentMovement, getMovementMode, getMovementNote, canCorrectMovement, summarizeAgentLedger, statementWithBalances, getMovementOrderIds, movementOwnsPayment, ledgerFinancialTotals, isAgentCashMovement, isRecognizedOrder } from '../src/lib/agentMovements.ts';
+import { planAgentMovement, getMovementMode, getMovementNote, canCorrectMovement, summarizeAgentLedger, statementWithBalances, getMovementOrderIds, movementOwnsPayment, ledgerFinancialTotals, isAgentCashMovement, isRecognizedOrder, outstandingAgentDebt } from '../src/lib/agentMovements.ts';
+
+test('reports include noncash credits in debt and never offset one customer debt with another customer credit', () => {
+  const entries = [tx(-100, 'شراء طلبية #34'), tx(20, 'خصم غير نقدي', { type: 'ADJUSTMENT' }), tx(200, 'إيداع', { agentId: 'other' })];
+  assert.equal(outstandingAgentDebt(entries), 80);
+  assert.equal(ledgerFinancialTotals(entries).received, 200);
+});
 
 test('sales, safe and reports distinguish cash from order reversals and only recognize completed sales', () => {
   const receipt = tx(6200, 'تسديد', { id: 79 });

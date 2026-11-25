@@ -7,6 +7,7 @@ import { Card } from '../../../components/ui';
 import { PaginationControl } from '../../../components/shared/PaginationControl';
 import { WalletTransaction, Order } from '../../../types';
 import { db } from '../../../lib/db';
+import { summarizeAgentLedger, statementWithBalances, getMovementOrderIds } from '../../../lib/agentMovements';
 import { formatDate, formatTime } from '../../../lib/dateUtils';
 
 interface FinanceTabProps {
@@ -31,11 +32,11 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({ myTransactions, currentB
     }, [financeSearch]);
 
     const filteredTransactions = useMemo(() => {
-        return myTransactions.filter(t =>
-            t.description.toLowerCase().includes(financeSearch.toLowerCase()) ||
-            t.amount.toString().includes(financeSearch)
+        return statementWithBalances(myTransactions, currentBalance).filter(t =>
+            String(t.description || '').toLowerCase().includes(financeSearch.toLowerCase()) ||
+            String(t.amount).includes(financeSearch) || String(t.id).includes(financeSearch.replace(/^#/, ''))
         );
-    }, [myTransactions, financeSearch]);
+    }, [myTransactions, financeSearch, currentBalance]);
 
     
     const translateDesc = (desc: string) => {
@@ -51,6 +52,8 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({ myTransactions, currentB
         res = res.replace('دفعة', t('agent.desc_payment'));
         return res;
     };
+
+    const summary = summarizeAgentLedger(myTransactions, currentBalance);
 
     const currentTransactions = useMemo(() => {
         return filteredTransactions.slice(financePage * financeRowsPerPage, (financePage + 1) * financeRowsPerPage);
@@ -82,13 +85,13 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({ myTransactions, currentB
                         <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
                             <p className="text-sm text-gray-500 mb-1 font-bold">{t('agent.total_payments')}</p>
                             <p className="text-xl font-mono font-bold text-green-600">
-                                ${myTransactions.filter(t => t.amount > 0).reduce((acc, curr) => acc + curr.amount, 0).toLocaleString()}
+                                ${summary.paid.toLocaleString()}
                             </p>
                         </div>
                         <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
                             <p className="text-sm text-gray-500 mb-1 font-bold">{t('agent.total_debts')}</p>
                             <p className="text-xl font-mono font-bold text-red-600">
-                                ${Math.abs(myTransactions.filter(t => t.amount < 0).reduce((acc, curr) => acc + curr.amount, 0)).toLocaleString()}
+                                ${summary.debt.toLocaleString()}
                             </p>
                         </div>
                         <div className={`p-4 rounded-2xl border ${!isDebt ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'}`}>
@@ -131,10 +134,12 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({ myTransactions, currentB
                     <table className="w-full text-right text-sm">
                         <thead className="bg-white text-gray-500 font-bold border-b border-gray-100">
                             <tr>
+                                <th className="p-4">رقم الحركة</th>
                                 <th className="p-4 w-40">{t('agent.date')}</th>
                                 <th className="p-4 w-48">{t('agent.col_type')}</th>
                                 <th className="p-4">{t('agent.col_details')}</th>
                                 <th className="p-4 text-left w-40">{t('agent.col_amount')}</th>
+                                <th className="p-4 text-left">الرصيد بعد الحركة</th>
                                 <th className="p-4 w-20 text-center">{t('agent.col_preview')}</th>
                             </tr>
                         </thead>
@@ -150,17 +155,16 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({ myTransactions, currentB
                                     </tr>
                                 ))
                             ) : currentTransactions.map(txn => {
-                                // Check for Order ID in description for "View Order" button
-                                const match = txn.description.match(/#(\d+)/);
-                                const relatedOrderId = match ? parseInt(match[1]) : null;
-                                const canViewOrder = relatedOrderId && db.orders.some(o => o.id === relatedOrderId);
+                                const ids = getMovementOrderIds(txn);
+                                const relatedOrders = db.orders.filter(o => String(o.agentId) === String(txn.agentId) && ids.includes(String(o.id)));
+                                const canViewOrder = relatedOrders.length === 1;
 
                                 let label: string = txn.type;
                                 let typeStyle = '';
                                 let Icon = Wallet;
 
                                 if (txn.amount >= 0) {
-                                    label = t('agent.deposit_payment');
+                                    label = txn.paymentDetails?.reversal ? 'عكس احتساب طلب ملغي' : txn.type === 'ADJUSTMENT' ? 'تسوية رصيد غير نقدية' : t('agent.deposit_payment');
                                     typeStyle = 'bg-green-50 text-green-700 border border-green-100';
                                     Icon = TrendingUp;
                                 } else {
@@ -171,6 +175,7 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({ myTransactions, currentB
 
                                 return (
                                     <tr key={txn.id} className="hover:bg-gray-50 transition-colors">
+                                        <td className="p-4 font-mono font-bold" dir="ltr">#{txn.id}</td>
                                         <td className="p-4 font-mono text-gray-500 text-xs">
                                             <div className="font-bold text-gray-700 mb-0.5">{formatDate(txn.createdAt)}</div>
                                             {formatTime(txn.createdAt)}
@@ -187,10 +192,11 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({ myTransactions, currentB
                                         <td className={`p-4 text-left font-mono font-bold text-base ${txn.amount >= 0 ? 'text-green-600' : 'text-red-600'}`} dir="ltr">
                                             {txn.amount > 0 ? '+' : ''}{txn.amount.toLocaleString()}
                                         </td>
+                                        <td className="p-4 text-left font-mono font-bold" dir="ltr">{txn.balanceAfter.toLocaleString('en-US')}</td>
                                         <td className="p-4 text-center">
                                             {canViewOrder && (
                                                 <button
-                                                    onClick={() => onViewOrder(db.orders.find(o => o.id === relatedOrderId) || null as any)}
+                                                    onClick={() => onViewOrder(relatedOrders[0])}
                                                     className="text-[#0e3c63] hover:bg-blue-50 p-2 rounded-lg transition-colors inline-flex items-center justify-center"
                                                     title={t('agent.view_order')}
                                                 >
@@ -203,7 +209,7 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({ myTransactions, currentB
                             })}
                             {!isLoading && currentTransactions.length === 0 && (
                                 <tr>
-                                    <td colSpan={5} className="text-center p-10 text-gray-400">
+                                    <td colSpan={7} className="text-center p-10 text-gray-400">
                                         <div className="flex flex-col items-center justify-center gap-2">
                                             <DollarSign size={32} className="opacity-20" />
                                             <p>{t('agent.no_financial_records')}</p>

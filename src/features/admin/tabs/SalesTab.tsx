@@ -5,13 +5,14 @@ import { DollarSign, TrendingDown, TrendingUp, Search, Eye, ChevronDown, Users, 
 import { Card, DateRangePicker, UserAvatar } from '../../../components/ui';
 import { UserSelector } from '../../../components/shared/UserSelector';
 import { PaginationControl } from '../../../components/shared/PaginationControl';
+import { ledgerFinancialTotals, getMovementOrderIds } from '../../../lib/agentMovements';
 import { db } from '../../../lib/db';
 import { formatDate, formatTime } from '../../../lib/dateUtils';
 
 export const SalesTab = ({ transactions, agents, isDateInRange, onNavigateToAgent, onViewOrder }: any) => {
     const [salesFromDate, setSalesFromDate] = useState('');
     const [salesToDate, setSalesToDate] = useState('');
-    const [salesSelectedAgent, setSalesSelectedAgent] = useState<'ALL' | number>('ALL');
+    const [salesSelectedAgent, setSalesSelectedAgent] = useState<'ALL' | string | number>('ALL');
     const [financialSearch, setFinancialSearch] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [isFilterCollapsed, setIsFilterCollapsed] = useState(true);
@@ -38,25 +39,16 @@ export const SalesTab = ({ transactions, agents, isDateInRange, onNavigateToAgen
     }, [transactions, salesFromDate, salesToDate, salesSelectedAgent, financialSearch, isDateInRange]);
 
     const stats = useMemo(() => {
-        const received = contextTransactions.filter((tx: any) => tx.amount >= 0).reduce((acc: number, tx: any) => acc + (tx.amount || 0), 0);
-        const billed = contextTransactions.filter((tx: any) => tx.amount < 0).reduce((acc: number, tx: any) => acc + Math.abs(tx.amount || 0), 0);
-        return { received, billed, net: received - billed };
+        return ledgerFinancialTotals(contextTransactions);
     }, [contextTransactions]);
 
     const currentTransactions = contextTransactions.slice(salesPage * salesRowsPerPage, (salesPage + 1) * salesRowsPerPage);
 
     // دالة ذكية لإيجاد الطلب المرتبط بالحركة المالية قبل عرضه
     const handleViewOrder = (transaction: any) => {
-        const match = transaction.description.match(/#(\d+)/);
-        if (match) {
-            const orderId = parseInt(match[1]);
-            const order = db.orders.find(o => o.id === orderId);
-            if (order) {
-                onViewOrder(order);
-            } else {
-                // إذا لم يكن طلباً (مثلاً تسديد يدوي)، لا نفعل شيئاً أو يمكن إظهار رسالة
-            }
-        }
+        const ids = getMovementOrderIds(transaction);
+        const related = db.orders.filter(o => String(o.agentId) === String(transaction.agentId) && ids.includes(String(o.id)));
+        if (related.length === 1) onViewOrder(related[0]);
     };
 
     const translateDesc = (desc: string) => {
@@ -143,7 +135,7 @@ export const SalesTab = ({ transactions, agents, isDateInRange, onNavigateToAgen
                         <tbody className="divide-y divide-gray-50">
                             {isLoading ? Array.from({ length: 5 }).map((_, i) => <tr key={i} className="animate-pulse"><td colSpan={5} className="p-8"><div className="h-4 bg-gray-100 rounded w-full"></div></td></tr>) : currentTransactions.map((tx: any) => {
                                 const isPositive = tx.amount >= 0;
-                                const hasOrder = tx.description.includes('#');
+                                const hasOrder = db.orders.some(o => String(o.agentId) === String(tx.agentId) && getMovementOrderIds(tx).includes(String(o.id)));
                                 const agent = db.users.find(u => u.id === tx.agentId);
 
                                 return (
@@ -169,7 +161,7 @@ export const SalesTab = ({ transactions, agents, isDateInRange, onNavigateToAgen
                                         <td className="p-5 font-bold text-gray-600 text-xs">{translateDesc(tx.description)}</td>
                                         <td className={`p-5 text-left font-mono font-black text-lg ${isPositive ? 'text-emerald-600' : 'text-red-600'}`} dir="ltr">
                                             {isPositive ? '+' : ''}{(tx.amount || 0).toLocaleString()}
-                                            <span className={`block text-[9px] uppercase tracking-tighter mt-1 ${isPositive ? 'text-emerald-400' : 'text-red-400'}`}>{isPositive ? t('batch4.txt_receipt') : t('batch4.txt_debt')}</span>
+                                            <span className={`block text-[9px] uppercase tracking-tighter mt-1 ${isPositive ? 'text-emerald-400' : 'text-red-400'}`}>{tx.paymentDetails?.reversal ? 'عكس احتساب طلب ملغي' : isPositive && tx.type === 'ADJUSTMENT' ? 'تسوية رصيد غير نقدية' : isPositive ? t('batch4.txt_receipt') : tx.description?.includes('ترجيع كاش فعلي للوكيل') ? 'صرف كاش للوكيل' : t('batch4.txt_debt')}</span>
                                         </td>
                                         <td className="p-5 text-center">
                                             {hasOrder && (

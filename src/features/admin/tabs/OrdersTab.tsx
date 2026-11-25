@@ -1,6 +1,6 @@
 import { getProductFamily, getProductUnit, isUnitPricedProduct, snapshotProductUnits } from '../../../lib/productFamilies';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
     Search, Eye, Edit, Wallet, AlertCircle, Hourglass, Activity, Filter, ChevronDown,
     Plus, Trash2, Banknote, ShoppingBag, CreditCard, Clock, Send, X, Save, Box, Layers,
@@ -45,6 +45,10 @@ export const OrdersTab = ({ orders, onViewOrder, onDeleteOrder, isDateInRange, o
     const [ordersPage, setOrdersPage] = useState(0);
     const [ordersRowsPerPage, setOrdersRowsPerPage] = useState(10);
     const [isLoading, setIsLoading] = useState(true);
+    const [isPaymentSaving, setIsPaymentSaving] = useState(false);
+    const [isManualSaving, setIsManualSaving] = useState(false);
+    const paymentBusy = useRef(false);
+    const manualBusy = useRef(false);
 
     const [activeFilter, setActiveFilter] = useState<{ type: 'PAYMENT' | 'PRODUCTION' | 'ALL', value: string | null }>({ type: 'ALL', value: null });
 
@@ -216,7 +220,7 @@ export const OrdersTab = ({ orders, onViewOrder, onDeleteOrder, isDateInRange, o
             try {
                 const canEditCompletedQuantities = userPermissions?.includes('UNLOCK_ORDERS') && unlockedOrders.has(editingOrder.id);
                 const isCompletedWithoutUnlock = editingOrder.productionStatus === ProductionStatus.COMPLETED && !canEditCompletedQuantities;
-                const originalItems = sortOrderItemsByProductCode(editingOrder.items);
+                const originalItems = sortOrderItemsByProductCode(editingOrder.items as OrderItem[]);
                 const quantityChanged = editingOrderItems.some((item, idx) => {
                     const original = originalItems[idx];
                     return !original || original.quantityCartons !== item.quantityCartons || original.quantityMeters !== item.quantityMeters;
@@ -262,13 +266,14 @@ export const OrdersTab = ({ orders, onViewOrder, onDeleteOrder, isDateInRange, o
 
     const handleSaveInvoicePayment = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (paymentBusy.current) return;
         const order = paymentModal.order;
         if (!order) return;
 
         const paymentAddition = Number(paymentModal.amount || 0);
         const remainingAmount = Math.max((order.totalAmount || 0) - (order.paidAmount || 0), 0);
 
-        if (Number.isNaN(paymentAddition) || paymentAddition <= 0) {
+        if (!Number.isFinite(paymentAddition) || paymentAddition <= 0) {
             toast.error('مبلغ الواصل غير صحيح');
             return;
         }
@@ -278,74 +283,14 @@ export const OrdersTab = ({ orders, onViewOrder, onDeleteOrder, isDateInRange, o
             return;
         }
 
+        paymentBusy.current = true; setIsPaymentSaving(true);
         try {
-            const unchangedItems = order.items.map(i => ({
-                productId: i.productId,
-                paintColor: i.paintColor,
-                    productSaleMode: i.productSaleMode,
-                productMetersPerCarton: i.productMetersPerCarton,
-                qMeters: i.quantityMeters,
-                qCartons: i.quantityCartons,
-                isSpecialRequest: i.isSpecialRequest,
-                specialRequestNote: i.specialRequestNote,
-                unitPriceCarton: i.unitPriceCarton,
-                unitPriceMeter: i.unitPriceMeter,
-                priceAdjustmentNote: i.priceAdjustmentNote
-            }));
-
-            await db.updateOrder(currentUser!.id, order.id, unchangedItems, paymentAddition, order.discountValue || 0, order.discountType || 'FIXED');
+            await db.saveAgentMovement(currentUser!.id, order.agentId, { mode: 'invoice', orderId: order.id, amount: paymentAddition });
             toast.success('تم تسجيل الواصل بنجاح');
             refreshPaymentModalOrder(order.id);
         } catch (err: any) {
             toast.error(err.message);
-        }
-    };
-
-    const handleEditPayment = async (paymentId: number) => {
-        const order = paymentModal.order;
-        if (!order) return;
-
-        const nextAmount = Number(paymentModal.editAmount || 0);
-        if (Number.isNaN(nextAmount) || nextAmount <= 0) {
-            toast.error('مبلغ الدفعة غير صحيح');
-            return;
-        }
-
-        const otherPaymentsTotal = (order.paymentHistory || [])
-            .filter(pay => pay.id !== paymentId)
-            .reduce((sum, pay) => sum + (Number(pay.amountAdded) || 0), 0);
-
-        if (otherPaymentsTotal + nextAmount > order.totalAmount) {
-            toast.warning('مجموع الدفعات أكبر من الفاتورة', `أقصى مبلغ ممكن لهذه الدفعة هو $${Math.max(order.totalAmount - otherPaymentsTotal, 0).toLocaleString()}.`);
-            return;
-        }
-
-        try {
-            const nextHistory = (order.paymentHistory || []).map(pay =>
-                pay.id === paymentId
-                    ? { ...pay, amountAdded: nextAmount, note: pay.note || 'تعديل دفعة' }
-                    : pay
-            );
-            await db.updateOrderPaymentHistory(currentUser!.id, order.id, nextHistory);
-            toast.success('تم تعديل الدفعة');
-            refreshPaymentModalOrder(order.id);
-        } catch (err: any) {
-            toast.error(err.message);
-        }
-    };
-
-    const handleDeletePayment = async (paymentId: number) => {
-        const order = paymentModal.order;
-        if (!order) return;
-
-        try {
-            const nextHistory = (order.paymentHistory || []).filter(pay => pay.id !== paymentId);
-            await db.updateOrderPaymentHistory(currentUser!.id, order.id, nextHistory);
-            toast.success('تم حذف الدفعة');
-            refreshPaymentModalOrder(order.id);
-        } catch (err: any) {
-            toast.error(err.message);
-        }
+        } finally { paymentBusy.current = false; setIsPaymentSaving(false); }
     };
 
     const addProductToEditOrder = (p: Product) => {
@@ -629,8 +574,10 @@ export const OrdersTab = ({ orders, onViewOrder, onDeleteOrder, isDateInRange, o
     const manualFinalTotal = manualSubtotal - manualActualDiscount;
 
     const handleCreateManualOrder = async () => {
+        if (manualBusy.current) return;
         if (manualOrderAgentId === 'ALL') { toast.error('يرجى تحديد الوكيل'); return; }
         if (manualOrderItems.length === 0) { toast.error('السلة فارغة'); return; }
+        manualBusy.current = true; setIsManualSaving(true);
         try {
             // 1. Create Base Order
             const itemsPayload = manualOrderItems.map(i => ({
@@ -643,24 +590,15 @@ export const OrdersTab = ({ orders, onViewOrder, onDeleteOrder, isDateInRange, o
                 isSpecial: i.isSpecialRequest,
                 specialNote: i.specialRequestNote
             }));
-            const newOrder = await db.createOrder(manualOrderAgentId, itemsPayload, 0, true, currentUser?.fullName, currentUser?.id);
-
-            // 2. Immediately update with custom prices if needed (admin override prices)
-            const updatePayload = manualOrderItems.map(i => ({
-                ...i,
-                qCartons: i.quantityCartons,
-                paintColor: i.paintColor,
-                    productSaleMode: i.productSaleMode,
-                productMetersPerCarton: i.productMetersPerCarton,
-                qMeters: i.quantityMeters,
-            }));
-            db.updateOrder(currentUser!.id, newOrder.id, updatePayload, 0, manualDiscount, manualDiscountType);
+            await db.createOrder(manualOrderAgentId, itemsPayload, 0, true, currentUser?.fullName, currentUser?.id, {
+                items: manualOrderItems, discountValue: manualDiscount, discountType: manualDiscountType
+            });
 
             toast.success('تم إنشاء الطلب اليدوي بنجاح');
             setManualOrderModal(false);
             setManualOrderItems([]);
             setManualOrderAgentId('ALL');
-        } catch (err: any) { toast.error(err.message); }
+        } catch (err: any) { toast.error(err.message); } finally { manualBusy.current = false; setIsManualSaving(false); }
     };
 
     return (
@@ -740,12 +678,12 @@ export const OrdersTab = ({ orders, onViewOrder, onDeleteOrder, isDateInRange, o
                                                 {isLocked && (() => {
                                                     const canUnlock = userPermissions?.includes('UNLOCK_ORDERS');
                                                     const isUnlocked = unlockedOrders.has(o.id);
-                                                    
+
                                                     if (isUnlocked) {
                                                         // Show re-lock button
                                                         return (
                                                             <Tooltip content="إعادة قفل الطلب">
-                                                                <button 
+                                                                <button
                                                                     onClick={() => {
                                                                         setUnlockedOrders(prev => { const next = new Set(prev); next.delete(o.id); return next; });
                                                                         toast.info('تم إعادة قفل الطلب');
@@ -760,7 +698,7 @@ export const OrdersTab = ({ orders, onViewOrder, onDeleteOrder, isDateInRange, o
 
                                                     return (
                                                     <Tooltip content={canUnlock ? "انقر مرتين لفتح القفل مؤقتاً" : (isPaid ? "طلب مغلق نهائياً" : "طلب مكتمل - مسموح بالدفع فقط")}>
-                                                        <button 
+                                                        <button
                                                             disabled={!canUnlock}
                                                             onDoubleClick={() => {
                                                                 if (canUnlock) {
@@ -1246,7 +1184,7 @@ export const OrdersTab = ({ orders, onViewOrder, onDeleteOrder, isDateInRange, o
                                 ) : (
                                     <div className="space-y-2 max-h-56 overflow-y-auto custom-scrollbar">
                                         {[...(paymentOrder.paymentHistory || [])].reverse().map(pay => {
-                                            const isEditing = paymentModal.editingPaymentId === pay.id;
+
                                             return (
                                                 <div key={pay.id} className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-center bg-gray-50 rounded-2xl px-3 py-3 border border-gray-100">
                                                     <div className="flex items-center gap-3 min-w-0">
@@ -1257,34 +1195,9 @@ export const OrdersTab = ({ orders, onViewOrder, onDeleteOrder, isDateInRange, o
                                                         </div>
                                                     </div>
                                                     <div className="flex items-center justify-end gap-2">
-                                                        {isEditing ? (
-                                                            <>
-                                                                <input
-                                                                    type="number"
-                                                                    min="1"
-                                                                    value={paymentModal.editAmount}
-                                                                    onChange={e => setPaymentModal(prev => ({ ...prev, editAmount: e.target.value }))}
-                                                                    className="w-28 h-10 bg-white border-2 border-emerald-100 rounded-xl px-3 text-center font-mono font-black text-gray-800 outline-none focus:border-emerald-500"
-                                                                />
-                                                                <button type="button" onClick={() => handleEditPayment(pay.id)} className="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center hover:bg-emerald-600 transition-all" title="حفظ تعديل الدفعة">
-                                                                    <Save size={16} />
-                                                                </button>
-                                                                <button type="button" onClick={() => setPaymentModal(prev => ({ ...prev, editingPaymentId: null, editAmount: '' }))} className="w-10 h-10 rounded-xl bg-gray-100 text-gray-500 flex items-center justify-center hover:bg-gray-200 transition-all" title="إلغاء التعديل">
-                                                                    <X size={16} />
-                                                                </button>
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                <span className="font-mono font-black text-emerald-600 min-w-[90px] text-left">${pay.amountAdded.toLocaleString()}</span>
-                                                                <button type="button" onClick={() => setPaymentModal(prev => ({ ...prev, editingPaymentId: pay.id, editAmount: String(pay.amountAdded) }))} className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all" title="تعديل الدفعة">
-                                                                    <Edit size={16} />
-                                                                </button>
-                                                                <button type="button" onClick={() => handleDeletePayment(pay.id)} className="w-10 h-10 rounded-xl bg-red-50 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all" title="حذف الدفعة">
-                                                                    <Trash2 size={16} />
-                                                                </button>
-                                                            </>
-                                                        )}
-                                                    </div>
+                                                        <span className="font-mono font-black text-emerald-600 min-w-[90px] text-left">${Number(pay.amountAdded).toLocaleString('en-US')}</span>
+                                                            <button type="button" title="تصحيح من كشف الحساب" onClick={() => { setPaymentModal({ order: null, amount: '', editingPaymentId: null, editAmount: '' }); onNavigateToAgent(paymentOrder.agentId); }} className="h-10 px-3 rounded-xl bg-blue-50 text-blue-600 font-bold text-xs">تصحيح من كشف الحساب</button>
+                                                        </div>
                                                 </div>
                                             );
                                         })}
@@ -1292,7 +1205,7 @@ export const OrdersTab = ({ orders, onViewOrder, onDeleteOrder, isDateInRange, o
                                 )}
                             </div>
 
-                            <Button type="submit" disabled={paymentRemainingAmount <= 0} className="w-full h-14 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-black text-lg shadow-xl">
+                            <Button type="submit" disabled={isPaymentSaving || paymentRemainingAmount <= 0} className="w-full h-14 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-black text-lg shadow-xl">
                                 <Save size={20} /> حفظ الواصل
                             </Button>
                         </div>
@@ -1555,7 +1468,7 @@ export const OrdersTab = ({ orders, onViewOrder, onDeleteOrder, isDateInRange, o
                                             </div>
                                             <div className="space-y-4 p-5 rounded-3xl bg-white/5 border border-white/10 relative overflow-hidden"><div className="absolute top-0 right-0 p-2 opacity-10"><Tag size={40} /></div><label className="block text-[10px] font-black text-amber-300 uppercase tracking-widest flex items-center gap-2"><Percent size={14} /> خصم إضافي</label><div className="flex gap-2"><div className="flex-1 relative"><input type="number" value={manualDiscount} onChange={e => setManualDiscount(Math.max(0, Number(e.target.value)))} className="w-full h-12 bg-white/10 border border-white/10 rounded-xl px-4 font-black font-mono text-white outline-none focus:bg-white/20" placeholder="0" /><span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 text-xs font-black">{manualDiscountType === 'PERCENT' ? '%' : '$'}</span></div><div className="flex bg-white/5 rounded-xl p-1 border border-white/10"><button type="button" onClick={() => setManualDiscountType('FIXED')} className={`px-3 rounded-lg text-[10px] font-black transition-all ${manualDiscountType === 'FIXED' ? 'bg-white text-[#0e3c63]' : 'text-blue-200'}`}>مبلغ</button><button type="button" onClick={() => setManualDiscountType('PERCENT')} className={`px-3 rounded-lg text-[10px] font-black transition-all ${manualDiscountType === 'PERCENT' ? 'bg-white text-[#0e3c63]' : 'text-blue-200'}`}>%</button></div></div></div>
                                             <div className="bg-emerald-400/10 p-5 rounded-2xl border border-emerald-400/20 text-center"><p className="text-emerald-400 text-[10px] font-black uppercase tracking-widest mb-1">الصافي النهائي</p><h2 className="text-4xl font-black font-mono text-emerald-400 tracking-tighter">${manualFinalTotal.toLocaleString()}</h2></div>
-                                            <Button onClick={handleCreateManualOrder} className="w-full h-16 bg-emerald-500 hover:bg-emerald-600 text-white text-lg font-black rounded-2xl shadow-xl transition-all group flex items-center justify-center gap-3"><Save size={22} /> إنشاء الطلب</Button>
+                                            <Button disabled={isManualSaving} onClick={handleCreateManualOrder} className="w-full h-16 bg-emerald-500 hover:bg-emerald-600 text-white text-lg font-black rounded-2xl shadow-xl transition-all group flex items-center justify-center gap-3"><Save size={22} /> إنشاء الطلب</Button>
                                         </div>
                                     </div>
                                 </div>

@@ -169,6 +169,7 @@ export interface WalletTransaction {
   createdAt: string;
   locked?: boolean;
   linkedOrderId?: number | string | null;
+    paymentDetails?: import('../lib/agentMovements').PaymentDetails | null;
 }
 
 export interface AdminActionResponse {

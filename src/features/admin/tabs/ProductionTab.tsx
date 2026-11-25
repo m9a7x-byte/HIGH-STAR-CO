@@ -93,8 +93,8 @@ export const ProductionTab = ({ productionQueue, canEdit, onUpdateStatus, onView
 
     const currentQueue = filteredQueue.slice(queuePage * queueRowsPerPage, (queuePage + 1) * queueRowsPerPage);
 
-    const handleUpdateDays = (orderId: number, days: number) => {
-        db.updateOrderEstimate(user!.id, orderId, days);
+    const handleUpdateDays = async (orderId: number, days: number) => {
+        try { await db.updateOrderEstimate(user!.id, orderId, days); } catch (err: any) { toast.error(err.message || 'تعذر تحديث مدة التجهيز'); }
     };
 
     const handleConfirmAction = async () => {
@@ -109,7 +109,7 @@ export const ProductionTab = ({ productionQueue, canEdit, onUpdateStatus, onView
 
         // Directly call database update to bypass parent's confirmation logic
         try {
-            await db.updateOrderStatus(user!.id, order.id, 'production', newStatus);
+            await db.updateOrderStatus(user!.id, order.id, 'production', newStatus, { productionStatus: order.productionStatus, totalAmount: order.totalAmount });
         } catch (err: any) {
             toast.error(err.message || 'تعذر تغيير حالة الطلب');
             return;
@@ -222,7 +222,7 @@ export const ProductionTab = ({ productionQueue, canEdit, onUpdateStatus, onView
                                     </td>
                                     <td className="p-4">
                                         <span className="font-mono text-xs text-gray-600 font-bold">
-                                            {o.movedToProductionAt ? new Date(o.movedToProductionAt).toLocaleDateString('ar-IQ') : '-'}
+                                            {o.movedToProductionAt ? new Date(o.movedToProductionAt).toLocaleDateString('ar-IQ-u-nu-latn') : '-'}
                                         </span>
                                     </td>
                                     <td className="p-4">

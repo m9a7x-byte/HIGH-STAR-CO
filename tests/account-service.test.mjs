@@ -22,7 +22,7 @@ function service({ status = 'active', deleted_at = null, failSave = false } = {}
       then: resolve => Promise.resolve({ data: [], error: failSave && written ? new Error('save failed') : null }).then(resolve)
     }; return query;
   }, rpc: async (name, args) => { calls.push({ rpc: name, args }); return { error: failSave ? new Error('save failed') : null }; } };
-  const source = readFileSync(new URL('../src/lib/db.ts', import.meta.url), 'utf8').replace('this.init();', '').replaceAll('import.meta.env', '({})');
+  const source = readFileSync(new URL('../src/lib/db.ts', import.meta.url), 'utf8').replace('this.init().catch(console.error);', '').replaceAll('import.meta.env', '({})');
   const { outputText } = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } });
   const enums = new Proxy({}, { get: (_, key) => key });
   const deps = { './supabase': { supabase }, '../types': { UserRole: enums, ProductionStatus: enums, PaymentStatus: enums }, './orderMoney': money, './agentMovements': movements,
@@ -72,4 +72,15 @@ test('completed order edits use the atomic RPC and never perform separate wallet
   assert.equal(calls[0].rpc, 'save_staff_order_edit');
   assert.equal(calls[0].args.p_changes.total_amount, 120);
   assert.equal(calls.some(c => c?.table), false);
+});
+
+test('manual requests insert final prices and discount once, without a second repricing update', async () => {
+  const { db, calls } = service();
+  await db.createOrder('user', [{ productId: -1, isSpecial: true, qCartons: 2, qMeters: 0 }], 0, true, 'Test', 'user', {
+    items: [{ unitPriceCarton: 20, unitPriceMeter: 0 }], discountValue: 10, discountType: 'PERCENT'
+  });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].payload.total_amount, 36);
+  assert.equal(calls[0].payload.sub_total_amount, 40);
+  assert.equal(calls[0].payload.items[0].unitPriceCarton, 20);
 });

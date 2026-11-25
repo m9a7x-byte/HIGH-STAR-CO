@@ -13,7 +13,7 @@ export default defineConfig({
       if (/\/src\/lib\/supabase(?:\.ts)?$/.test(absolute)) return path.join(root, 'tests/browser/supabase.mjs');
     },
     transform(code, id) {
-      if (id.replaceAll('\\', '/').endsWith('/src/lib/db.ts')) return code.replace('this.init();', '');
+      if (id.replaceAll('\\', '/').endsWith('/src/lib/db.ts')) return code.replace('this.init().catch(console.error);', '');
     }
   }, react()],
   define: { 'process.env.API_KEY': '""', 'process.env.GEMINI_API_KEY': '""' }

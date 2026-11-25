@@ -7,7 +7,7 @@ function service({ fail = false } = {}) {
   const calls=[]; const errors = new Error('رفض تغيير الحالة');
   const supabase={rpc:async(name,args)=>{calls.push({name,args});return {error:fail?errors:null};},from:()=>{throw Error('status must use atomic RPC');}};
   const types=new Proxy({}, {get:(_,key)=>key==='ProductionStatus'?{PENDING_TRANSFER:'PENDING_TRANSFER',PENDING_PAYMENT:'PENDING_PAYMENT'}:{}});
-  let source=readFileSync(new URL('../src/lib/db.ts',import.meta.url),'utf8').replace('this.init();','').replaceAll('import.meta.env','({})');
+  let source=readFileSync(new URL('../src/lib/db.ts',import.meta.url),'utf8').replace('this.init().catch(console.error);','').replaceAll('import.meta.env','({})');
   const {outputText}=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}});
   const exports={};new Function('require','exports',outputText)(name=>name==='./supabase'?{supabase}:name==='../types'?types:{},exports);
   const db=exports.db;db.orders=[{id:34,productionStatus:'COMPLETED',totalAmount:11376.96,paidAmount:0,paymentHistory:[]}];

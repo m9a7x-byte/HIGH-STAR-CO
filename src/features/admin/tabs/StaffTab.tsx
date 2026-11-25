@@ -779,7 +779,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                             <span className="text-[10px] font-bold text-gray-700 leading-tight dir-ltr">
                                                 {selectedEmployee.presence?.lastSeen ? (
                                                     <>
-                                                        {new Date(selectedEmployee.presence.lastSeen).toLocaleDateString('ar-IQ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                                                        {new Date(selectedEmployee.presence.lastSeen).toLocaleDateString('ar-IQ-u-nu-latn', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                                                         <br />
                                                         {new Date(selectedEmployee.presence.lastSeen).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                                                     </>
@@ -1046,7 +1046,7 @@ export const StaffTab = ({ employees, selectedEmployee, onSelectEmployee, isSupe
                                     <AvatarUploader
                                         currentAvatarUrl={editingEmployee?.imageUrl || ''}
                                         currentAvatarPath={(editingEmployee as any)?.avatar_path}
-                                        userName={editingEmployee?.fullName || t('batch4.new_employee') || 'موظف جديد'}
+                                        userName={editingEmployee?.fullName || t('batch4.new_employee', 'إضافة موظف') || 'موظف جديد'}
                                         targetUserId={editingEmployee?.id}
                                         onUploadSuccess={handleAvatarUpload}
                                     />

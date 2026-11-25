@@ -11,7 +11,7 @@ import {
 import { UserAvatar, Badge, Button, Card, Input, PhoneInput, DateRangePicker } from '../../../components/ui';
 import { AvatarUploader } from '../../../components/profile/AvatarUploader';
 import { formatDate, formatTime } from '../../../lib/dateUtils';
-import { canCorrectMovement, getMovementMode, getMovementNote } from '../../../lib/agentMovements';
+import { canCorrectMovement, getMovementMode, getMovementNote, getMovementOrderIds, summarizeAgentLedger, statementWithBalances, movementOwnsPayment } from '../../../lib/agentMovements';
 import { supabase } from '../../../lib/supabase';
 import { AgentType, UserRole, User as UserType, ProductionStatus, PaymentStatus, UserRoleLabels, Order, ProductionStatusLabels } from '../../../types';
 import { PaginationControl } from '../../../components/shared/PaginationControl';
@@ -122,17 +122,9 @@ const ModernTypeSelector = ({ value, onChange }: { value: AgentType, onChange: (
 
 const formatSignedMoney = (value: number) => `${value < 0 ? '-' : value > 0 ? '+' : ''}$${Math.abs(value).toLocaleString()}`;
 
-const isAgentDebtMovement = (tx: any) => {
-    const description = tx.description || '';
-    return (Number(tx.amount) || 0) < 0 && (
-        description.includes('شراء طلبية #') ||
-        description.includes('تعديل قيمة الطلب #')
-    );
-};
-
 export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, canChangeOrderStatus = false, canEditOrders = false, isSuperAdmin, onSelectAgent, onViewOrder }: any) => {
     const { t } = useTranslation();
-    
+
     const translateDesc = (desc: string) => {
         if (!desc) return '';
         let res = desc;
@@ -523,7 +515,7 @@ export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, c
     // --- LOGIC HELPERS ---
     const filteredAgents = useMemo(() => {
         return agents.filter((a: any) => {
-            const matchesSearch = a.fullName.toLowerCase().includes(listSearch.toLowerCase()) ||
+            const matchesSearch = String(a.fullName || '').toLowerCase().includes(listSearch.toLowerCase()) ||
                 (a.province && a.province.includes(listSearch)) ||
                 (a.phone && a.phone.includes(listSearch));
             const matchesType = agentTypeFilter === 'ALL' || a.agentDetails?.type === agentTypeFilter;
@@ -539,22 +531,16 @@ export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, c
 
     const agentTransactionsWithBalance = useMemo(() => {
         if (!agentTransactions) return [];
-        const sortedTx = [...agentTransactions].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-        let runningBalance = 0;
-        const withBalance = sortedTx.map(tx => {
-            runningBalance += tx.amount;
-            return { ...tx, balanceAfter: runningBalance };
-        });
-        return withBalance.reverse();
-    }, [agentTransactions]);
+        return statementWithBalances(agentTransactions, Number(displayAgent?.agentDetails?.currentBalance || 0));
+    }, [agentTransactions, displayAgent]);
 
     const filteredTransactions = useMemo(() => {
         if (!agentTransactionsWithBalance) return [];
         return agentTransactionsWithBalance.filter((t: any) => {
-            const matchesSearch = t.description.toLowerCase().includes(searchTerm.toLowerCase()) || t.amount.toString().includes(searchTerm) || String(t.id).includes(searchTerm.replace(/^#/, ''));
-            
+            const matchesSearch = String(t.description || '').toLowerCase().includes(searchTerm.toLowerCase()) || String(t.amount).includes(searchTerm) || String(t.id).includes(searchTerm.replace(/^#/, ''));
+
             let matchesType = true;
-            if (walletTypeFilter === 'ORDERS') matchesType = !!t.linkedOrderId || t.description.includes('#');
+            if (walletTypeFilter === 'ORDERS') matchesType = getMovementOrderIds(t).length > 0;
             else if (walletTypeFilter === 'DEPOSIT') matchesType = t.amount > 0 && (t.description.includes('إيداع') || t.description.includes('رصيد يدوي'));
             else if (walletTypeFilter === 'WITHDRAW') matchesType = t.amount < 0 && (t.description.includes('سحب') || (!t.linkedOrderId && !t.description.includes('#')));
             else if (walletTypeFilter === 'SETTLEMENT') matchesType = t.amount > 0 && t.description.includes('تسديد');
@@ -589,32 +575,20 @@ export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, c
             .filter(o => {
                 const term = agentOrderSearch.trim().toLowerCase();
                 if (!term) return true;
-                return String(o.id).includes(term) || o.items.some(item =>
-                    item.productCode.toLowerCase().includes(term) ||
-                    item.productDimensions.toLowerCase().includes(term)
+                return String(o.id).includes(term) || (o.items || []).some(item =>
+                    String(item.productCode || '').toLowerCase().includes(term) ||
+                    String(item.productDimensions || '').toLowerCase().includes(term)
                 );
             })
             .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    }, [displayAgent, agentOrderSearch, agents, agentTransactions]);
+    }, [displayAgent, agentOrderSearch, agents, agentTransactions, db.orders]);
 
     const currentAgentOrders = useMemo(() => {
         return selectedAgentOrders.slice(agentOrderPage * agentOrderRowsPerPage, (agentOrderPage + 1) * agentOrderRowsPerPage);
     }, [selectedAgentOrders, agentOrderPage, agentOrderRowsPerPage]);
 
     const agentFinancialSummary = useMemo(() => {
-        const balance = displayAgent?.agentDetails?.currentBalance || 0;
-        const debtMovements = (agentTransactions || []).filter(isAgentDebtMovement);
-        const debt = debtMovements.reduce((acc: number, tx: any) => acc + Math.abs(Number(tx.amount) || 0), 0);
-        const paid = Math.max(0, debt + balance);
-
-        return {
-            debt,
-            paid,
-            net: balance,
-            debtCount: debtMovements.length,
-            paidCount: (agentTransactions || []).filter((tx: any) => !isAgentDebtMovement(tx) && (Number(tx.amount) || 0) !== 0).length,
-            totalCount: (agentTransactions || []).length
-        };
+        return summarizeAgentLedger(agentTransactions || [], Number(displayAgent?.agentDetails?.currentBalance || 0));
     }, [displayAgent, agentTransactions]);
 
     const agentNetCardTheme = useMemo(() => {
@@ -653,7 +627,7 @@ export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, c
         if (!agent || !agent.agentDetails) return;
 
         const activeOrders = db.orders.filter(o =>
-            Number(o.agentId) === Number(agent.id) &&
+            String(o.agentId) === String(agent.id) &&
             o.productionStatus !== ProductionStatus.COMPLETED &&
             o.paymentStatus !== PaymentStatus.CANCELLED
         );
@@ -676,12 +650,16 @@ export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, c
         setDeleteConfirmModal({ isOpen: true, agent });
     };
 
-    const executeDeleteAgent = () => {
-        if (deleteConfirmModal.agent && currentUser) {
-            db.deleteAgent(currentUser.id, deleteConfirmModal.agent.id);
+    const executeDeleteAgent = async () => {
+        if (deleteConfirmModal.agent && currentUser && canEdit && !isSubmitting) {
+          setIsSubmitting(true);
+          try {
+            await db.deleteAgent(currentUser.id, deleteConfirmModal.agent.id);
             success(t('batch4.txt_vwet5h_6980'));
             setDeleteConfirmModal({ isOpen: false, agent: null });
             onSelectAgent(null);
+          } catch (err: any) { error(err.message || 'تعذر حذف الوكيل'); }
+          finally { setIsSubmitting(false); }
         }
     };
 
@@ -704,20 +682,6 @@ export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, c
         }
     };
 
-    const toOrderUpdatePayload = (order: Order) => order.items.map(item => ({
-        productId: item.productId,
-        paintColor: item.paintColor,
-        productSaleMode: item.productSaleMode,
-        productMetersPerCarton: item.productMetersPerCarton,
-        qMeters: item.quantityMeters,
-        qCartons: item.quantityCartons,
-        isSpecialRequest: item.isSpecialRequest,
-        specialRequestNote: item.specialRequestNote,
-        unitPriceCarton: item.unitPriceCarton,
-        unitPriceMeter: item.unitPriceMeter,
-        priceAdjustmentNote: item.priceAdjustmentNote
-    }));
-
     const refreshAgentOrderPaymentModal = (orderId: Order['id']) => {
         const updated = db.orders.find(o => o.id == orderId) as Order | undefined;
         setAgentOrderPaymentModal({ order: updated || null, amount: '', editingPaymentId: null, editAmount: '' });
@@ -726,54 +690,29 @@ export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, c
     const handleAgentInvoicePayment = async (e: React.FormEvent) => {
         e.preventDefault();
         const order = agentOrderPaymentModal.order;
-        if (!order) return;
+        if (!order || !currentUser || !canEdit || isSubmitting) return;
         const amount = Number(agentOrderPaymentModal.amount || 0);
         const remaining = Math.max((order.totalAmount || 0) - (order.paidAmount || 0), 0);
 
-        if (Number.isNaN(amount) || amount <= 0) { error('مبلغ الواصل غير صحيح'); return; }
+        if (!Number.isFinite(amount) || amount <= 0) { error('مبلغ الواصل غير صحيح'); return; }
         if (amount > remaining) { error('مبلغ الواصل أكبر من المتبقي'); return; }
 
+        setIsSubmitting(true);
         try {
-            await db.updateOrder(currentUser!.id, order.id, toOrderUpdatePayload(order), amount, order.discountValue || 0, order.discountType || 'FIXED');
+            await db.saveAgentMovement(currentUser.id, order.agentId, { mode: 'invoice', orderId: order.id, amount });
             success('تم تسجيل الواصل بنجاح');
             refreshAgentOrderPaymentModal(order.id);
         } catch (err: any) {
             error(err.message || 'تعذر تسجيل الواصل');
-        }
+        } finally { setIsSubmitting(false); }
     };
 
-    const handleEditAgentOrderPayment = async (paymentId: number) => {
-        const order = agentOrderPaymentModal.order;
-        if (!order) return;
-        const nextAmount = Number(agentOrderPaymentModal.editAmount || 0);
-        if (Number.isNaN(nextAmount) || nextAmount <= 0) { error('مبلغ الدفعة غير صحيح'); return; }
-
-        const otherPaymentsTotal = (order.paymentHistory || [])
-            .filter(pay => pay.id !== paymentId)
-            .reduce((sum, pay) => sum + (Number(pay.amountAdded) || 0), 0);
-        if (otherPaymentsTotal + nextAmount > order.totalAmount) { error('مجموع الدفعات أكبر من الفاتورة'); return; }
-
-        try {
-            const nextHistory = (order.paymentHistory || []).map(pay => pay.id === paymentId ? { ...pay, amountAdded: nextAmount } : pay);
-            await db.updateOrderPaymentHistory(currentUser!.id, order.id, nextHistory);
-            success('تم تعديل الدفعة');
-            refreshAgentOrderPaymentModal(order.id);
-        } catch (err: any) {
-            error(err.message || 'تعذر تعديل الدفعة');
-        }
-    };
-
-    const handleDeleteAgentOrderPayment = async (paymentId: number) => {
-        const order = agentOrderPaymentModal.order;
-        if (!order) return;
-        try {
-            const nextHistory = (order.paymentHistory || []).filter(pay => pay.id !== paymentId);
-            await db.updateOrderPaymentHistory(currentUser!.id, order.id, nextHistory);
-            success('تم حذف الدفعة');
-            refreshAgentOrderPaymentModal(order.id);
-        } catch (err: any) {
-            error(err.message || 'تعذر حذف الدفعة');
-        }
+    const openPaymentCorrection = (order: Order, payment: any) => {
+        const candidates = (agentTransactions || []).filter((tx: any) => movementOwnsPayment(tx, order, payment.id, db.orders));
+        if (candidates.length !== 1) { error('تعذر تحديد الحركة الأصلية بشكل مؤكد. راجع كشف الحساب لتصحيحها.'); return; }
+        const tx = candidates[0];
+        setAgentOrderPaymentModal({ order: null, amount: '', editingPaymentId: null, editAmount: '' });
+        setWalletModal({ isOpen: true, agent: displayAgent, mode: getMovementMode(tx), amount: String(Math.abs(Number(tx.amount))), notes: getMovementNote(tx), editId: tx.id });
     };
 
     const openAgentOrderEditModal = (order: Order) => {
@@ -859,39 +798,15 @@ export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, c
     };
 
     const handleAgentLoss = async (mode: 'CREDIT_ONLY' | 'CASH_REFUND') => {
-        if (isSubmitting || !lossModal.agent) return;
+        if (isSubmitting || !lossModal.agent || !currentUser || !canEdit) return;
         const amount = Number(lossModal.amount);
-        if (Number.isNaN(amount) || amount <= 0) { error('الرجاء إدخال مبلغ خسارة صحيح'); return; }
+        if (!Number.isFinite(amount) || amount <= 0) { error('الرجاء إدخال مبلغ خسارة صحيح'); return; }
 
         const note = lossModal.notes.trim();
         setIsSubmitting(true);
         try {
-            if (mode === 'CREDIT_ONLY') {
-                await db.addBalance(
-                    currentUser!.id,
-                    lossModal.agent.id,
-                    amount,
-                    note ? `خسارة/خصم للوكيل - إضافة رصيد: ${note}` : 'خسارة/خصم للوكيل - إضافة رصيد',
-                    { affectsSafe: false }
-                );
-                success('تم تسجيل الخسارة كرصيد للوكيل');
-            } else {
-                await db.addBalance(
-                    currentUser!.id,
-                    lossModal.agent.id,
-                    amount,
-                    note ? `خسارة/خصم للوكيل - اعتماد محاسبي: ${note}` : 'خسارة/خصم للوكيل - اعتماد محاسبي',
-                    { affectsSafe: false }
-                );
-                await db.addBalance(
-                    currentUser!.id,
-                    lossModal.agent.id,
-                    -amount,
-                    note ? `ترجيع كاش فعلي للوكيل: ${note}` : 'ترجيع كاش فعلي للوكيل',
-                    { affectsSafe: true }
-                );
-                success('تم تسجيل الخسارة وترجيع الكاش من القاصة');
-            }
+            await db.recordAgentLoss(currentUser!.id, lossModal.agent.id, amount, note, mode === 'CASH_REFUND');
+            success(mode === 'CREDIT_ONLY' ? 'تم تسجيل الخسارة كرصيد للوكيل' : 'تم تسجيل الخسارة وترجيع الكاش من القاصة');
 
             const updatedAgent = db.users.find((a: any) => a.id === lossModal.agent!.id);
             if (updatedAgent) onSelectAgent(updatedAgent);
@@ -1092,7 +1007,7 @@ export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, c
                             )
                         })}
                     </div>
-                    
+
                     {filteredAgents.length > listRowsPerPage && (
                         <div className="mt-8">
                             <PaginationControl
@@ -1164,7 +1079,7 @@ export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, c
                                 </div>
 
                                 <div className="flex items-center gap-3">
-                                    <button 
+                                    <button
                                         onClick={() => setShowThumbprintModal(true)}
                                         className="flex flex-col items-center justify-center gap-1.5 p-3 w-20 rounded-2xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:scale-105 transition-all shadow-sm border border-indigo-100"
                                         title="بصمة الوكيل الرقمية"
@@ -1334,7 +1249,7 @@ export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, c
                                                     <td className="p-6">
                                                         <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase ${tx.amount >= 0 ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-red-50 text-red-600 border border-red-100'}`}>
                                                             {tx.amount >= 0 ? <ArrowDownLeft size={14} /> : <ArrowUpRight size={14} />}
-                                                            {tx.amount >= 0 ? t('batch4.txt_9oodnp_6981') : t('batch4.txt_a86nmx_6981')}
+                                                            {tx.paymentDetails?.reversal ? 'عكس احتساب طلب ملغي' : tx.type === 'ADJUSTMENT' && tx.amount > 0 ? 'تسوية رصيد غير نقدية' : tx.amount >= 0 ? t('batch4.txt_9oodnp_6981') : t('batch4.txt_a86nmx_6981')}
                                                         </span>
                                                     </td>
                                                     <td className="p-6 text-gray-700 font-bold text-sm leading-relaxed max-w-[300px]">{translateDesc(tx.description)}</td>
@@ -1346,7 +1261,12 @@ export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, c
                                                     </td>
                                                     <td className="p-6 text-center">
                                                         <div className="flex items-center justify-center gap-1.5">
-                                                            <button onClick={() => { const ord = db.orders.find(o => tx.description.includes(o.id.toString())); if (ord) onViewOrder(ord); }} className="p-2 rounded-lg text-gray-300 hover:text-[#0e3c63] hover:bg-blue-50 transition-all disabled:opacity-20" disabled={!tx.description.includes('#')} title="عرض الطلب"><Eye size={16} /></button>
+                                                            <button onClick={() => {
+                                                                const ids = getMovementOrderIds(tx);
+                                                                const related = db.orders.filter(o => String(o.agentId) === String(displayAgent.id) && ids.includes(String(o.id)));
+                                                                if (related.length === 1) onViewOrder(related[0]);
+                                                                else if (related.length > 1) { setAgentDetailTab('orders'); setAgentOrderSearch(''); setAgentOrderPage(0); }
+                                                            }} className="p-2 rounded-lg text-gray-300 hover:text-[#0e3c63] hover:bg-blue-50 transition-all disabled:opacity-20" disabled={!db.orders.some(o => String(o.agentId) === String(displayAgent.id) && getMovementOrderIds(tx).includes(String(o.id)))} title="عرض الطلب"><Eye size={16} /></button>
                                                             {canEdit && canCorrectMovement(tx) ? (
                                                                 <>
                                                                     <button onClick={() => handleMovementLock(tx.id, true)} className="p-2 rounded-lg text-gray-300 hover:text-amber-500 hover:bg-amber-50" title="قفل الحركة"><Unlock size={16} /></button>
@@ -1921,24 +1841,13 @@ export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, c
                                         ) : (
                                             <div className="space-y-2 sm:max-h-52 sm:overflow-y-auto custom-scrollbar">
                                                 {[...(order.paymentHistory || [])].reverse().map(pay => {
-                                                    const isEditing = agentOrderPaymentModal.editingPaymentId === pay.id;
+
                                                     return (
                                                         <div key={pay.id} className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-center bg-gray-50 rounded-2xl px-3 py-3 border border-gray-100">
                                                             <div><span className="font-black text-gray-700 block">{pay.addedBy || 'مستخدم'}</span><span className="text-[10px] text-gray-400 font-bold">{formatDate(pay.date)}</span></div>
                                                             <div className="flex items-center justify-end gap-2">
-                                                                {isEditing ? (
-                                                                    <>
-                                                                        <input type="number" min="1" value={agentOrderPaymentModal.editAmount} onChange={e => setAgentOrderPaymentModal(prev => ({ ...prev, editAmount: e.target.value }))} className="w-28 h-10 bg-white border-2 border-emerald-100 rounded-xl px-3 text-center font-mono font-black outline-none focus:border-emerald-500" />
-                                                                        <button type="button" onClick={() => handleEditAgentOrderPayment(pay.id)} className="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center"><Save size={16} /></button>
-                                                                        <button type="button" onClick={() => setAgentOrderPaymentModal(prev => ({ ...prev, editingPaymentId: null, editAmount: '' }))} className="w-10 h-10 rounded-xl bg-gray-100 text-gray-500 flex items-center justify-center"><X size={16} /></button>
-                                                                    </>
-                                                                ) : (
-                                                                    <>
-                                                                        <span className="font-mono font-black text-emerald-600 min-w-[90px] text-left">${pay.amountAdded.toLocaleString()}</span>
-                                                                        <button type="button" onClick={() => setAgentOrderPaymentModal(prev => ({ ...prev, editingPaymentId: pay.id, editAmount: String(pay.amountAdded) }))} className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center"><Edit3 size={16} /></button>
-                                                                        <button type="button" onClick={() => handleDeleteAgentOrderPayment(pay.id)} className="w-10 h-10 rounded-xl bg-red-50 text-red-500 flex items-center justify-center"><Trash2 size={16} /></button>
-                                                                    </>
-                                                                )}
+                                                                <span className="font-mono font-black text-emerald-600 min-w-[90px] text-left">${Number(pay.amountAdded).toLocaleString('en-US')}</span>
+                                                                {canEdit && <button type="button" title="تصحيح الحركة الأصلية" onClick={() => openPaymentCorrection(order, pay)} className="h-10 px-3 rounded-xl bg-blue-50 text-blue-600 flex items-center gap-2 text-xs font-bold"><Edit3 size={16} /> تصحيح الحركة</button>}
                                                             </div>
                                                         </div>
                                                     );
@@ -1946,7 +1855,7 @@ export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, c
                                             </div>
                                         )}
                                     </div>
-                                    <Button type="submit" disabled={remaining <= 0} className="w-full h-14 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-black text-lg shadow-xl"><Save size={20} /> حفظ الواصل</Button>
+                                    <Button type="submit" disabled={remaining <= 0 || isSubmitting || !canEdit} className="w-full h-14 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-black text-lg shadow-xl"><Save size={20} /> حفظ الواصل</Button>
                                 </div>
                             );
                         })()}
@@ -2371,7 +2280,7 @@ export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, c
                                     <X size={20} />
                                 </button>
                             </div>
-                            
+
                             <div className="p-8">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {/* Main Digital ID Card */}
@@ -2418,7 +2327,7 @@ export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, c
                                             })()}
                                         </span>
                                     </div>
-                                    
+
                                     <div className="bg-gray-50 p-6 rounded-[1.5rem] border border-gray-100 shadow-sm flex flex-col gap-2 hover:border-blue-200 transition-all">
                                         <div className="flex items-center gap-2 text-blue-500 mb-2">
                                             <Globe size={18} />
@@ -2428,7 +2337,7 @@ export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, c
                                             {displayAgent?.last_ip || t('batch4.k544')}
                                         </span>
                                     </div>
-                                    
+
                                     <div className="bg-gray-50 p-6 rounded-[1.5rem] border border-gray-100 shadow-sm flex flex-col gap-2 hover:border-emerald-200 transition-all">
                                         <div className="flex items-center gap-2 text-emerald-500 mb-2">
                                             <Activity size={18} />
@@ -2438,7 +2347,7 @@ export const AgentsTab = ({ agents, selectedAgent, agentTransactions, canEdit, c
                                             {agentTransactions.length} الحركات
                                         </div>
                                     </div>
-                                    
+
                                     <div className="bg-gray-50 p-6 rounded-[1.5rem] border border-gray-100 shadow-sm flex flex-col gap-2 hover:border-amber-200 transition-all">
                                         <div className="flex items-center gap-2 text-amber-500 mb-2">
                                             <Clock size={18} />

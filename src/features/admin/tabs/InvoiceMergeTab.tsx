@@ -513,7 +513,7 @@ export const InvoiceMergeTab = ({ orders, products, onViewOrder }: InvoiceMergeT
                                             </div>
                                             <p className="text-sm font-black text-gray-800 truncate mt-1">{order.agentName}</p>
                                             <div className="flex items-center justify-between gap-2 mt-2">
-                                                <span className="text-[10px] font-bold text-gray-400">{new Date(order.createdAt).toLocaleDateString('ar-IQ')}</span>
+                                                <span className="text-[10px] font-bold text-gray-400">{new Date(order.createdAt).toLocaleDateString('ar-IQ-u-nu-latn')}</span>
                                                 <button type="button" onClick={(event) => { event.preventDefault(); onViewOrder(order); }} className="text-[10px] font-black text-blue-600 hover:text-blue-800">عرض الفاتورة</button>
                                             </div>
                                         </div>
@@ -585,7 +585,7 @@ export const InvoiceMergeTab = ({ orders, products, onViewOrder }: InvoiceMergeT
                             <p className="text-sm font-bold mt-1">{printMode === 'no-price' ? 'نسخة تجهيز بدون أسعار' : 'نسخة إدارة مع الأسعار'}</p>
                         </div>
                         <div className="text-left text-xs font-bold leading-6">
-                            <p>التاريخ: {new Date().toLocaleDateString('ar-IQ')}</p>
+                            <p>التاريخ: {new Date().toLocaleDateString('ar-IQ-u-nu-latn')}</p>
                             <p>عدد الفواتير: {summary.invoices}</p>
                             <p>الفواتير: {selectedInvoiceLabel}</p>
                         </div>

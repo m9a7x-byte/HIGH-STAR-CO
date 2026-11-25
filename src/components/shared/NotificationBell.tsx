@@ -6,6 +6,8 @@ import { useAuth } from '../../context/AuthContext';
 import { AppNotification } from '../../types';
 import { enablePushNotifications, getPushPermission, isPushNotificationSupported } from '../../lib/pushNotifications';
 import { useToast } from '../../context/ToastContext';
+import { formatDate, formatTime } from '../../lib/dateUtils';
+import { notificationActionUrl } from '../../lib/notificationLinks';
 
 export const NotificationBell = () => {
     const { user } = useAuth();
@@ -18,8 +20,8 @@ export const NotificationBell = () => {
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     const refreshData = useCallback(() => {
-        setNotifications([...db.notifications]);
-    }, []);
+        setNotifications(db.notifications.filter(n => String(n.userId) === String(user?.id)));
+    }, [user?.id]);
 
     useEffect(() => {
         refreshData();
@@ -39,16 +41,19 @@ export const NotificationBell = () => {
 
     const unreadCount = notifications.filter(n => !n.isRead).length;
 
-    const handleMarkAsRead = (id: string) => {
-        db.markNotificationAsRead(id);
+    const handleMarkAsRead = async (id: string) => {
+        try { await db.markNotificationAsRead(id); }
+        catch (err: any) { toast.error('تعذر تحديث الإشعار', err.message); }
     };
 
-    const handleMarkAllAsRead = () => {
-        db.markAllNotificationsAsRead();
+    const handleMarkAllAsRead = async () => {
+        try { await db.markAllNotificationsAsRead(); }
+        catch (err: any) { toast.error('تعذر تحديث الإشعارات', err.message); }
     };
 
-    const handleDeleteAll = () => {
-        db.deleteAllNotifications();
+    const handleDeleteAll = async () => {
+        try { await db.deleteAllNotifications(); }
+        catch (err: any) { toast.error('تعذر حذف الإشعارات', err.message); }
     };
 
     const handleEnablePush = async () => {
@@ -77,8 +82,7 @@ export const NotificationBell = () => {
     };
 
     const formatTimestamp = (timestamp: string) => {
-        const date = new Date(timestamp);
-        return date.toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' }) + ' ' + date.toLocaleDateString('ar-IQ', { month: 'numeric', day: 'numeric' });
+        return formatTime(timestamp) + ' ' + formatDate(timestamp, { month: 'numeric', day: 'numeric' });
     };
 
     return (
@@ -86,7 +90,7 @@ export const NotificationBell = () => {
             <button 
                 onClick={() => setIsOpen(!isOpen)} 
                 className={`relative p-2.5 rounded-xl transition-all duration-300 active:scale-95 shadow-inner border ${isOpen ? 'bg-sky-500 text-white border-sky-400/50' : 'bg-white/5 text-white hover:bg-white/10 border-white/10'}`}
-                title={t('notifications.bell')}
+                title={t('notifications.title')}
             >
                 <Bell 
                     size={22} 
@@ -218,12 +222,12 @@ export const NotificationBell = () => {
                                                     <Clock size={12} />
                                                     <span>{formatTimestamp(notif.createdAt)}</span>
                                                 </div>
-                                                {notif.actionUrl && (
+                                                {notificationActionUrl(notif.actionUrl, window.location.origin) && (
                                                     <button
                                                         onClick={(event) => {
                                                             event.stopPropagation();
                                                             handleMarkAsRead(notif.id);
-                                                            window.open(notif.actionUrl, '_blank', 'noopener,noreferrer');
+                                                            window.open(notificationActionUrl(notif.actionUrl, window.location.origin)!, '_blank', 'noopener,noreferrer');
                                                         }}
                                                         className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0e3c63] text-white text-[10px] font-black hover:bg-[#1a4d7a] transition-all"
                                                     >

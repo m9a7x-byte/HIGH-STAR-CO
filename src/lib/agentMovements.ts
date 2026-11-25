@@ -1,8 +1,8 @@
 // A movement owns specific invoice payments. Never infer ownership from an invoice number alone.
 export type MovementMode = 'deposit' | 'withdraw' | 'settlement' | 'invoice';
 type Allocation = { orderId: string | number; paymentId: string | number; amount: number };
-export type PaymentDetails = { mode: MovementMode; note: string; allocations: Allocation[] };
-type Payment = { id: string | number; amountAdded: number; previousPaid?: number; newTotalPaid?: number; date: string; addedBy?: string; addedById?: string | number; [key: string]: unknown };
+export type PaymentDetails = { mode: MovementMode; note: string; allocations: Allocation[]; reversal?: { kind: 'order_charge_reversal'; transactionId: string | number; orderId: string | number } };
+type Payment = { id: string | number; amountAdded: number; previousPaid?: number; newTotalPaid?: number; date: string; addedBy?: string; addedById?: string | number; note?: string };
 export type MovementOrder = {
     id: string | number; agentId: string | number; totalAmount: number; paidAmount: number;
     paymentHistory: Payment[]; paymentStatus: string; createdAt: string; paidAt?: string | null;
@@ -32,7 +32,67 @@ export function getMovementNote(tx: AgentMovement) {
 
 export function canCorrectMovement(tx: AgentMovement) {
     // Purchases and invoice price adjustments must still be edited from the invoice.
-    return !tx.locked && !(tx.amount <= 0 && tx.linkedOrderId) && !/^(?:شراء طلبية|تعديل قيمة الطلب|تعديل دفعات الطلب).*#/.test(tx.description);
+    return !tx.locked && !tx.paymentDetails?.reversal && !(tx.amount <= 0 && tx.linkedOrderId) && !/^(?:شراء طلبية|تعديل قيمة الطلب|تعديل دفعات الطلب).*#/.test(tx.description);
+}
+
+export function getMovementOrderIds(tx: AgentMovement): string[] {
+    if (tx.paymentDetails?.reversal) return [String(tx.paymentDetails.reversal.orderId)];
+    if (tx.paymentDetails?.allocations?.length) return [...new Set(tx.paymentDetails.allocations.map(a => String(a.orderId)))];
+    if (tx.linkedOrderId != null) return [String(tx.linkedOrderId)];
+    const description = String(tx.description || '');
+    if (!/^(?:شراء طلبية|تعديل قيمة الطلب|تعديل دفعات الطلب|تسديد موحد|دفعة(?: إضافية)? للطلب|تسديد واصل لطلبية|تسديد دفعة للطلب|تسديد إضافي للطلب)/.test(description)) return [];
+    return [...new Set([...description.split(' | ')[0].matchAll(/#(\d+)(?!\d)/g)].map(match => match[1]))];
+}
+
+const isPurchase = (tx: AgentMovement) => /^(?:شراء طلبية|تعديل قيمة الطلب).*#/.test(String(tx.description || ''));
+
+export const isRecognizedOrder = (order: { productionStatus: string; paymentStatus?: string }) => order.productionStatus === 'COMPLETED' && order.paymentStatus !== 'CANCELLED';
+
+export function isAgentCashMovement(tx: AgentMovement) {
+    if (tx.paymentDetails?.reversal || isPurchase(tx)) return false;
+    return (tx.type === 'DEPOSIT' && Number(tx.amount) > 0)
+        || (Number(tx.amount) < 0 && String(tx.description || '').includes('ترجيع كاش فعلي للوكيل'));
+}
+
+export function ledgerFinancialTotals(entries: AgentMovement[]) {
+    const received = money(entries.filter(isAgentCashMovement).reduce((sum, tx) => sum + cents(tx.amount), 0));
+    const billed = money(-entries.filter(tx => isPurchase(tx) || tx.paymentDetails?.reversal?.kind === 'order_charge_reversal').reduce((sum, tx) => sum + cents(tx.amount), 0));
+    const net = money(entries.reduce((sum, tx) => sum + cents(tx.amount), 0));
+    return { received, billed, net };
+}
+
+export function outstandingAgentDebt(entries: AgentMovement[]) {
+    const balances = new Map<string, number>();
+    for (const tx of entries) balances.set(String(tx.agentId), (balances.get(String(tx.agentId)) || 0) + cents(tx.amount));
+    return money([...balances.values()].reduce((total, balance) => total + Math.max(0, -balance), 0));
+}
+
+export function summarizeAgentLedger(entries: AgentMovement[], currentBalance: number) {
+    const reversed = new Set<string>();
+    const corrections = new Set<string>();
+    for (const tx of entries) {
+        const reversal = tx.paymentDetails?.reversal;
+        if (reversal?.kind !== 'order_charge_reversal') continue;
+        const source = entries.find(item => String(item.id) === String(reversal.transactionId) && String(item.agentId) === String(tx.agentId));
+        if (!source || !isPurchase(source) || Number(source.amount) >= 0 || cents(tx.amount) !== -cents(source.amount)
+            || !getMovementOrderIds(source).includes(String(reversal.orderId)) || reversed.has(String(source.id))) continue;
+        reversed.add(String(source.id));
+        corrections.add(String(tx.id));
+    }
+    const purchases = entries.filter(tx => isPurchase(tx) && !reversed.has(String(tx.id)));
+    const debt = money(Math.max(0, -purchases.reduce((sum, tx) => sum + cents(tx.amount), 0)));
+    const net = Number(currentBalance) || 0;
+    return { debt, paid: ledgerFinancialTotals(entries).received, net,
+        debtCount: purchases.filter(tx => Number(tx.amount) < 0).length,
+        paidCount: entries.filter(isAgentCashMovement).length,
+        totalCount: entries.length };
+}
+
+export function statementWithBalances<T extends AgentMovement>(entries: T[], currentBalance: number) {
+    const sorted = [...entries].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        || String(a.id).localeCompare(String(b.id), 'en', { numeric: true }));
+    let running = cents(currentBalance) - entries.reduce((sum, tx) => sum + cents(tx.amount), 0);
+    return sorted.map(tx => { running += cents(tx.amount); return { ...tx, amount: Number(tx.amount), balanceAfter: money(running) }; }).reverse();
 }
 
 function resolveAllocations(tx: AgentMovement, orders: MovementOrder[]): Allocation[] {
@@ -62,9 +122,16 @@ function resolveAllocations(tx: AgentMovement, orders: MovementOrder[]): Allocat
     });
 }
 
+export function movementOwnsPayment(tx: AgentMovement, order: MovementOrder, paymentId: string | number, orders: MovementOrder[] = [order]) {
+    if (String(tx.agentId) !== String(order.agentId) || !canCorrectMovement(tx)) return false;
+    try {
+        return resolveAllocations(tx, orders).some(a => String(a.orderId) === String(order.id) && String(a.paymentId) === String(paymentId));
+    } catch { return false; } // Ambiguous legacy records must be reviewed from the full statement.
+}
+
 export function planAgentMovement(input: {
     agentId: string | number; transaction?: AgentMovement; orders: MovementOrder[];
-    amount?: number; mode?: MovementMode; note?: string; remove?: boolean;
+    amount?: number; mode?: MovementMode; note?: string; remove?: boolean; orderId?: string | number;
     user: { id: string | number; fullName: string }; now: string; paymentId: () => string | number;
 }) {
     const { transaction: tx, user, now } = input;
@@ -102,8 +169,8 @@ export function planAgentMovement(input: {
         remaining -= value;
     };
     if (!input.remove && !preserveDistribution && mode === 'invoice') {
-        const order = working.find(order => String(order.id) === String(owned[0]?.orderId));
-        if (!order || remaining > cents(order.totalAmount) - cents(order.paidAmount)) throw new Error('مبلغ الدفعة أكبر من المتبقي على الفاتورة');
+        const order = working.find(order => String(order.id) === String(tx ? owned[0]?.orderId : input.orderId));
+        if (!order || order.paymentStatus === 'CANCELLED' || remaining > cents(order.totalAmount) - cents(order.paidAmount)) throw new Error('الفاتورة غير متاحة أو مبلغ الدفعة أكبر من المتبقي على الفاتورة');
         addPayment(order, remaining);
     }
     if (!input.remove && !preserveDistribution && mode === 'settlement') {

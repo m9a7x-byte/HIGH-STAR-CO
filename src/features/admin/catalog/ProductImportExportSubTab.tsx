@@ -162,7 +162,7 @@ export const ProductImportExportSubTab: React.FC<ProductImportExportSubTabProps>
 </head>
 <body>
   <h1>تقرير منتجات VOGA — ${familyLabel}</h1>
-  <p>عدد المنتجات: ${filteredRows.length} | التاريخ: ${new Date().toLocaleDateString('ar-IQ')}</p>
+  <p>عدد المنتجات: ${filteredRows.length} | التاريخ: ${new Date().toLocaleDateString('ar-IQ-u-nu-latn')}</p>
   <table>
     <thead><tr>${fields.map(field => `<th>${escapeXml(fieldLabels[field])}</th>`).join('')}</tr></thead>
     <tbody>${printableRows}</tbody>

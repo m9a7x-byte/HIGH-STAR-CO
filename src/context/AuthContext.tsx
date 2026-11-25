@@ -105,6 +105,10 @@ export const AuthProvider = ({ children }: { children?: React.ReactNode }) => {
           }
         }
 
+        if (updatedUser && (updatedUser.status === 'suspended' || updatedUser.deleted_at)) {
+          void expireCurrentSession();
+          return;
+        }
         if (updatedUser) {
           setUser(prev => {
             if (!prev || String(prev.id) !== String(updatedUser.id)) return prev;

@@ -86,14 +86,14 @@ test('database corrections are atomic, reject stale data and enforce permissions
     assert.deepEqual(state.rawOrders.map(o => Number(o.paid_amount)), [0, 30]);
     await save(state, plan(state, undefined, true));
     assert.equal(Number((await snapshot()).balance), -200);
-    await db.exec(readFileSync(new URL('../supabase/migrations/20261125071327_protect_order_charge_reversals.sql', import.meta.url), 'utf8'));
+    await db.exec(readFileSync(new URL('../supabase/migrations/20261125071540_protect_order_charge_reversals.sql', import.meta.url), 'utf8'));
     await db.exec(`INSERT INTO wallet_transactions(id,agent_id,amount,type,description) VALUES(93,'${agentId}',-100,'PAYMENT','شراء طلبية #21');
       INSERT INTO wallet_transactions(id,agent_id,amount,type,description,locked,payment_details) VALUES(100,'${agentId}',100,'ADJUSTMENT','عكس احتساب',true,'{"reversal":{"kind":"order_charge_reversal","transactionId":93,"orderId":21}}');`);
     for (const query of ["UPDATE wallet_transactions SET locked=false WHERE id=100", "DELETE FROM wallet_transactions WHERE id=100", "UPDATE wallet_transactions SET amount=-1 WHERE id=93", "DELETE FROM wallet_transactions WHERE id=93"]) {
       await assert.rejects(db.exec(query), /قيد عكسي/);
     }
     assert.equal((await db.query('SELECT count(*) AS count FROM wallet_transactions')).rows[0].count, 2);
-    await db.exec(readFileSync(new URL('../supabase/migrations/20261125074134_atomic_agent_loss.sql', import.meta.url), 'utf8'));
+    await db.exec(readFileSync(new URL('../supabase/migrations/20261125081306_atomic_agent_loss.sql', import.meta.url), 'utf8'));
     await db.query('SELECT public.record_agent_loss($1,$2,$3,$4,$5)', [agentId, -200, 10, 'خصم', false]);
     assert.equal(Number((await snapshot()).balance), -190);
     await db.query('SELECT public.record_agent_loss($1,$2,$3,$4,$5)', [agentId, -190, 20, 'ترجيع', true]);

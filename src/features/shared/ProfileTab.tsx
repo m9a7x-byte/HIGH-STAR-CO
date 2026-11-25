@@ -271,7 +271,9 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onBack }) => {
     const handleAvatarUploadSuccess = async (path: string) => {
         try {
             // Update profile in DB with the new path
-            await supabase.from('profiles').update({ avatar_path: path }).eq('id', user!.id);
+            const { data: saved, error } = await supabase.from('profiles').update({ avatar_path: path }).eq('id', user!.id).select('id').maybeSingle();
+            if (error) throw error;
+            if (!saved) throw new Error('تعذر حفظ صورة البروفايل');
 
             // Update local state
             const updatedUser = { ...user, avatar_path: path };

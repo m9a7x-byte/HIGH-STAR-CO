@@ -11,7 +11,7 @@ import { STYROFOAM_CATEGORIES, ADHESIVE_CATEGORY } from '../../../lib/constants'
 import { db } from '../../../lib/db';
 import { useToast } from '../../../context/ToastContext';
 import { ProductSortMode, sortProductsForCatalog } from '../../../lib/productSort';
-import { getAdjustedProductPrices } from '../../../lib/pricing';
+import { getCartProductPrices } from '../../../lib/pricing';
 import { isPieceProduct } from '../../../lib/productFamilies';
 
 type CatalogCartEntry = {
@@ -317,9 +317,7 @@ export const CatalogTab: React.FC<CatalogTabProps> = ({
                             ))
                         ) : filteredProducts.map(p => {
                             const inCart = cart[p.id];
-                            const price = inCart?.productSaleMode && inCart.productSaleMode !== (p.saleMode ?? 'CARTON')
-                                ? { pricePerCarton: inCart.unitPriceCarton ?? 0, pricePerMeter: inCart.unitPriceMeter ?? 0, increasePercent: 0 }
-                                : getAdjustedProductPrices(p, user!.agentDetails);
+                            const price = getCartProductPrices(p, user?.agentDetails, inCart || {}, editingOrderId != null);
                             const family = db.categories.find((c: any) => c.name === p.category)?.type;
                             const isAdhesive = family === 'ADHESIVE';
                             const isPaint = family === 'PAINT';

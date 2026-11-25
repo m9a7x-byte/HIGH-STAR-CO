@@ -1,3 +1,4 @@
+import { calculateLineTotal, calculateOrderTotals } from '../../lib/orderMoney';
 import { snapshotProductUnits } from '../../lib/productFamilies';
 import { getCatalogCartCounts } from '../../lib/productFamilies';
 
@@ -14,7 +15,7 @@ import { ShippingCalculator } from '../../components/shared/ShippingCalculator';
 import { InvoiceModal } from '../../components/shared/InvoiceModal';
 import { ADHESIVE_CATEGORY } from '../../lib/constants';
 import { compareProductsAlphabetically } from '../../lib/productSort';
-import { getAdjustedProductPrices } from '../../lib/pricing';
+import { getCartProductPrices, getAdjustedProductPrices } from '../../lib/pricing';
 
 import { CatalogTab } from './tabs/CatalogTab';
 import { HistoryTab } from './tabs/HistoryTab';
@@ -42,6 +43,8 @@ export const AgentDashboard = () => {
     const toast = useToast();
     const { t } = useTranslation();
     const [activeTab, setActiveTab] = useState('catalog');
+    const [isOrderSubmitting, setIsOrderSubmitting] = useState(false);
+    const orderSubmitBusy = useRef(false);
     const [mobileCartActive, setMobileCartActive] = useState(false);
     const cartPanelRef = useRef<HTMLDivElement>(null);
 
@@ -181,21 +184,15 @@ export const AgentDashboard = () => {
     const cartItemCount = (Object.values(cart) as AgentCartEntry[]).filter(item => item.c > 0 || item.m > 0).length;
 
     const cartTotal = useMemo(() => {
-        return Object.entries(cart).reduce((sum, [pid, qty]) => {
-            const id = Number(pid);
-            const qData = qty as any;
-
-            // Special requests have 0 initial price until set by admin
-            if (id < 0 || qData.isSpecial) return sum;
-
-            const p = products.find(x => x.id === id);
-            if (!p) return sum;
-            const prices = getAdjustedProductPrices(p, effectiveUser?.agentDetails);
-            const q = qty as { m: number, c: number };
-            const previousUnits = qData.productSaleMode && qData.productSaleMode !== (p.saleMode ?? 'CARTON');
-            return sum + ((q.c || 0) * (previousUnits ? qData.unitPriceCarton ?? 0 : prices.pricePerCarton)) + ((q.m || 0) * (previousUnits ? qData.unitPriceMeter ?? 0 : prices.pricePerMeter));
-        }, 0);
-    }, [cart, products, agentPriceIncreasePercent, effectiveUser?.agentDetails?.type]);
+        const lines = Object.entries(cart).map(([pid, quantity]) => {
+            const snapshot = quantity as AgentCartEntry;
+            if ((Number(pid)<0 || snapshot.isSpecial) && !editingAgentOrder) return { totalPrice: 0 };
+            const product = products.find(p => String(p.id) === pid);
+            const prices = getCartProductPrices(product, effectiveUser?.agentDetails, snapshot, Boolean(editingAgentOrder));
+            return { totalPrice: calculateLineTotal(snapshot.c || 0, prices.pricePerCarton, snapshot.m || 0, prices.pricePerMeter) };
+        });
+        return calculateOrderTotals(lines, editingAgentOrder?.discountValue || 0, editingAgentOrder?.discountType || 'FIXED').total;
+    }, [cart, products, agentPriceIncreasePercent, effectiveUser?.agentDetails?.type, editingAgentOrder]);
 
     const orderCanBeEditedByAgent = (order: Order) => {
         return !lockedAgentEditOrderIds.includes(String(order.id)) &&
@@ -241,19 +238,21 @@ export const AgentDashboard = () => {
             const product = products.find(p => Number(p.id) === id);
             const prices = getAdjustedProductPrices(product, effectiveUser?.agentDetails);
             const q = qty as AgentCartEntry;
+            const original = editingAgentOrder?.items.find(item => !item.isSpecialRequest && Number(item.productId) === id
+                && (item.productSaleMode || 'CARTON') === (qData.productSaleMode || product?.saleMode || 'CARTON'));
             return {
                 productId: id,
                 qMeters: q.m || 0,
                 qCartons: q.c || 0,
                 paintColor: qData.paintColor,
                 ...(includePricing ? {
-                    productCode: product?.code,
+                    productCode: original?.productCode ?? product?.code,
                     ...snapshotProductUnits(product),
                     productSaleMode: qData.productSaleMode ?? product?.saleMode ?? 'CARTON',
                     productMetersPerCarton: qData.productMetersPerCarton ?? snapshotProductUnits(product).productMetersPerCarton,
-                    productDimensions: product?.dimensions,
-                    unitPriceCarton: qData.productSaleMode && qData.productSaleMode !== (product?.saleMode ?? 'CARTON') ? qData.unitPriceCarton ?? 0 : prices?.pricePerCarton || 0,
-                    unitPriceMeter: qData.productSaleMode && qData.productSaleMode !== (product?.saleMode ?? 'CARTON') ? qData.unitPriceMeter ?? 0 : prices?.pricePerMeter || 0,
+                    productDimensions: original?.productDimensions ?? product?.dimensions,
+                    unitPriceCarton: original?.unitPriceCarton ?? prices.pricePerCarton,
+                    unitPriceMeter: original?.unitPriceMeter ?? prices.pricePerMeter,
                     priceAdjustmentNote: prices.increasePercent > 0 ? `زيادة ${prices.increasePercent}%` : undefined
                 } : {})
             };
@@ -266,6 +265,8 @@ export const AgentDashboard = () => {
             return;
         }
 
+        const productIds = order.items.filter(item => !item.isSpecialRequest).map(item => String(item.productId));
+        if (new Set(productIds).size !== productIds.length) { toast.error('يحتاج تعديل من الإدارة', 'هذا الطلب يحتوي نفس المادة بأكثر من سطر. راجع الإدارة حتى تبقى جميع السطور محفوظة.'); return; }
         const nextCart: Record<number, AgentCartEntry> = {};
         order.items.forEach((item, index) => {
             const key = item.isSpecialRequest ? -(Date.now() + index) : Number(item.productId);
@@ -297,6 +298,7 @@ export const AgentDashboard = () => {
     };
 
     const handleOrderSubmit = async () => {
+        if (orderSubmitBusy.current) return;
         if (maintenanceMode) {
             toast.error(t('agent_dashboard.sorry'), maintenanceMessage);
             return;
@@ -304,6 +306,8 @@ export const AgentDashboard = () => {
 
         const paidVal = 0; // LEDGER SYSTEM: No payment at order time — charge at COMPLETED only.
 
+        orderSubmitBusy.current = true;
+        setIsOrderSubmitting(true);
         try {
             const items = buildCartItemsPayload(Boolean(editingAgentOrder));
             if (editingAgentOrder) {
@@ -324,7 +328,7 @@ export const AgentDashboard = () => {
             if (effectiveUser?.agentDetails?.permissions.showHistory) setActiveTab('history');
         } catch (e: any) {
             toast.error(t('agent_dashboard.order_send_failed'), e.message);
-        }
+        } finally { orderSubmitBusy.current = false; setIsOrderSubmitting(false); }
     };
 
     if (latestUser?.agentDetails?.isFrozen) {
@@ -461,7 +465,7 @@ export const AgentDashboard = () => {
 
                                     <Button 
                                         onClick={handleOrderSubmit} 
-                                        disabled={cartItemCount === 0 || maintenanceMode || isOverLimit}
+                                        disabled={isOrderSubmitting || cartItemCount === 0 || maintenanceMode || isOverLimit}
                                         variant={maintenanceMode ? "secondary" : "primary"} 
                                         className="w-full mt-6 text-lg py-4 shadow-xl"
                                     >

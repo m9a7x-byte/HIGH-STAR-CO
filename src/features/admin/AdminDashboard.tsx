@@ -1,3 +1,4 @@
+import { ledgerFinancialTotals, isRecognizedOrder } from '../../lib/agentMovements';
 import { getProductUnit } from '../../lib/productFamilies';
 import { useTranslation } from 'react-i18next';
 
@@ -137,13 +138,12 @@ export const AdminDashboard = ({ activeTab, setActiveTab }: AdminDashboardProps)
         }
     };
 
-    const confirmUpdateSettings = () => {
-        if (settingsConfirm) {
-            const newSettings = { ...settings, [settingsConfirm.key]: settingsConfirm.val };
-            setSettings(newSettings); db.updateVehicleConfig(user!.id, newSettings);
-            toast.success(t('batch4.k150'));
-            setSettingsConfirm(null);
-        }
+    const persistSettings = async (newSettings: any) => {
+        try { await db.updateVehicleConfig(user!.id, newSettings); setSettings(newSettings); return true; }
+        catch (err: any) { toast.error(err.message || 'تعذر حفظ الإعدادات'); return false; }
+    };
+    const confirmUpdateSettings = async () => {
+        if (settingsConfirm && await persistSettings({ ...settings, [settingsConfirm.key]: settingsConfirm.val })) setSettingsConfirm(null);
     };
 
     const isDateInRange = (dateStr: string, from: string, to: string) => {
@@ -160,8 +160,8 @@ export const AdminDashboard = ({ activeTab, setActiveTab }: AdminDashboardProps)
         });
         return {
             totalOrders: monthlyOrders.length,
-            totalRevenue: monthlyOrders.reduce((acc, o) => acc + (o.totalAmount || 0), 0),
-            paidRevenue: monthlyOrders.reduce((acc, o) => acc + (o.paidAmount || 0), 0),
+            totalRevenue: monthlyOrders.filter(isRecognizedOrder).reduce((acc, o) => acc + Number(o.totalAmount || 0), 0),
+            paidRevenue: ledgerFinancialTotals(allTransactions.filter(tx => { const date = new Date(tx.createdAt); const now = new Date(); return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear(); })).received,
             activeProduction: orders.filter(o => o.productionStatus === ProductionStatus.WAITING || o.productionStatus === ProductionStatus.IN_PROGRESS).length,
             pendingTransferCount: orders.filter(o => o.productionStatus === ProductionStatus.PENDING_TRANSFER).length,
             unpaidCount: monthlyOrders.filter(o => o.paymentStatus !== PaymentStatus.PAID).length,
@@ -169,7 +169,7 @@ export const AdminDashboard = ({ activeTab, setActiveTab }: AdminDashboardProps)
             recentOrders: [...orders].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 5),
             onlineUsersCount: allUsers.filter(u => u.presence?.isOnline).length
         };
-    }, [orders, allUsers]);
+    }, [orders, allUsers, allTransactions]);
 
     const selectedOrderForStatus = useMemo(() => confirmStatus ? orders.find(o => o.id === confirmStatus.id) : null, [confirmStatus, orders]);
 
@@ -379,7 +379,7 @@ export const AdminDashboard = ({ activeTab, setActiveTab }: AdminDashboardProps)
             {activeTab === 'agents' && hasPermission('VIEW_AGENTS') && <AgentsTab agents={agents} selectedAgent={selectedAgent} agentTransactions={allTransactions.filter(t => String(t.agentId) === String(selectedAgent?.id))} canEdit={hasPermission('EDIT_AGENTS')} canChangeOrderStatus={hasPermission('EDIT_PRODUCTION')} canEditOrders={hasPermission('EDIT_ORDERS')} isSuperAdmin={user?.role === UserRole.SUPER_ADMIN} onSelectAgent={setSelectedAgent} onViewOrder={setViewingOrder} />}
             {activeTab === 'staff' && hasPermission('MANAGE_STAFF') && <StaffTab employees={employees} selectedEmployee={selectedEmployee} onSelectEmployee={setSelectedEmployee} isSuperAdmin={user?.role === UserRole.SUPER_ADMIN} onNavigateOrder={(id: any) => setActiveTab('orders')} />}
             {activeTab === 'activity_log' && hasPermission('VIEW_LOGS') && <ActivityLogTab employees={employees} agents={agents} onNavigateUser={(u: any) => { if (u.role === UserRole.AGENT) { setSelectedAgent(u); setActiveTab('agents'); } else { setSelectedEmployee(u); setActiveTab('staff'); } }} onNavigateOrder={(id: any) => setActiveTab('orders')} />}
-            {activeTab === 'settings' && hasPermission('VIEW_SETTINGS') && <SettingsTab settings={settings} onUpdateSettings={(key: any, val: any, title: any, msg: any, icon: any, color: any) => { if (msg) setSettingsConfirm({ key, val, title, message: msg, icon, color }); else db.updateVehicleConfig(user!.id, { ...settings, [key]: val }); }} />}
+            {activeTab === 'settings' && hasPermission('VIEW_SETTINGS') && <SettingsTab settings={settings} onUpdateSettings={(key: any, val: any, title: any, msg: any, icon: any, color: any) => { if (msg) setSettingsConfirm({ key, val, title, message: msg, icon, color }); else void persistSettings({ ...settings, [key]: val }); }} />}
             {activeTab === 'presence' && hasPermission('VIEW_PRESENCE') && <PresenceTab users={allUsers} onNavigate={(u: any) => { if (u.role === UserRole.AGENT) { setSelectedAgent(u); setActiveTab('agents'); } else { setSelectedEmployee(u); setActiveTab('staff'); } }} />}
             {activeTab === 'factory' && hasPermission('ACCESS_FACTORY') && <FactoryDashboard />}
             {activeTab === 'safe' && hasPermission('VIEW_SAFE') && <SafeTab />}

@@ -13,7 +13,7 @@ function service(pages, { balance = 0, orders = [], adminError } = {}) {
     };
     return query;
   } };
-  const source = readFileSync(new URL('../src/lib/db.ts', import.meta.url), 'utf8').replace('this.init();', '').replaceAll('import.meta.env', '({})');
+  const source = readFileSync(new URL('../src/lib/db.ts', import.meta.url), 'utf8').replace('this.init().catch(console.error);', '').replaceAll('import.meta.env', '({})');
   const { outputText } = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } });
   const exports = {};
   new Function('require', 'exports', outputText)(name => name === './supabase' ? { supabase } : name === './edgeFunctions' ? { invokeAdminAction: async (...args) => { actions.push(args); return { success: !adminError, error: adminError }; } } : {}, exports);
@@ -44,4 +44,15 @@ test('agent removal never deletes financial data and rejects balances or active 
   const { db, actions } = service([]);
   await db.deleteAgent('admin', 'uuid-agent');
   assert.deepEqual(actions, [['delete_user', { userId: 'uuid-agent' }]]);
+});
+
+test('a slower previous refresh cannot overwrite a newer statement snapshot', async () => {
+  let finish;
+  const slow = new Promise(resolve => { finish = resolve; });
+  const { db } = service([slow, { data: [{ id: 2, amount: 20 }] }]);
+  const previous = db.fetchWalletTransactions();
+  await db.fetchWalletTransactions();
+  finish({ data: [{ id: 1, amount: 10 }] });
+  await previous;
+  assert.deepEqual(db.walletTransactions.map(tx => tx.id), [2]);
 });

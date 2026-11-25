@@ -17,7 +17,7 @@ test('order price edits charge completed orders atomically, reject stale status 
       INSERT INTO profiles VALUES('${admin}','ADMIN','محاسب','{EDIT_ORDERS}','active',NULL);
       INSERT INTO agent_details VALUES('${agent}',-80);
       INSERT INTO orders VALUES(34,'${agent}',100,20,'COMPLETED','PARTIALLY_PAID','[]',0,'FIXED',100,0,false,false,NULL);`);
-    await db.exec(readFileSync(new URL('../supabase/migrations/20261125072124_atomic_staff_order_edits.sql', import.meta.url), 'utf8'));
+    await db.exec(readFileSync(new URL('../supabase/migrations/20261125081300_atomic_staff_order_edits.sql', import.meta.url), 'utf8'));
     const expected = { total_amount: 100, paid_amount: 20, production_status: 'COMPLETED', items: [], discount_value: 0, discount_type: 'FIXED' };
     const next = { total_amount: 120, sub_total_amount: 120, discount_value: 0, discount_type: 'FIXED', items: [{ totalPrice: 120 }], total_volume: 0, has_special_request: false };
     const save = (before = expected, changes = next) => db.query('SELECT public.save_staff_order_edit($1,$2,$3)', [34, before, changes]);

@@ -38,6 +38,7 @@ export const StaffLoginPage: React.FC<StaffLoginPageProps> = ({ onBack, onForgot
 
             // 2. التحقق الأمني: هل المستخدم موظف/ادمن؟ (ليس وكيلاً)
             if (tempUser.role === UserRole.AGENT) {
+                await db.logout();
                 throw new Error(t('login.agent_account_error'));
             }
 

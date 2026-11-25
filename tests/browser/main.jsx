@@ -11,6 +11,14 @@ import { ProfileTab } from '../../src/features/shared/ProfileTab';
 import { NotificationBell } from '../../src/components/shared/NotificationBell';
 import { LanguageProvider } from '../../src/context/LanguageContext';
 import { ToastProvider } from '../../src/context/ToastContext';
+import { InventoryModal } from '../../src/features/factory/components/InventoryModal';
+import { ExpenseModal } from '../../src/features/factory/components/ExpenseModal';
+import { LogisticsModal } from '../../src/features/factory/components/LogisticsModal';
+import { SupplierModal } from '../../src/features/factory/components/SupplierModal';
+import { EditFinanceModal } from '../../src/features/factory/components/EditFinanceModal';
+import { InvoiceModal } from '../../src/components/shared/InvoiceModal';
+import { ProductionConfirmationModal } from '../../src/components/shared/ProductionConfirmationModal';
+import { AvatarCropModal } from '../../src/components/profile/AvatarCropModal';
 
 const pages = import.meta.glob('../../src/pages/*.tsx', { eager: true });
 const now = new Date().toISOString();
@@ -54,12 +62,17 @@ function Fixture() {
   const name = params.get('page') || 'StaffLoginPage';
   const module = pages[`../../src/pages/${name}.tsx`];
   const PublicPage = module?.[name] || module?.default;
+  const windows = { InventoryModal, ExpenseModal, LogisticsModal, SupplierModal, EditFinanceModal, InvoiceModal, ProductionConfirmationModal, AvatarCropModal };
+  const Window = windows[name];
   return <LanguageProvider><ToastProvider><Boundary><main data-testid="page-content">
     {view === 'admin' && <AdminDashboard activeTab={tab} setActiveTab={setTab} />}
     {view === 'agent' && <AgentDashboard />}
     {view === 'factory' && <FactoryDashboard />}
     {view === 'profile' && <ProfileTab onBack={() => {}} />}
     {view === 'notifications' && <div className="p-20 bg-blue-900"><NotificationBell /></div>}
+    {view === 'window' && Window && <Window isOpen={true} order={db.orders[0]} onClose={() => {}} onCancel={() => {}} onSuccess={() => {}} onConfirm={() => {}} onCropComplete={() => {}}
+      category={params.get('category') || 'DAILY_EXPENSE'} transaction={name === 'EditFinanceModal' || params.get('editing') ? { ...db.factoryTransactions[0], amount: 100, paidAmount: 20, paymentHistory: [], category: params.get('category') || 'DAILY_EXPENSE' } : undefined}
+      imageSrc="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect width='100' height='100' fill='blue'/%3E%3C/svg%3E" />}
     {view === 'public' && PublicPage && <PublicPage onBack={() => {}} onSuccess={() => {}} onNavigate={() => {}} onLogin={() => {}} onSwitchToAgent={() => {}} onForgotPassword={() => {}} title="اختبار" message="اختبار" />}
   </main></Boundary></ToastProvider></LanguageProvider>;
 }

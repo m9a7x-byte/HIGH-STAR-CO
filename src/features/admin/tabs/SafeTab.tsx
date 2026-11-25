@@ -10,6 +10,7 @@ import {
     Lock, ArrowRightLeft, MapPin, ChevronLeft, Layout, RotateCcw
 } from 'lucide-react';
 import { Card, Badge, Button, Input, DateRangePicker, UserAvatar } from '../../../components/ui';
+import { isAgentCashMovement } from '../../../lib/agentMovements';
 import { db } from '../../../lib/db';
 import { formatDate, formatTime, getTodayDateString } from '../../../lib/dateUtils';
 import { FactoryTransaction, WalletTransaction, UserRole, FactoryCategory } from '../../../types';
@@ -68,7 +69,7 @@ export const SafeTab = () => {
 
     const allSafeEvents = useMemo(() => {
         const events: any[] = [];
-        db.getAllTransactions().filter(t => t.type === 'DEPOSIT' || (t.amount < 0 && t.description.includes('ترجيع كاش فعلي للوكيل'))).forEach(t => {
+        db.getAllTransactions().filter(isAgentCashMovement).forEach(t => {
             const agent = db.users.find(u => u.id === t.agentId);
             const isAgentCashRefund = t.amount < 0 && t.description.includes('ترجيع كاش فعلي للوكيل');
             // Extract real user if present in description

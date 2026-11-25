@@ -7,8 +7,8 @@ import { User } from '../../types';
 
 interface UserSelectorProps {
     users: User[];
-    selectedUserId: 'ALL' | number;
-    onChange: (id: 'ALL' | number) => void;
+    selectedUserId: 'ALL' | string | number;
+    onChange: (id: 'ALL' | string | number) => void;
     placeholder: string;
 }
 

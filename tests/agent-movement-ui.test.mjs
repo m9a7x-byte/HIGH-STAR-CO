@@ -91,7 +91,7 @@ test('a viewer cannot see edit and delete controls', () => {
 });
 
 
-const testOrder = status => ({ id: 34, agentId: 'agent', agentName: 'BOTAN ZAXO', productionStatus: status, totalAmount: 11376.96, paidAmount: 0, createdAt: '2026-11-24T08:00:00Z', items: [] });
+const testOrder = status => ({ id: 34, agentId: 'agent', agentName: 'وكيل اختبار', productionStatus: status, totalAmount: 11376.96, paidAmount: 0, createdAt: '2026-11-24T08:00:00Z', items: [] });
 function orderTab(app) {
   nodes(app.render()).find(node => node.type === 'button' && text(node).startsWith('الطلبات')).props.onClick();
   return app.render();

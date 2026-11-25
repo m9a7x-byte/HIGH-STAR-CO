@@ -56,7 +56,7 @@ class SupabaseService {
   private hasRemoteVehicleConfig = false;
 
   constructor() {
-    this.init();
+    this.init().catch(console.error);
   }
 
   
@@ -89,7 +89,7 @@ class SupabaseService {
           description: desc,
           createdAt: tx.date,
           createdBy: tx.withdrawnBy || 'نظام المصنع',
-          locked: tx.is_locked,
+          locked: tx.isLocked,
           linkedTxId: (isCustoms || tx.category === 'SUPPLIER' || tx.category === 'TRANSPORT_IN') ? tx.id : undefined
         };
       }).filter(tx => tx.supplierId);
@@ -130,7 +130,7 @@ class SupabaseService {
     // Optimistic update
     const tx = this.factoryTransactions.find(t => String(t.id) === String(txId));
     if (tx) {
-        (tx as any).is_locked = isLocked;
+        tx.isLocked = isLocked;
         this.notify();
     }
   }
@@ -148,19 +148,20 @@ class SupabaseService {
       const { data: { session }, error } = await supabase.auth.getSession();
       if (error || !session?.user) return null;
       
-      if (this.users.length === 0) {
-        await this.fetchUsers();
-      }
-      
-      const user = this.users.find(u => u.id === session.user.id);
-      return user || null;
+      await this.fetchUsers();
+      const user = this.users.find(u => String(u.id) === String(session.user.id));
+      if (!user || user.status === 'suspended' || user.deleted_at) { await this.logout(); return null; }
+      return user;
     } catch (e) {
       console.error('Error restoring session:', e);
       return null;
     }
   }
 
+  private notificationsRequest = 0;
+
   async fetchNotifications() {
+    const request = ++this.notificationsRequest;
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -173,6 +174,7 @@ class SupabaseService {
         
       if (error) throw error;
       
+      if (request !== this.notificationsRequest) return;
       this.notifications = (data || []).map(n => ({
         id: n.id,
         userId: n.user_id,
@@ -203,8 +205,9 @@ class SupabaseService {
 
   async markNotificationAsRead(id: string) {
     try {
-      const { error } = await supabase.from('notifications').update({ is_read: true }).eq('id', id);
+      const { data: saved, error } = await supabase.from('notifications').update({ is_read: true }).eq('id', id).select('id').maybeSingle();
       if (error) throw error;
+      if (!saved) throw new Error('تعذر تحديث الإشعار');
       
       const notif = this.notifications.find(n => n.id === id);
       if (notif) {
@@ -213,6 +216,7 @@ class SupabaseService {
       }
     } catch (e) {
       console.error('Error marking notification as read:', e);
+      throw e;
     }
   }
 
@@ -228,6 +232,7 @@ class SupabaseService {
       this.notify();
     } catch (e) {
       console.error('Error marking all notifications as read:', e);
+      throw e;
     }
   }
 
@@ -243,6 +248,7 @@ class SupabaseService {
       this.notify();
     } catch (e) {
       console.error('Error deleting notifications:', e);
+      throw e;
     }
   }
 
@@ -309,8 +315,11 @@ class SupabaseService {
   }
 
 
+  private settingsPollingTimer: ReturnType<typeof setInterval> | null = null;
+
   async init() {
     if (this.initialized) return;
+    const generation = this.cacheGeneration;
 
     // Initial fetch
     await Promise.all([
@@ -327,12 +336,14 @@ class SupabaseService {
       this.fetchNotifications()
     ]);
 
+    if (generation !== this.cacheGeneration) return;
     this.setupRealtimeSubscription();
     this.initialized = true;
 
     // Polling fallback for critical settings (every 5 seconds)
     // This ensures agents get updates even if Realtime is not enabled for system_settings table
-    setInterval(() => this.fetchSettings(), 5000);
+    if (this.settingsPollingTimer) clearInterval(this.settingsPollingTimer);
+    this.settingsPollingTimer = setInterval(() => { void this.fetchSettings().catch(console.error); }, 5000);
 
     this.notify();
   }
@@ -368,20 +379,20 @@ class SupabaseService {
         switch (table) {
           case 'orders':
             console.log('Realtime Order Update:', payload);
-            this.fetchOrders().then(() => this.notify());
+            this.fetchOrders().then(() => this.notify()).catch(console.error);
             break;
-          case 'products': this.fetchProducts(); break;
-          case 'factory_transactions': this.fetchFactoryTransactions().then(() => this.notify()); break;
+          case 'products': void this.fetchProducts().catch(console.error); break;
+          case 'factory_transactions': this.fetchFactoryTransactions().then(() => this.notify()).catch(console.error); break;
           case 'factory_materials': void this.fetchFactoryMaterials(); break;
-          case 'supplier_transactions': this.fetchFactoryTransactions().then(() => this.notify()); break;
-          case 'wallet_transactions': this.fetchWalletTransactions().then(() => this.notify()); break;
-          case 'profiles': this.fetchUsers().then(() => this.notify()); break;
-          case 'agent_details': this.fetchUsers().then(() => this.notify()); break;
-          case 'suppliers': this.fetchSuppliers().then(() => this.notify()); break;
-          case 'audit_logs': this.fetchAuditLogs().then(() => this.notify()); break;
-          case 'system_settings': this.fetchSettings().then(() => this.notify()); break;
+          case 'supplier_transactions': this.fetchFactoryTransactions().then(() => this.notify()).catch(console.error); break;
+          case 'wallet_transactions': this.fetchWalletTransactions().then(() => this.notify()).catch(console.error); break;
+          case 'profiles': this.fetchUsers().then(() => this.notify()).catch(console.error); break;
+          case 'agent_details': this.fetchUsers().then(() => this.notify()).catch(console.error); break;
+          case 'suppliers': this.fetchSuppliers().then(() => this.notify()).catch(console.error); break;
+          case 'audit_logs': this.fetchAuditLogs().then(() => this.notify()).catch(console.error); break;
+          case 'system_settings': this.fetchSettings().then(() => this.notify()).catch(console.error); break;
           case 'categories': this.fetchCategories(); break;
-          case 'notifications': this.fetchNotifications().then(() => this.notify()); break;
+          case 'notifications': this.fetchNotifications().then(() => this.notify()).catch(console.error); break;
         }
       })
       .subscribe();
@@ -408,27 +419,31 @@ class SupabaseService {
   }
 
   async updateVehicleConfig(userId: any, newConfig: any) {
-    // Optimistic Update
+    const { error } = await supabase.from('system_settings').upsert({ key: 'vehicle_config', value: newConfig }, { onConflict: 'key' });
+    if (error) throw error;
     this.settingsLoaded = true;
     this.hasRemoteVehicleConfig = true;
     this.vehicleConfig = newConfig;
     this.notify();
+    void this.logActivity(userId, 'تعديل الإعدادات', 'SETTINGS', 'تم تحديث إعدادات النظام وسعات المركبات').catch(console.error);
+  }
 
-    try {
-      const { error } = await supabase.from('system_settings').upsert({
-        key: 'vehicle_config',
-        value: newConfig
-      }, { onConflict: 'key' });
+  private cacheGeneration = 0;
+  private fetchVersions = new Map<string, number>();
 
+  private async fetchAllRows(table: string, columns = '*'): Promise<any[] | null> {
+    const version = (this.fetchVersions.get(table) || 0) + 1;
+    this.fetchVersions.set(table, version);
+    const generation = this.cacheGeneration;
+    const rows: any[] = [];
+    for (let offset = 0; ; offset += 500) {
+      const { data, error } = await supabase.from(table).select(columns).order('id', { ascending: true }).range(offset, offset + 499);
       if (error) throw error;
-
-      // Log activity
-      this.logActivity(userId, 'تعديل الإعدادات', 'SETTINGS', 'تم تحديث إعدادات النظام وسعات المركبات');
-    } catch (err) {
-      console.error('Failed to update vehicle config:', err);
-      // Revert if needed, though fetch will correct it eventually
-      this.fetchSettings();
+      if (!data) throw new Error('تعذر تحميل البيانات كاملة');
+      rows.push(...data);
+      if (data.length < 500) break;
     }
+    return generation === this.cacheGeneration && this.fetchVersions.get(table) === version ? rows : null;
   }
 
   async fetchCategories() {
@@ -440,7 +455,7 @@ class SupabaseService {
   }
 
   async fetchProducts() {
-    const { data } = await supabase.from('products').select('*').order('id');
+    const data = await this.fetchAllRows('products');
     if (data) {
       this.products = data.map(p => ({
         ...p,
@@ -461,7 +476,7 @@ class SupabaseService {
 
 
   async fetchSuppliers() {
-    const { data } = await supabase.from('suppliers').select('*').order('id');
+    const data = await this.fetchAllRows('suppliers');
     if (data) {
       this.suppliers = data;
       this.notify();
@@ -469,10 +484,10 @@ class SupabaseService {
   }
 
   async fetchUsers() {
-    const { data: profiles, error } = await supabase.from('profiles').select('*, agent_details(*)');
-    if (error) { console.error('Error fetching users', error); return; }
+    const profiles = await this.fetchAllRows('profiles', '*, agent_details(*)');
+    if (!profiles) return;
 
-    this.users = profiles.map(p => ({
+    this.users = (profiles || []).map(p => ({
       id: p.id, // UUID string
       fullName: p.full_name,
       email: p.email,
@@ -544,25 +559,16 @@ class SupabaseService {
   }
 
   async fetchOrders() {
-    try {
-      const { data, error } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
-      if (error) {
-        console.error('Error fetching orders:', error);
-        return;
-      }
-      if (data) {
-        this.orders = data.map(o => this.mapOrder(o));
-        this.notify();
-      }
-    } catch (err) {
-      console.error('Unexpected error fetching orders:', err);
-    }
+    const data = await this.fetchAllRows('orders');
+    if (!data) return;
+    this.orders = data.map(o => this.mapOrder(o)).sort((a,b) => new Date(b.createdAt).getTime()-new Date(a.createdAt).getTime());
+    this.notify();
   }
 
   async fetchFactoryTransactions() {
     const { data } = await supabase.from('factory_transactions').select('*').order('created_at', { ascending: false });
     if (data) {
-      this.factoryTransactions = data.map(t => ({
+      this.factoryTransactions = data.sort((a,b) => new Date(b.date).getTime()-new Date(a.date).getTime()).map(t => ({
         ...t,
         date: t.transaction_date,
         paidAmount: t.paid_amount,
@@ -620,17 +626,18 @@ class SupabaseService {
   }
 
   async fetchWalletTransactions() {
-    const { data } = await supabase.from('wallet_transactions').select('*').order('created_at', { ascending: false });
-    if (data) {
-      this.walletTransactions = data.map(t => ({
+    const rows = await this.fetchAllRows('wallet_transactions');
+    if (!rows) return;
+      this.walletTransactions = rows.map(t => ({
         ...t,
+        amount: Number(t.amount),
+        description: String(t.description || ''),
         agentId: t.agent_id,
         linkedOrderId: t.linked_order_id,
         paymentDetails: t.payment_details,
         createdAt: t.created_at
       }));
       this.notify();
-    }
   }
 
   async fetchAuditLogs() {
@@ -658,9 +665,15 @@ class SupabaseService {
       throw new Error(error.message);
     }
 
+    const { data: account, error: accountError } = await supabase.from('profiles').select('status,deleted_at').eq('id', data.user.id).single();
+    if (accountError || !account || account.status === 'suspended' || account.deleted_at) {
+      await this.logout();
+      throw accountError || new Error('هذا الحساب موقوف أو محذوف وغير متاح للدخول');
+    }
     // Generate new Session ID
     const newSessionId = this.generateUUID();
-    await supabase.from('profiles').update({ current_session_id: newSessionId }).eq('id', data.user.id);
+    const { data: savedSession, error: sessionError } = await supabase.from('profiles').update({ current_session_id: newSessionId }).eq('id', data.user.id).select('id').maybeSingle();
+    if (sessionError || !savedSession) { await this.logout(); throw sessionError || new Error('تعذر حفظ جلسة الدخول'); }
 
     // Force re-initialization to get fresh data for the logged-in user context
     // First, ensure we don't have stale state if init ran before
@@ -674,7 +687,7 @@ class SupabaseService {
     // Force fetch to ensure we have the user profile (init calls it, but just to be safe and get the user object for return)
     await this.fetchUsers();
 
-    let user = this.users.find(u => u.email.toLowerCase() === email.toLowerCase());
+    let user = this.users.find(u => String(u.id) === String(data.user.id));
 
     // Fallback: Direct fetch if cache missed (Robostness)
     if (!user) {
@@ -686,6 +699,8 @@ class SupabaseService {
           fullName: profile.full_name,
           email: profile.email,
           role: profile.role,
+          status: profile.status,
+          deleted_at: profile.deleted_at,
           permissions: profile.permissions || [],
           imageUrl: profile.avatar_url,
           avatar_url: profile.avatar_url,
@@ -729,9 +744,15 @@ class SupabaseService {
 
   async logout() {
     await supabase.auth.signOut();
+    if (this.settingsPollingTimer) clearInterval(this.settingsPollingTimer);
+    this.settingsPollingTimer = null;
+    this.cacheGeneration++;
     // Reset state on logout
     this.initialized = false;
     this.users = [];
+    this.notifications = [];
+    this.shownNotifications.clear();
+    this.notificationsRequest++;
     this.suppliers = [];
     this.categories = [];
     this.products = [];
@@ -765,7 +786,10 @@ class SupabaseService {
     });
   }
 
-  async createOrder(userId: string | number, items: { productId: string | number, qMeters: number, qCartons: number, paintColor?: string, isSpecial?: boolean, specialNote?: string }[], paidAmount: number, isManual: boolean = false, manualBy?: string, operatorId?: string | number) {
+  async createOrder(userId: string | number, items: { productId: string | number, qMeters: number, qCartons: number, paintColor?: string, isSpecial?: boolean, specialNote?: string }[], paidAmount: number, isManual: boolean = false, manualBy?: string, operatorId?: string | number,
+    manualPricing?: { items: { unitPriceCarton: number; unitPriceMeter: number; priceAdjustmentNote?: string }[]; discountValue: number; discountType: 'FIXED' | 'PERCENT' }) {
+    if (Number(paidAmount) !== 0) throw new Error('أنشئ الطلب أولاً ثم سجّل الدفعة من كشف الحساب');
+    if (!items.length || items.some(item => ![item.qCartons, item.qMeters].every(value => Number.isFinite(Number(value)) && Number(value)>=0) || Number(item.qCartons)+Number(item.qMeters)<=0)) throw new Error('كمية مادة الطلب غير صحيحة');
     let user = this.users.find(u => u.id == userId);
     if (!user) throw new Error('الوكيل غير موجود');
 
@@ -821,7 +845,23 @@ class SupabaseService {
       };
     });
 
-    const { subTotal } = calculateOrderTotals(orderItems);
+    if (!orderItems.length) throw new Error('الطلب يجب أن يحتوي مادة واحدة على الأقل');
+    if (manualPricing) {
+      if (!isManual || manualPricing.items.length !== orderItems.length) throw new Error('بيانات أسعار الطلب اليدوي غير متطابقة');
+      orderItems.forEach((item, index) => {
+        const prices = manualPricing.items[index];
+        if (![prices.unitPriceCarton, prices.unitPriceMeter].every(value => Number.isFinite(Number(value)) && Number(value) >= 0)) throw new Error('سعر مادة الطلب غير صحيح');
+        item.unitPriceCarton = Number(prices.unitPriceCarton);
+        item.unitPriceMeter = Number(prices.unitPriceMeter);
+        item.priceAdjustmentNote = prices.priceAdjustmentNote;
+        item.totalPrice = calculateLineTotal(item.quantityCartons, item.unitPriceCarton, item.quantityMeters, item.unitPriceMeter);
+      });
+    }
+    const discount = Number(manualPricing?.discountValue || 0);
+    const discountType = manualPricing?.discountType || 'FIXED';
+    if (!Number.isFinite(discount) || discount < 0 || (discountType === 'PERCENT' && discount > 100)) throw new Error('الخصم غير صحيح');
+    const { subTotal, total } = calculateOrderTotals(orderItems, discount, discountType);
+    if (!Number.isFinite(total) || total < 0) throw new Error('مجموع الطلب غير صحيح');
     const totalVolume = orderItems.reduce((acc, curr) => {
       const p = this.products.find(x => x.id == curr.productId);
       return acc + (isPieceProduct(p) ? 0 : curr.quantityCartons * (p?.volumePerCarton || 0));
@@ -838,9 +878,9 @@ class SupabaseService {
       agent_name: user.fullName,
       agent_province: user.province || '',
       sub_total_amount: subTotal,
-      discount_value: 0,
-      discount_type: 'FIXED',
-      total_amount: subTotal,
+      discount_value: discount,
+      discount_type: discountType,
+      total_amount: total,
       paid_amount: paidAmount,
       total_volume: totalVolume,
       payment_status: paidAmount >= subTotal && subTotal > 0 ? PaymentStatus.PAID : (paidAmount > 0 ? PaymentStatus.PARTIALLY_PAID : PaymentStatus.PENDING),
@@ -857,30 +897,7 @@ class SupabaseService {
     if (error) throw error;
     const newOrder = data;
 
-    // Update Wallet (Deferred Billing Logic)
-    // We only add paidAmount (deposit) upfront. Subtotal deduction happens when order is COMPLETED.
-    const newBalance = user.agentDetails.currentBalance + paidAmount;
-
-    // Update Agent Profile (Balance)
-    // Note: We update agent_details table
-    await supabase.from('agent_details').update({ current_balance: newBalance }).eq('id', user.id);
-
-    // Update Local Cache Immediately
-    if (user.agentDetails) {
-      user.agentDetails.currentBalance = newBalance;
-    }
-
-    // Wallet Transactions
-    // DO NOT insert 'PAYMENT' for -subTotal here. Deferred until 'COMPLETED'.
-
-    if (paidAmount > 0) {
-      await supabase.from('wallet_transactions').insert({
-        agent_id: user.id,
-        amount: paidAmount,
-        type: 'DEPOSIT',
-        description: `تسديد واصل لطلبية #${newOrder.id}`
-      });
-    }
+    // Creating a request must not rewrite a cached balance; billing starts at completion.
 
     const logUserId = operatorId || userId;
     const logDetails = operatorId && operatorId !== userId
@@ -895,7 +912,7 @@ class SupabaseService {
     this.notify(); // Immediate UI update
 
     // Background fetch to ensure consistency (no await)
-    this.fetchOrders();
+    void this.fetchOrders().catch(console.error);
     return newOrder;
   }
 
@@ -1022,61 +1039,28 @@ class SupabaseService {
       ...(options.agentEditUnlocked !== undefined ? { agent_edit_unlocked: options.agentEditUnlocked } : {})
     };
 
-    const { data: updatedOrder, error: updateError } = await supabase
-      .from('orders')
-      .update(updatePayload)
-      .eq('id', orderId)
-      .select('id')
-      .maybeSingle();
-
-    if (updateError) throw updateError;
-    if (!updatedOrder) throw new Error('لم يتم تحديث الطلب. تحقق من صلاحية التعديل وحاول مرة ثانية.');
-
-    // 6. Wallet & Balance Adjustments
-    // a) Adjust for Cost Difference (If order is more expensive, deduct more. If cheaper, refund difference).
-    // Logic: Balance = Balance - CostDiff
-    // Example: Old Cost 100. New Cost 150. Diff +50. Balance -= 50.
-    // Example: Old Cost 100. New Cost 80. Diff -20. Balance -= -20 (Balance += 20).
-
-    // b) Adjust for New Payment
-    // Logic: Balance = Balance + Payment
-
-    const isBilled = existingOrder.productionStatus === ProductionStatus.COMPLETED;
-    const appliedCostDifference = isBilled ? costDifference : 0;
-    const totalBalanceChange = -appliedCostDifference + paymentAddition;
-
-    if (totalBalanceChange !== 0) {
-      const newBalance = agent.agentDetails.currentBalance + totalBalanceChange;
-
-      await supabase.from('agent_details').update({ current_balance: newBalance }).eq('id', agent.id);
-
-      // Update Local Cache
-      if (agent.agentDetails) agent.agentDetails.currentBalance = newBalance;
-    }
-
-    // 7. Log Transactions
-    if (appliedCostDifference !== 0) {
-      await supabase.from('wallet_transactions').insert({
-        agent_id: agent.id,
-        amount: -appliedCostDifference, // Negative means "Spend", so if Cost goes UP (Diff > 0), Amount is Negative.
-        type: 'ADJUSTMENT',
-        description: `تعديل قيمة الطلب #${orderId} (${appliedCostDifference > 0 ? 'زيادة' : 'نقصان'})`
+    if (Number(paymentAddition) !== 0) throw new Error('سجّل الدفعة من كشف الحساب لحفظها مع الرصيد بعملية واحدة');
+    const operator = this.users.find(user => String(user.id) === String(userId));
+    if (!operator) throw new Error('بيانات المستخدم غير موجودة');
+    if (operator.role === UserRole.AGENT) {
+      if (String(operator.id) !== String(existingOrder.agentId) || !existingOrder.agentEditUnlocked || !this.isOrderBeforeProduction(existingOrder)) throw new Error('تعديل هذا الطلب غير متاح للوكيل');
+      const { data, error } = await supabase.from('orders').update(updatePayload)
+        .eq('id', orderId).eq('production_status', existingOrder.productionStatus)
+        .eq('total_amount', existingOrder.totalAmount).eq('paid_amount', existingOrder.paidAmount)
+        .eq('items', JSON.stringify(existingOrder.items)).eq('agent_edit_unlocked', true).select('id').maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error('تغيّر الطلب أو دفعاته. حدّث الصفحة ثم حاول مجدداً.');
+    } else {
+      const { error } = await supabase.rpc('save_staff_order_edit', {
+        p_order_id: orderId,
+        p_expected: { total_amount: existingOrder.totalAmount, paid_amount: existingOrder.paidAmount,
+          production_status: existingOrder.productionStatus, items: existingOrder.items,
+          discount_value: existingOrder.discountValue || 0, discount_type: existingOrder.discountType || 'FIXED' },
+        p_changes: updatePayload
       });
+      if (error) throw error;
     }
-
-    if (paymentAddition > 0 && options.recordPaymentTransaction !== false) {
-      await supabase.from('wallet_transactions').insert({
-        agent_id: agent.id,
-        amount: paymentAddition,
-        type: 'DEPOSIT', // Payment is a deposit into the system wallet
-        description: `دفعة إضافية للطلب #${orderId} | بواسطة: ${this.users.find(u => u.id == userId)?.fullName}`
-      });
-    }
-
-    this.logActivity(userId, 'تعديل طلب', 'ORDERS', `تعديل الطلب #${orderId}`, existingOrder.totalAmount.toString(), newTotalAmount.toString());
-
-    // 8. Refresh
-    await this.fetchOrders();
+    await Promise.all([this.fetchOrders(), this.fetchUsers(), this.fetchWalletTransactions()]);
     this.notify();
   }
 
@@ -1124,7 +1108,7 @@ class SupabaseService {
   }
 
   async saveAgentMovement(userId: User['id'], agentId: User['id'], input: {
-    transactionId?: string | number; amount?: number; notes?: string; mode?: MovementMode; remove?: boolean;
+    transactionId?: string | number; amount?: number; notes?: string; mode?: MovementMode; remove?: boolean; orderId?: string | number;
   }) {
     const user = this.users.find(user => String(user.id) === String(userId));
     if (!user) throw new Error('بيانات المستخدم غير موجودة');
@@ -1138,7 +1122,7 @@ class SupabaseService {
     for (const result of [agentResult, ordersResult, transactionResult]) if (result.error) throw result.error;
     const rawTx = transactionResult.data;
     const plan = planAgentMovement({
-      agentId, user, amount: input.amount, mode: input.mode, note: input.notes, remove: input.remove,
+      agentId, user, amount: input.amount, mode: input.mode, note: input.notes, remove: input.remove, orderId: input.orderId,
       now: new Date().toISOString(), paymentId: (() => { let id = Date.now(); return () => ++id; })(),
       transaction: rawTx ? { ...rawTx, agentId: rawTx.agent_id, createdAt: rawTx.created_at, linkedOrderId: rawTx.linked_order_id, paymentDetails: rawTx.payment_details } : undefined,
       orders: (ordersResult.data || []).map(order => ({
@@ -1207,70 +1191,7 @@ class SupabaseService {
   }
 
   async updateOrderPaymentHistory(userId: any, orderId: any, paymentHistory: any[]) {
-    const existingOrder = this.orders.find(o => o.id == orderId);
-    if (!existingOrder) throw new Error('الطلب غير موجود');
-
-    const agent = this.users.find(u => u.id == existingOrder.agentId);
-    if (!agent || !agent.agentDetails) throw new Error('بيانات الوكيل غير موجودة');
-
-    const changedPaymentIds = (existingOrder.paymentHistory || []).filter(payment => {
-      const next = paymentHistory.find(next => String(next.id) === String(payment.id));
-      return !next || Number(next.amountAdded) !== Number(payment.amountAdded);
-    }).map(payment => String(payment.id));
-    if (changedPaymentIds.length) {
-      const { data, error } = await supabase.from('wallet_transactions').select('id,payment_details').eq('agent_id', existingOrder.agentId);
-      if (error) throw error;
-      const linked = data?.find(tx => tx.payment_details?.allocations?.some((allocation: { orderId: string | number; paymentId: string | number }) =>
-        String(allocation.orderId) === String(orderId) && changedPaymentIds.includes(String(allocation.paymentId))
-      ));
-      if (linked) throw new Error(`هذه الدفعة مرتبطة بالحركة #${linked.id}. عدّل الحركة من كشف حساب الوكيل لتصحيح توزيعها مع الرصيد.`);
-    }
-
-    const normalizedHistory = paymentHistory
-      .filter(pay => Number(pay.amountAdded) > 0)
-      .map(pay => ({ ...pay, amountAdded: Number(pay.amountAdded) }));
-
-    let runningPaid = 0;
-    const recalculatedHistory = normalizedHistory.map(pay => {
-      const previousPaid = runningPaid;
-      runningPaid += pay.amountAdded;
-      return {
-        ...pay,
-        previousPaid,
-        newTotalPaid: runningPaid
-      };
-    });
-
-    if (runningPaid > existingOrder.totalAmount) {
-      throw new Error('مجموع الدفعات أكبر من قيمة الفاتورة');
-    }
-
-    const { error: updateError } = await supabase.from('orders').update({
-      paid_amount: runningPaid,
-      payment_status: runningPaid >= existingOrder.totalAmount && existingOrder.totalAmount > 0 ? PaymentStatus.PAID : (runningPaid > 0 ? PaymentStatus.PARTIALLY_PAID : PaymentStatus.PENDING),
-      payment_history: recalculatedHistory,
-      paid_at: runningPaid >= existingOrder.totalAmount && existingOrder.totalAmount > 0 ? (existingOrder.paidAt || new Date().toISOString()) : null
-    }).eq('id', orderId);
-
-    if (updateError) throw updateError;
-
-    const balanceChange = runningPaid - existingOrder.paidAmount;
-    if (balanceChange !== 0) {
-      const newBalance = agent.agentDetails.currentBalance + balanceChange;
-      await supabase.from('agent_details').update({ current_balance: newBalance }).eq('id', agent.id);
-      agent.agentDetails.currentBalance = newBalance;
-
-      await supabase.from('wallet_transactions').insert({
-        agent_id: agent.id,
-        amount: balanceChange,
-        type: 'ADJUSTMENT',
-        description: `تعديل دفعات الطلب #${orderId} | بواسطة: ${this.users.find(u => u.id == userId)?.fullName || 'مستخدم'}`
-      });
-    }
-
-    this.logActivity(userId, 'تعديل دفعات طلب', 'ORDERS', `تعديل دفعات الطلب #${orderId}`, existingOrder.paidAmount.toString(), runningPaid.toString());
-    await this.fetchOrders();
-    this.notify();
+    throw new Error('صحّح الحركة الأصلية من كشف حساب الوكيل حتى تبقى الدفعة والتوزيع والرصيد متطابقة');
   }
 
   async updateOrderStatus(userId: User['id'], orderId: Order['id'], type: 'payment' | 'production', newVal: string,
@@ -1294,21 +1215,13 @@ class SupabaseService {
     }
     this.notify();
   }
-  updateOrderEstimate(userId: any, orderId: any, days: number) {
-    const originalOrders = [...this.orders];
-    this.orders = this.orders.map(o => o.id == orderId ? { ...o, estimatedDays: days } : o);
+  async updateOrderEstimate(userId: any, orderId: any, days: number) {
+    if (!Number.isInteger(days) || days < 0) throw new Error('مدة التجهيز غير صحيحة');
+    const { data, error } = await supabase.from('orders').update({ estimated_days: days }).eq('id', orderId).select('id').maybeSingle();
+    if (error) throw error;
+    if (!data) throw new Error('تعذر تحديث مدة التجهيز');
+    this.orders = this.orders.map(o => String(o.id) === String(orderId) ? { ...o, estimatedDays: days } : o);
     this.notify();
-
-    (async () => {
-      try {
-        const { error } = await supabase.from('orders').update({ estimated_days: days }).eq('id', orderId);
-        if (error) throw error;
-      } catch (err) {
-        console.error('Update estimate failed, reverting:', err);
-        this.orders = originalOrders;
-        this.notify();
-      }
-    })();
   }
 
   async deleteOrder(userId: User['id'], orderId: Order['id'], _refund: boolean) {
@@ -1403,45 +1316,29 @@ class SupabaseService {
       }
     }
 
-    // 2. Update Public Profile
+    // Persist public profile fields together; failed writes must never look successful.
     const updates: any = {};
-    if (data.fullName) updates.full_name = data.fullName;
+    if (data.fullName !== undefined) {
+      if (!String(data.fullName).trim()) throw new Error('الاسم مطلوب');
+      updates.full_name = String(data.fullName).trim();
+    }
     if (data.role) updates.role = data.role;
-    if (data.permissions) updates.permissions = data.permissions; // Handle permissions updates
-
-    // Only update public profile email if it was changed IMMEDIATELY (no confirmation pending)
-    if (data.email && !confirmationPending) {
-      updates.email = data.email;
-    }
-
-    if (Object.keys(updates).length > 0) {
-      await supabase.from('profiles').update(updates).eq('id', userId);
-    }
-
-    // Also update phone in profiles if provided - CHECK FOR UNIQUENESS FIRST
-    if (data.phone) {
-      // Check if phone is already used by another user
-      const { data: existingUsers, error: checkError } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('phone', data.phone)
-        .neq('id', userId);
-
-      if (existingUsers && existingUsers.length > 0) {
-        throw new Error('رقم الهاتف مستخدم مسبقاً من قبل مستخدم آخر');
+    if (data.permissions) updates.permissions = data.permissions;
+    if (data.email && !confirmationPending) updates.email = data.email;
+    if (data.phone !== undefined) {
+      if (data.phone) {
+        const { data: existingUsers, error: checkError } = await supabase.from('profiles').select('id').eq('phone', data.phone).neq('id', userId);
+        if (checkError) throw checkError;
+        if (existingUsers?.length) throw new Error('رقم الهاتف مستخدم مسبقاً من قبل مستخدم آخر');
       }
-
-      await supabase.from('profiles').update({ phone: data.phone }).eq('id', userId);
+      updates.phone = data.phone || null;
     }
-
-    // Update province and address in profiles table (for all users including agents)
-    const profileExtras: any = {};
-    if (data.province !== undefined) profileExtras.province = data.province;
-    if (data.address !== undefined) profileExtras.address = data.address;
-
-    if (Object.keys(profileExtras).length > 0) {
-      console.log('Updating profile extras (province/address):', profileExtras);
-      await supabase.from('profiles').update(profileExtras).eq('id', userId);
+    if (data.province !== undefined) updates.province = data.province;
+    if (data.address !== undefined) updates.address = data.address;
+    if (Object.keys(updates).length) {
+      const { data: savedProfile, error } = await supabase.from('profiles').update(updates).eq('id', userId).select('id').maybeSingle();
+      if (error) throw error;
+      if (!savedProfile) throw new Error('تعذر حفظ بيانات البروفايل');
     }
 
     this.logActivity(userId, 'تحديث بروفايل', 'AUTH', `تحديث بيانات المستخدم`);
@@ -1452,29 +1349,7 @@ class SupabaseService {
 
     // Return the updated user for the UI to show success toast
     const updatedUser = this.users.find(u => u.id == userId);
-    if (!updatedUser) {
-      // Fallback: If fetchUsers fails to find the user immediately (race condition),
-      // construct the user object from the input data + existing data.
-      // Return a constructed object so the UI doesn't crash
-      // We use 'any' to bypass strict type checking for this fallback
-      const currentUser: any = this.users.find(u => u.id == userId) || {};
-
-      const safeUser = {
-        ...currentUser,
-        id: userId,
-        email: (data.email && !confirmationPending) ? data.email : (currentUser.email || data.email),
-        fullName: data.fullName || currentUser.fullName,
-        role: data.role || currentUser.role,
-        // Reconstruct other fields as best as possible
-        agentDetails: {
-          ...(currentUser.agentDetails || {}),
-          phone: data.phoneNumber || data.phone || currentUser.agentDetails?.phone
-        },
-        avatar_path: currentUser.avatar_path // Preserve avatar path
-      } as any;
-
-      return { user: safeUser, confirmationPending };
-    }
+    if (!updatedUser) throw new Error('تعذر تحميل البروفايل بعد الحفظ. حدّث الصفحة.');
 
     return { user: updatedUser, confirmationPending };
   }
@@ -1673,7 +1548,7 @@ class SupabaseService {
     }
 
     supabase.from('suppliers').update(supplierData).eq('id', id).then(() => {
-      this.fetchSuppliers();
+      void this.fetchSuppliers().catch(console.error);
     });
     this.logActivity(userId, 'تعديل مورد', 'SUPPLIERS' as any, `تعديل بيانات المورد #${id}`);
   }
@@ -1740,7 +1615,7 @@ class SupabaseService {
       // Wait a moment before refetching to ensure DB has synced
       // The realtime subscription will also pick this up
       setTimeout(() => {
-        void this.fetchFactoryTransactions().then(() => this.notify());
+        void this.fetchFactoryTransactions().then(() => this.notify()).catch(console.error);
       }, 1500);
     } catch (err) {
       console.error('Insert failed, reverting optimistic add:', err);
@@ -1916,7 +1791,8 @@ class SupabaseService {
       else if (empData.agentDetails?.address) profileUpdates.address = empData.agentDetails.address;
 
       if (Object.keys(profileUpdates).length > 0) {
-        await supabase.from('profiles').update(profileUpdates).eq('id', newUserId);
+        const { error } = await supabase.from('profiles').update(profileUpdates).eq('id', newUserId);
+        if (error) throw error;
       }
 
       // 2. Insert Agent Details if present
@@ -2039,60 +1915,13 @@ class SupabaseService {
     this.notify();
   }
 
-  async addBalance(userId: any, agentId: any, amount: number, notes: string, options: { affectsSafe?: boolean; recordTransaction?: boolean } = {}) {
-    const agent = this.users.find(u => u.id == agentId);
-    if (!agent || !agent.agentDetails) throw new Error('وكيل غير موجود');
-
-    const originalUsers = JSON.parse(JSON.stringify(this.users)); // Deep copy backup
-    const originalTransactions = [...this.walletTransactions];
-
-    // Optimistic Update
-    const newBalance = agent.agentDetails.currentBalance + amount;
-    agent.agentDetails.currentBalance = newBalance;
-    this.users = [...this.users]; // Trigger update
-    const affectsSafe = options.affectsSafe ?? amount > 0;
-    const transactionType = amount > 0 && affectsSafe ? 'DEPOSIT' : 'ADJUSTMENT';
-    const shouldRecordTransaction = options.recordTransaction ?? true;
-
-    if (shouldRecordTransaction) {
-      const tempTx = {
-        id: Date.now(),
-        agent_id: agentId,
-        agentId: agentId,
-        amount: amount,
-        type: transactionType as any,
-        description: notes || 'تعديل رصيد يدوي',
-        created_at: new Date().toISOString(),
-        createdAt: new Date().toISOString()
-      };
-      this.walletTransactions = [tempTx as any, ...this.walletTransactions];
-    }
+  async recordAgentLoss(userId: User['id'], agentId: User['id'], amount: number, notes: string, cashRefund: boolean) {
+    const { data, error: readError } = await supabase.from('agent_details').select('current_balance').eq('id', agentId).single();
+    if (readError) throw readError;
+    const { error } = await supabase.rpc('record_agent_loss', { p_agent_id: agentId, p_expected_balance: data.current_balance, p_amount: amount, p_notes: notes, p_cash_refund: cashRefund });
+    if (error) throw error;
+    await Promise.all([this.fetchUsers(), this.fetchWalletTransactions()]);
     this.notify();
-
-    try {
-      await supabase.from('agent_details').update({ current_balance: newBalance }).eq('id', agentId);
-      if (shouldRecordTransaction) {
-        await supabase.from('wallet_transactions').insert({
-          agent_id: agentId,
-          amount: amount,
-          type: transactionType,
-          description: `${notes || 'تعديل رصيد يدوي'} | بواسطة: ${this.users.find(u => u.id == userId)?.fullName}`
-        });
-      }
-
-      // Re-sync to confirm
-      await this.fetchUsers();
-      if (shouldRecordTransaction) await this.fetchWalletTransactions();
-      this.logActivity(userId, 'تعديل رصيد', 'AGENTS', `تعديل رصيد الوكيل ${agent.fullName} بمبلغ ${amount}`);
-
-    } catch (err) {
-      console.error('Add balance failed, reverting:', err);
-      // Rollback
-      this.users = originalUsers;
-      this.walletTransactions = originalTransactions;
-      this.notify();
-      throw err;
-    }
   }
 
   async setAgentStatus(userId: any, targetId: any, status: 'active' | 'suspended') {
@@ -2148,57 +1977,19 @@ class SupabaseService {
   }
 
   async deleteAgent(userId: any, targetId: any) {
-    // Hard delete - permanently removes user and ALL related data
-    // We must manually delete dependencies first to avoid FK constraint errors
-    try {
-      console.log('Starting cascade delete for agent:', targetId);
-
-      // 1. Delete Wallet Transactions
-      await supabase.from('wallet_transactions').delete().eq('agent_id', targetId);
-
-      // 2. Delete Orders (Warning: This removes sales history)
-      await supabase.from('orders').delete().eq('agent_id', targetId);
-
-      // 3. Delete Audit Logs
-      await supabase.from('audit_logs').delete().eq('user_id', targetId);
-
-      // 4. Delete Agent Details
-      await supabase.from('agent_details').delete().eq('id', targetId);
-
-      // 5. Delete Profile Manually (to clear FK for auth.users if needed)
-      // We delete from 'profiles' first because often 'auth.users' references 'profiles' or vice versa,
-      // but 'profiles.id' is usually the FK to 'auth.users.id'. 
-      // If we delete 'profiles' row, the 'auth.users' row has no dependents in public schema.
-      const { error: profileDelError } = await supabase.from('profiles').delete().eq('id', targetId);
-      if (profileDelError) console.warn('Manual profile delete warning:', profileDelError);
-
-      // 6. Delete Auth User via Edge Function
-      // Now that all public schema references are gone, this should succeed.
-      const res = await invokeAdminAction('delete_user', { userId: String(targetId) });
-
-      if (!res.success) {
-        console.warn('Edge function delete failed (user might already be deleted or other issue):', res.error);
-        // If we successfully deleted the profile, the user is effectively gone from the app UI.
-        // We can consider this a "partial success" if the profile is gone.
-        // But let's check: if it failed because "User not found", thats fine.
-        if (res.error?.includes('Database error') && !profileDelError) {
-          // If we already deleted the profile, maybe that's why it errored? 
-          // Logic error: If we delete profile first, maybe the edge function tries to delete it again?
-          // Depends on how 'delete_user' is implemented. Usually it deletes auth.users.
-          // If ON DELETE CASCADE is set, deleting auth.users deletes profiles.
-          // If we deleted profiles manually, deleting auth.users should still work unless there is a check.
-          // BUT, if we deleted profiles, we are good for the UI.
-        } else {
-          // throw new Error(res.error || 'فشل الحذف النهائي');
-        }
-      }
-
-      await this.fetchUsers();
-      this.notify();
-    } catch (e: any) {
-      console.error('Cascade Delete Error:', e);
-      throw new Error(e.message || 'فشل الحذف، يرجى التحقق من وجود بيانات مرتبطة');
-    }
+    // Revoke access through the server; financial and order history must remain intact.
+    const [details, orders] = await Promise.all([
+      supabase.from('agent_details').select('current_balance').eq('id', targetId).single(),
+      supabase.from('orders').select('id,production_status,payment_status').eq('agent_id', targetId)
+    ]);
+    if (details.error) throw details.error;
+    if (orders.error) throw orders.error;
+    if (Number(details.data.current_balance) !== 0) throw new Error('لا يمكن حذف وكيل لديه رصيد. استخدم تجميد الحساب.');
+    if (orders.data.some(order => order.production_status !== 'COMPLETED' && order.payment_status !== 'CANCELLED')) throw new Error('لا يمكن حذف وكيل لديه طلبات نشطة. استخدم تجميد الحساب.');
+    const result = await invokeAdminAction('delete_user', { userId: String(targetId) });
+    if (!result.success) throw new Error(result.error || 'تعذر سحب صلاحيات الدخول');
+    await this.fetchUsers();
+    this.notify();
   }
 
   async setAgentRole(userId: any, targetId: any, role: string) {
@@ -2258,7 +2049,8 @@ class SupabaseService {
         const completed = confirmedEmail?.toLowerCase() === newEmail.trim().toLowerCase();
 
         if (completed && authData.user?.id) {
-          await supabase.from('profiles').update({ email: newEmail.trim() }).eq('id', authData.user.id);
+          const { error: profileError } = await supabase.from('profiles').update({ email: newEmail.trim() }).eq('id', authData.user.id);
+          if (profileError) throw profileError;
           await this.fetchUsers();
           this.notify();
         }

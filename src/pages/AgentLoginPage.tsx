@@ -38,6 +38,7 @@ export const AgentLoginPage: React.FC<AgentLoginPageProps> = ({ onBack, onForgot
 
             // 2. التحقق الأمني: هل المستخدم وكيل فعلاً؟
             if (tempUser.role !== UserRole.AGENT) {
+                await db.logout();
                 throw new Error(t('login.not_authorized_agent'));
             }
 
