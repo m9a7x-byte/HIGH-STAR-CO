@@ -1,28 +1,33 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# HIGH-STAR
 
-# Run and deploy your AI Studio app
+HIGH STAR CO. administration and agent portals, with Windows desktop applications built with React, TypeScript, Electron and Supabase.
 
-This contains everything you need to run your app locally.
+- [Administration portal](https://v.high-star.iq)
+- [Agent portal](https://agents.high-star.iq)
+- [Latest Windows installers](https://github.com/m9a7x-byte/HIGH-STAR-CO/releases/latest)
+- [3.6.10 audit and verification](docs/releases/3.6.10-audit.md)
 
-View your app in AI Studio: https://ai.studio/apps/drive/1oQHA3Lea1smRPxQu3BnyhSM-8PPaVEnw
+## Development
 
-## Run Locally
+Use Node.js 24, then run:
 
-**Prerequisites:**  Node.js
+```sh
+npm ci
+npm run dev
+npm test
+npm run typecheck
+npm run test:e2e
+```
 
+The browser tests use isolated services and do not send production mail, notifications or financial transactions. Install the browser once with `npx playwright install chromium`.
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Builds
 
-🛠️ معلومة للمستقبل:
-عندما تريد إصدار تحديث جديد:
+```sh
+npm run build:admin
+npm run build:agent
+npm run build:electron:admin -- --publish never
+npm run build:electron:agent -- --publish never
+```
 
-عدل رقم الإصدار في package.json (مثلاً 1.0.1).
-شغل أوامر البناء:
-للإدارة: npx cross-env GH_TOKEN=... npm run build:electron:admin -- --publish always
-للوكلاء: npx cross-env GH_TOKEN=... npm run build:electron:agent -- --publish always
+Each web build writes `dist`; each desktop build uses its matching administration or agent configuration. Increment the package version before a release and verify updater checksums before publishing. Keep credentials, database backups and private deployment receipts outside published assets.
